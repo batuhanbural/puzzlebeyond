@@ -206,6 +206,7 @@ export default function Home() {
   const cols = room?.cols ?? DEFAULT_COLS;
   const pieceCount = rows * cols;
   const solvedCount = pieces.filter((piece) => piece.locked).length;
+  const remainingCount = pieceCount - solvedCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);
   const hintPiece = pieces.find((piece) => !piece.locked);
 
@@ -353,7 +354,7 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="hero-strip">
+      <section className={`hero-strip ${room ? "compact" : ""}`}>
         <div>
           <p className="eyebrow">Herkes bir parça koysun</p>
           <h1>{room ? room.title : "Birlikte daha kolay."}</h1>
@@ -369,6 +370,7 @@ export default function Home() {
               <p className="muted-label">ODA KODU</p>
               <button className="room-code" onClick={copyCode} title="Kopyala">{room.code}<span>⧉</span></button>
               <p className="room-hint">Arkadaşların bu kodu girerek aynı tahtaya bağlanabilir.</p>
+              <div className="room-state"><span className="live-dot" /><b>ODA AÇIK</b><span>{pieceCount} parça</span></div>
               <div className="divider" />
               <p className="muted-label">OYUNCULAR · 1</p>
               <div className="players">
@@ -463,10 +465,12 @@ export default function Home() {
           <div className="panel-heading"><span className="index">02</span><span>İLERLEME</span></div>
           <div className="progress-value"><strong>{progress}</strong><span>%</span></div>
           <div className="progress-track"><i style={{ width: `${progress}%` }} /></div>
-          <p><b>{solvedCount}</b> / {pieceCount} parça doğru yerde</p>
+          <div className="stat-grid">
+            <div><strong>{solvedCount}</strong><span>YERLEŞEN</span></div>
+            <div><strong>{remainingCount}</strong><span>KALAN</span></div>
+          </div>
           <div className="divider" />
-          <p className="muted-label">ODA DURUMU</p>
-          <p className="activity-empty">İlerleme, yerleştirilen gerçek parçalarla güncellenir.</p>
+          <div className="tip-card"><span>NASIL OYNANIR?</span><p>Parçayı doğru yerine yakın bırakman yeterli; otomatik olarak yerine oturur.</p></div>
           {!room && <button className="primary-button full create-main" onClick={() => setDialog("create")}>FOTOĞRAFINLA BAŞLA <span>→</span></button>}
         </aside>
       </section>
