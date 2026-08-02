@@ -16,6 +16,31 @@ type Room = {
 const DEFAULT_ROWS = 3;
 const DEFAULT_COLS = 4;
 const BOARD = { left: 0.18, top: 0.235, width: 0.64, height: 0.53 };
+const PUZZLE_SIZES = [
+  { count: 12, rows: 3, cols: 4, label: "RAHAT" },
+  { count: 20, rows: 4, cols: 5, label: "KOLAY" },
+  { count: 48, rows: 6, cols: 8, label: "ORTA" },
+  { count: 120, rows: 10, cols: 12, label: "ZOR" },
+  { count: 300, rows: 15, cols: 20, label: "UZMAN" },
+  { count: 600, rows: 20, cols: 30, label: "USTA" },
+  { count: 1024, rows: 32, cols: 32, label: "EFSANE" },
+] as const;
+
+const puzzleImageCache = new Map<string, Promise<HTMLImageElement>>();
+
+function loadPuzzleImage(src: string) {
+  const cached = puzzleImageCache.get(src);
+  if (cached) return cached;
+  const pending = new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Puzzle görseli yüklenemedi."));
+    image.src = src;
+  });
+  puzzleImageCache.set(src, pending);
+  return pending;
+}
 
 function createDefaultImage() {
   if (typeof document === "undefined") return "";
@@ -51,18 +76,39 @@ function scatteredPieces(rows: number, cols: number, seed?: string) {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
     return state / 4294967296;
   } : Math.random;
-  const ids = Array.from({ length: rows * cols }, (_, id) => id).sort(() => random() - 0.5);
-  const perSide = Math.ceil(ids.length / 4);
-  return ids.map((id, index) => {
-    const side = index % 4;
-    const slot = Math.floor(index / 4);
-    const along = (slot + 0.35 + random() * 0.3) / perSide;
-    const jitter = (random() - 0.5) * 0.035;
-    if (side === 0) return { id, x: 0.07 + along * 0.75, y: 0.025 + jitter, locked: false };
-    if (side === 1) return { id, x: 0.81 + jitter, y: 0.1 + along * 0.68, locked: false };
-    if (side === 2) return { id, x: 0.07 + along * 0.75, y: 0.82 + jitter, locked: false };
-    return { id, x: 0.025 + jitter, y: 0.1 + along * 0.68, locked: false };
-  });
+  const shuffle = <T,>(values: T[]) => {
+    for (let index = values.length - 1; index > 0; index--) {
+      const swapIndex = Math.floor(random() * (index + 1));
+      [values[index], values[swapIndex]] = [values[swapIndex], values[index]];
+    }
+    return values;
+  };
+  const cellWidth = BOARD.width / cols;
+  const cellHeight = BOARD.height / rows;
+  const slots: Array<{ x: number; y: number }> = [];
+  const stepX = cellWidth * 0.82;
+  const stepY = cellHeight * 0.82;
+  for (let y = 0.012; y <= 0.988 - cellHeight; y += stepY) {
+    for (let x = 0.012; x <= 0.988 - cellWidth; x += stepX) {
+      const overlapsBoard = x + cellWidth * 0.9 > BOARD.left - 0.008
+        && x < BOARD.left + BOARD.width + 0.008
+        && y + cellHeight * 0.9 > BOARD.top - 0.008
+        && y < BOARD.top + BOARD.height + 0.008;
+      if (overlapsBoard) continue;
+      slots.push({
+        x: Math.max(0.005, Math.min(0.99 - cellWidth, x + (random() - 0.5) * cellWidth * 0.12)),
+        y: Math.max(0.005, Math.min(0.99 - cellHeight, y + (random() - 0.5) * cellHeight * 0.12)),
+      });
+    }
+  }
+  shuffle(slots);
+  const ids = shuffle(Array.from({ length: rows * cols }, (_, id) => id));
+  return ids.map((id, index) => ({
+    id,
+    x: slots[index]?.x ?? 0.01 + random() * Math.max(0.01, 0.98 - cellWidth),
+    y: slots[index]?.y ?? 0.01 + random() * Math.max(0.01, 0.98 - cellHeight),
+    locked: false,
+  }));
 }
 
 function normalizePieces(room: Room) {
@@ -88,15 +134,17 @@ function edgeProfile(seed: string, row: number, col: number, axis: "h" | "v") {
   };
 }
 
-function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: number; cols: number; seed: string; imageUrl: string }) {
+function JigsawPiece({ id, rows, cols, seed, imageUrl, locked }: { id: number; rows: number; cols: number; seed: string; imageUrl: string; locked: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !imageUrl) return;
-    const image = new Image();
-    image.crossOrigin = "anonymous";
-    image.onload = () => {
+    let cancelled = false;
+    let drawTimer: number | undefined;
+    void loadPuzzleImage(imageUrl).then((image) => {
+      drawTimer = window.setTimeout(() => {
+        if (cancelled) return;
       const row = Math.floor(id / cols);
       const col = id % cols;
       const cellWidth = 800 / cols;
@@ -185,15 +233,21 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       context.restore();
       context.lineJoin = "round";
       context.lineCap = "round";
-      context.strokeStyle = "rgba(21,21,21,.92)";
-      context.lineWidth = 3;
+      context.strokeStyle = locked ? "rgba(21,21,21,.18)" : "rgba(21,21,21,.78)";
+      context.lineWidth = locked ? 0.55 : 1.8;
       context.stroke();
-      context.strokeStyle = "rgba(255,255,255,.46)";
-      context.lineWidth = 0.9;
-      context.stroke();
+      if (!locked) {
+        context.strokeStyle = "rgba(255,255,255,.42)";
+        context.lineWidth = 0.65;
+        context.stroke();
+      }
+      }, (id % 64) * 4);
+    }).catch(() => { /* The next image URL change retries the render. */ });
+    return () => {
+      cancelled = true;
+      if (drawTimer !== undefined) window.clearTimeout(drawTimer);
     };
-    image.src = imageUrl;
-  }, [id, rows, cols, seed, imageUrl]);
+  }, [id, rows, cols, seed, imageUrl, locked]);
 
   return <canvas ref={canvasRef} className="piece-canvas" aria-hidden="true" />;
 }
@@ -249,14 +303,14 @@ export default function Home() {
   const progress = Math.round((solvedCount / pieceCount) * 100);
   const hintPiece = pieces.find((piece) => !piece.locked);
 
-  const pushMove = useCallback(async (nextPieces: Piece[]) => {
+  const pushMove = useCallback(async (nextPieces: Piece[], movedId: number) => {
     if (!room) return;
     lastLocalMove.current = Date.now();
     try {
       const response = await fetch("/api/room", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: room.code, pieces: nextPieces }),
+        body: JSON.stringify({ code: room.code, piece: nextPieces.find((piece) => piece.id === movedId) }),
       });
       if (response.ok) {
         const data = await response.json() as { updatedAt?: number };
@@ -272,7 +326,8 @@ export default function Home() {
     const timer = window.setInterval(async () => {
       if (dragRef.current || Date.now() - lastLocalMove.current < 1200) return;
       try {
-        const response = await fetch(`/api/room?code=${room.code}`, { cache: "no-store" });
+        const response = await fetch(`/api/room?code=${room.code}&since=${remoteUpdatedAt.current}`, { cache: "no-store" });
+        if (response.status === 204) return;
         if (!response.ok) return;
         const data = await response.json() as { room: Room };
         if (data.room.updatedAt <= remoteUpdatedAt.current) return;
@@ -286,7 +341,8 @@ export default function Home() {
 
   const createRoom = async () => {
     setBusy(true);
-    const [r, c] = difficulty === "20" ? [4, 5] : [3, 4];
+    const selectedSize = PUZZLE_SIZES.find((option) => String(option.count) === difficulty) ?? PUZZLE_SIZES[0];
+    const { rows: r, cols: c } = selectedSize;
     const nextPieces = scatteredPieces(r, c);
     try {
       const form = new FormData();
@@ -358,7 +414,7 @@ export default function Home() {
       const next = current.map((piece) => piece.id === movingId
         ? { ...piece, x: snaps ? targetX : drag.currentX, y: snaps ? targetY : drag.currentY, locked: snaps }
         : piece);
-      void pushMove(next);
+      void pushMove(next, movingId);
       if (snaps) setNotice("Tak! Parça doğru yerine oturdu.");
       return next;
     });
@@ -488,7 +544,7 @@ export default function Home() {
                 }}
                 role="button" tabIndex={0} aria-label={`${piece.id + 1}. puzzle parçası`}
               >
-                <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
+                <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} locked={Boolean(piece.locked)} />
               </div>
             ))}
             {progress === 100 && <div className="complete-badge"><span>✓</span> TAMAMLANDI!</div>}
@@ -531,9 +587,12 @@ export default function Home() {
                   <div><b>{file ? file.name : "Fotoğrafını ekle"}</b><small>JPG, PNG veya WEBP · en fazla 8 MB</small></div>
                   <input type="file" accept="image/jpeg,image/png,image/webp" onChange={onFile} />
                 </label>
-                <fieldset><legend>Zorluk</legend><div className="difficulty-options">
-                  <button className={difficulty === "12" ? "selected" : ""} onClick={() => setDifficulty("12")}><b>12</b><span>RAHAT</span></button>
-                  <button className={difficulty === "20" ? "selected" : ""} onClick={() => setDifficulty("20")}><b>20</b><span>MEYDAN OKU</span></button>
+                <fieldset><legend>Zorluk · 12–1024 parça</legend><div className="difficulty-options">
+                  {PUZZLE_SIZES.map((option) => (
+                    <button key={option.count} className={difficulty === String(option.count) ? "selected" : ""} onClick={() => setDifficulty(String(option.count))}>
+                      <b>{option.count}</b><span>{option.label}</span>
+                    </button>
+                  ))}
                 </div></fieldset>
                 <button className="primary-button full dialog-submit" onClick={createRoom} disabled={busy}>{busy ? "ODA HAZIRLANIYOR…" : "ODAYI OLUŞTUR →"}</button>
               </>

@@ -35,10 +35,13 @@ function roomJson(row: RoomRow) {
 
 export async function GET(request: Request) {
   await ensureSchema();
-  const code = new URL(request.url).searchParams.get("code")?.trim().toUpperCase();
+  const url = new URL(request.url);
+  const code = url.searchParams.get("code")?.trim().toUpperCase();
+  const since = Number(url.searchParams.get("since") || 0);
   if (!code) return Response.json({ error: "Oda kodu gerekli." }, { status: 400 });
   const row = await env.DB.prepare("SELECT * FROM puzzle_rooms WHERE code = ?").bind(code).first<RoomRow>();
   if (!row) return Response.json({ error: "Bu kodla bir oda bulunamadı." }, { status: 404 });
+  if (since > 0 && row.updated_at <= since) return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   return Response.json({ room: roomJson(row) }, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -46,8 +49,8 @@ export async function POST(request: Request) {
   await ensureSchema();
   const form = await request.formData();
   const title = String(form.get("title") || "Bizim puzzle").slice(0, 48);
-  const rows = Math.max(2, Math.min(6, Number(form.get("rows")) || 3));
-  const cols = Math.max(2, Math.min(6, Number(form.get("cols")) || 4));
+  const rows = Math.max(2, Math.min(32, Number(form.get("rows")) || 3));
+  const cols = Math.max(2, Math.min(32, Number(form.get("cols")) || 4));
   const pieces = String(form.get("pieces") || "[]");
   const file = form.get("image");
   const defaultImage = String(form.get("defaultImage") || "");
@@ -81,16 +84,24 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   await ensureSchema();
-  const payload = await request.json() as { code?: string; pieces?: Piece[] };
+  const payload = await request.json() as { code?: string; pieces?: Piece[]; piece?: Piece };
   const code = payload.code?.trim().toUpperCase();
-  if (!code || !Array.isArray(payload.pieces)) return Response.json({ error: "Geçersiz hamle." }, { status: 400 });
-  const row = await env.DB.prepare("SELECT rows, cols FROM puzzle_rooms WHERE code = ?").bind(code).first<{ rows: number; cols: number }>();
+  if (!code || (!Array.isArray(payload.pieces) && !payload.piece)) return Response.json({ error: "Geçersiz hamle." }, { status: 400 });
+  const row = await env.DB.prepare("SELECT rows, cols, pieces FROM puzzle_rooms WHERE code = ?").bind(code).first<{ rows: number; cols: number; pieces: string }>();
   if (!row) return Response.json({ error: "Oda bulunamadı." }, { status: 404 });
-  if (payload.pieces.length !== row.rows * row.cols) return Response.json({ error: "Parça sayısı eşleşmiyor." }, { status: 400 });
-  const pieces = payload.pieces.map((piece) => ({
+  if (payload.pieces && payload.pieces.length !== row.rows * row.cols) return Response.json({ error: "Parça sayısı eşleşmiyor." }, { status: 400 });
+  const normalizePiece = (piece: Piece) => ({
     id: Math.max(0, Math.floor(piece.id)), x: Math.max(0, Math.min(1, Number(piece.x))),
     y: Math.max(0, Math.min(1, Number(piece.y))), locked: Boolean(piece.locked),
-  }));
+  });
+  let pieces: Piece[];
+  if (payload.piece) {
+    const movedPiece = normalizePiece(payload.piece);
+    if (movedPiece.id >= row.rows * row.cols) return Response.json({ error: "Geçersiz parça." }, { status: 400 });
+    pieces = (JSON.parse(row.pieces) as Piece[]).map((piece) => piece.id === movedPiece.id ? movedPiece : piece);
+  } else {
+    pieces = payload.pieces!.map(normalizePiece);
+  }
   const now = Date.now();
   await env.DB.prepare("UPDATE puzzle_rooms SET pieces = ?, updated_at = ? WHERE code = ?").bind(JSON.stringify(pieces), now, code).run();
   return Response.json({ ok: true, updatedAt: now });
