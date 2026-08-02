@@ -76,6 +76,20 @@ function scatteredPieces(rows: number, cols: number, seed?: string) {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
     return state / 4294967296;
   } : Math.random;
+  if (rows * cols <= 20) {
+    const ids = Array.from({ length: rows * cols }, (_, id) => id).sort(() => random() - 0.5);
+    const perSide = Math.ceil(ids.length / 4);
+    return ids.map((id, index) => {
+      const side = index % 4;
+      const slot = Math.floor(index / 4);
+      const along = (slot + 0.35 + random() * 0.3) / perSide;
+      const jitter = (random() - 0.5) * 0.035;
+      if (side === 0) return { id, x: 0.07 + along * 0.75, y: 0.025 + jitter, locked: false };
+      if (side === 1) return { id, x: 0.81 + jitter, y: 0.1 + along * 0.68, locked: false };
+      if (side === 2) return { id, x: 0.07 + along * 0.75, y: 0.82 + jitter, locked: false };
+      return { id, x: 0.025 + jitter, y: 0.1 + along * 0.68, locked: false };
+    });
+  }
   const shuffle = <T,>(values: T[]) => {
     for (let index = values.length - 1; index > 0; index--) {
       const swapIndex = Math.floor(random() * (index + 1));
@@ -134,7 +148,7 @@ function edgeProfile(seed: string, row: number, col: number, axis: "h" | "v") {
   };
 }
 
-function JigsawPiece({ id, rows, cols, seed, imageUrl, locked }: { id: number; rows: number; cols: number; seed: string; imageUrl: string; locked: boolean }) {
+function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: number; cols: number; seed: string; imageUrl: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -233,21 +247,19 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl, locked }: { id: number; r
       context.restore();
       context.lineJoin = "round";
       context.lineCap = "round";
-      context.strokeStyle = locked ? "rgba(21,21,21,.18)" : "rgba(21,21,21,.78)";
-      context.lineWidth = locked ? 0.55 : 1.8;
+      context.strokeStyle = "rgba(21,21,21,.92)";
+      context.lineWidth = 3;
       context.stroke();
-      if (!locked) {
-        context.strokeStyle = "rgba(255,255,255,.42)";
-        context.lineWidth = 0.65;
-        context.stroke();
-      }
+      context.strokeStyle = "rgba(255,255,255,.46)";
+      context.lineWidth = 0.9;
+      context.stroke();
       }, (id % 64) * 4);
     }).catch(() => { /* The next image URL change retries the render. */ });
     return () => {
       cancelled = true;
       if (drawTimer !== undefined) window.clearTimeout(drawTimer);
     };
-  }, [id, rows, cols, seed, imageUrl, locked]);
+  }, [id, rows, cols, seed, imageUrl]);
 
   return <canvas ref={canvasRef} className="piece-canvas" aria-hidden="true" />;
 }
@@ -544,7 +556,7 @@ export default function Home() {
                 }}
                 role="button" tabIndex={0} aria-label={`${piece.id + 1}. puzzle parçası`}
               >
-                <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} locked={Boolean(piece.locked)} />
+                <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
               </div>
             ))}
             {progress === 100 && <div className="complete-badge"><span>✓</span> TAMAMLANDI!</div>}
