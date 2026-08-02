@@ -247,11 +247,12 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       context.restore();
       context.lineJoin = "round";
       context.lineCap = "round";
+      const edgeScale = rows * cols <= 20 ? 1 : Math.max(0.18, Math.sqrt(20 / (rows * cols)));
       context.strokeStyle = "rgba(21,21,21,.92)";
-      context.lineWidth = 3;
+      context.lineWidth = 3 * edgeScale;
       context.stroke();
       context.strokeStyle = "rgba(255,255,255,.46)";
-      context.lineWidth = 0.9;
+      context.lineWidth = 0.9 * edgeScale;
       context.stroke();
       }, (id % 64) * 4);
     }).catch(() => { /* The next image URL change retries the render. */ });
@@ -552,7 +553,7 @@ export default function Home() {
             {pieces.map((piece) => (
               <div
                 key={piece.id}
-                className={`puzzle-piece ${piece.locked ? "locked" : ""} ${piece.id === lastHeldPieceId ? "recent" : ""}`}
+                className={`puzzle-piece ${piece.locked ? "locked" : ""} ${piece.id === lastHeldPieceId ? "recent" : ""} ${pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : ""}`}
                 style={{
                   width: `${BOARD.width * 100 / cols}%`, height: `${BOARD.height * 100 / rows}%`,
                   left: `${piece.x * 100}%`, top: `${piece.y * 100}%`,
