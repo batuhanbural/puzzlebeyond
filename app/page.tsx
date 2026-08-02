@@ -552,7 +552,7 @@ export default function Home() {
             {pieces.map((piece) => (
               <div
                 key={piece.id}
-                className={`puzzle-piece ${piece.locked ? "locked" : ""}`}
+                className={`puzzle-piece ${piece.locked ? "locked" : ""} ${piece.id === lastHeldPieceId ? "recent" : ""}`}
                 style={{
                   width: `${BOARD.width * 100 / cols}%`, height: `${BOARD.height * 100 / rows}%`,
                   left: `${piece.x * 100}%`, top: `${piece.y * 100}%`,
