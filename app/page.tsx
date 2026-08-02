@@ -168,8 +168,8 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       context.moveTo(x0, y0);
       addEdge(x0, y0, x1, y0, 0, -1, top);
       addEdge(x1, y0, x1, y1, 1, 0, right);
-      addEdge(x1, y1, x0, y1, 0, 1, bottom);
-      addEdge(x0, y1, x0, y0, -1, 0, left);
+      addEdge(x1, y1, x0, y1, 0, 1, { ...bottom, center: 1 - bottom.center });
+      addEdge(x0, y1, x0, y0, -1, 0, { ...left, center: 1 - left.center });
       context.closePath();
       context.save();
       context.clip();
