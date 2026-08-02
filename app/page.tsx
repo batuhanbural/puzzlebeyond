@@ -480,7 +480,6 @@ export default function Home() {
                 role="button" tabIndex={0} aria-label={`${piece.id + 1}. puzzle parçası`}
               >
                 <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? "PARCA0"} imageUrl={imageUrl} />
-                <span className="piece-number">{piece.id + 1}</span>
               </div>
             ))}
             {progress === 100 && <div className="complete-badge"><span>✓</span> TAMAMLANDI!</div>}
