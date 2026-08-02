@@ -70,14 +70,19 @@ function normalizePieces(room: Room) {
   return legacyGrid ? scatteredPieces(room.rows, room.cols, room.code) : room.pieces;
 }
 
-function edgeSign(seed: string, row: number, col: number, axis: "h" | "v") {
+function edgeProfile(seed: string, row: number, col: number, axis: "h" | "v") {
   let hash = 2166136261;
   const value = `${seed}:${axis}:${row}:${col}`;
   for (let index = 0; index < value.length; index++) {
     hash ^= value.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return (hash >>> 0) % 2 === 0 ? 1 : -1;
+  const unsigned = hash >>> 0;
+  return {
+    sign: unsigned % 2 === 0 ? 1 : -1,
+    center: 0.46 + ((unsigned >>> 3) % 9) / 100,
+    scale: 0.9 + ((unsigned >>> 8) % 19) / 100,
+  };
 }
 
 function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: number; cols: number; seed: string; imageUrl: string }) {
@@ -93,8 +98,8 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       const col = id % cols;
       const cellWidth = 800 / cols;
       const cellHeight = 600 / rows;
-      const pad = Math.min(cellWidth, cellHeight) * 0.28;
-      const tab = Math.min(cellWidth, cellHeight) * 0.24;
+      const pad = Math.min(cellWidth, cellHeight) * 0.34;
+      const tab = Math.min(cellWidth, cellHeight) * 0.28;
       const width = cellWidth + pad * 2;
       const height = cellHeight + pad * 2;
       const scale = 2;
@@ -104,42 +109,64 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       if (!context) return;
       context.scale(scale, scale);
 
-      const top = row === 0 ? 0 : -edgeSign(seed, row - 1, col, "h");
-      const right = col === cols - 1 ? 0 : edgeSign(seed, row, col, "v");
-      const bottom = row === rows - 1 ? 0 : edgeSign(seed, row, col, "h");
-      const left = col === 0 ? 0 : -edgeSign(seed, row, col - 1, "v");
+      const flat = { sign: 0, center: 0.5, scale: 1 };
+      const topBoundary = row === 0 ? flat : edgeProfile(seed, row - 1, col, "h");
+      const rightBoundary = col === cols - 1 ? flat : edgeProfile(seed, row, col, "v");
+      const bottomBoundary = row === rows - 1 ? flat : edgeProfile(seed, row, col, "h");
+      const leftBoundary = col === 0 ? flat : edgeProfile(seed, row, col - 1, "v");
+      const top = { ...topBoundary, sign: -topBoundary.sign };
+      const right = rightBoundary;
+      const bottom = bottomBoundary;
+      const left = { ...leftBoundary, sign: -leftBoundary.sign };
       const x0 = pad, y0 = pad, x1 = pad + cellWidth, y1 = pad + cellHeight;
+
+      const addEdge = (
+        startX: number, startY: number, endX: number, endY: number,
+        normalX: number, normalY: number,
+        edge: { sign: number; center: number; scale: number },
+      ) => {
+        if (!edge.sign) {
+          context.lineTo(endX, endY);
+          return;
+        }
+        const deltaX = endX - startX;
+        const deltaY = endY - startY;
+        const point = (along: number, normal: number) => ({
+          x: startX + deltaX * along + normalX * normal,
+          y: startY + deltaY * along + normalY * normal,
+        });
+        const center = edge.center;
+        const spread = 0.18 * edge.scale;
+        const neck = 0.11 * edge.scale;
+        const crown = 0.26 * edge.scale;
+        const depth = tab * edge.scale * edge.sign;
+        const baseStart = point(center - spread, 0);
+        const neckLeft = point(center - neck, depth * 0.18);
+        const crownTop = point(center, depth);
+        const neckRight = point(center + neck, depth * 0.18);
+        const baseEnd = point(center + spread, 0);
+        context.lineTo(baseStart.x, baseStart.y);
+        let control1 = point(center - spread + 0.035, 0);
+        let control2 = point(center - neck - 0.01, depth * 0.04);
+        context.bezierCurveTo(control1.x, control1.y, control2.x, control2.y, neckLeft.x, neckLeft.y);
+        control1 = point(center - crown, depth * 0.38);
+        control2 = point(center - crown * 0.9, depth * 0.9);
+        context.bezierCurveTo(control1.x, control1.y, control2.x, control2.y, crownTop.x, crownTop.y);
+        control1 = point(center + crown * 0.9, depth * 0.9);
+        control2 = point(center + crown, depth * 0.38);
+        context.bezierCurveTo(control1.x, control1.y, control2.x, control2.y, neckRight.x, neckRight.y);
+        control1 = point(center + neck + 0.01, depth * 0.04);
+        control2 = point(center + spread - 0.035, 0);
+        context.bezierCurveTo(control1.x, control1.y, control2.x, control2.y, baseEnd.x, baseEnd.y);
+        context.lineTo(endX, endY);
+      };
 
       context.beginPath();
       context.moveTo(x0, y0);
-      if (!top) context.lineTo(x1, y0);
-      else {
-        context.lineTo(x0 + cellWidth * 0.34, y0);
-        context.bezierCurveTo(x0 + cellWidth * 0.39, y0, x0 + cellWidth * 0.37, y0 - top * tab, x0 + cellWidth * 0.5, y0 - top * tab);
-        context.bezierCurveTo(x0 + cellWidth * 0.63, y0 - top * tab, x0 + cellWidth * 0.61, y0, x0 + cellWidth * 0.66, y0);
-        context.lineTo(x1, y0);
-      }
-      if (!right) context.lineTo(x1, y1);
-      else {
-        context.lineTo(x1, y0 + cellHeight * 0.34);
-        context.bezierCurveTo(x1, y0 + cellHeight * 0.39, x1 + right * tab, y0 + cellHeight * 0.37, x1 + right * tab, y0 + cellHeight * 0.5);
-        context.bezierCurveTo(x1 + right * tab, y0 + cellHeight * 0.63, x1, y0 + cellHeight * 0.61, x1, y0 + cellHeight * 0.66);
-        context.lineTo(x1, y1);
-      }
-      if (!bottom) context.lineTo(x0, y1);
-      else {
-        context.lineTo(x0 + cellWidth * 0.66, y1);
-        context.bezierCurveTo(x0 + cellWidth * 0.61, y1, x0 + cellWidth * 0.63, y1 + bottom * tab, x0 + cellWidth * 0.5, y1 + bottom * tab);
-        context.bezierCurveTo(x0 + cellWidth * 0.37, y1 + bottom * tab, x0 + cellWidth * 0.39, y1, x0 + cellWidth * 0.34, y1);
-        context.lineTo(x0, y1);
-      }
-      if (!left) context.lineTo(x0, y0);
-      else {
-        context.lineTo(x0, y0 + cellHeight * 0.66);
-        context.bezierCurveTo(x0, y0 + cellHeight * 0.61, x0 - left * tab, y0 + cellHeight * 0.63, x0 - left * tab, y0 + cellHeight * 0.5);
-        context.bezierCurveTo(x0 - left * tab, y0 + cellHeight * 0.37, x0, y0 + cellHeight * 0.39, x0, y0 + cellHeight * 0.34);
-        context.lineTo(x0, y0);
-      }
+      addEdge(x0, y0, x1, y0, 0, -1, top);
+      addEdge(x1, y0, x1, y1, 1, 0, right);
+      addEdge(x1, y1, x0, y1, 0, 1, bottom);
+      addEdge(x0, y1, x0, y0, -1, 0, left);
       context.closePath();
       context.save();
       context.clip();
@@ -155,6 +182,9 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       context.restore();
       context.strokeStyle = "rgba(21,21,21,.92)";
       context.lineWidth = 3;
+      context.stroke();
+      context.strokeStyle = "rgba(255,255,255,.46)";
+      context.lineWidth = 0.9;
       context.stroke();
     };
     image.src = imageUrl;

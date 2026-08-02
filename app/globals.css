@@ -75,7 +75,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(42px,5vw,78px); line-height:.87;
 .hint-target span { width:26px; height:26px; display:grid; place-items:center; border:2px solid var(--ink); border-radius:50%; background:var(--lime); font-size:10px; font-weight:950; }
 @keyframes hintPulse { from { transform:scale(.94); opacity:.72; } to { transform:scale(1.04); opacity:1; } }
 .puzzle-piece { position:absolute; z-index:2; cursor:grab; transition:left .16s ease-out, top .16s ease-out, filter .2s, transform .2s; touch-action:none; will-change:left,top; }
-.piece-canvas { position:absolute; left:-28%; top:-28%; width:156%; height:156%; display:block; overflow:visible; filter:drop-shadow(3px 4px 1px rgba(21,21,21,.38)); pointer-events:none; }
+.piece-canvas { position:absolute; left:-34%; top:-34%; width:168%; height:168%; display:block; overflow:visible; filter:drop-shadow(3px 4px 1px rgba(21,21,21,.4)); pointer-events:none; }
 .puzzle-piece:hover { z-index:30; filter:brightness(1.08); transform:scale(1.04) rotate(1deg); }
 .puzzle-piece:active { z-index:40; cursor:grabbing; transform:scale(1.07) rotate(-1deg); transition:none; }
 .puzzle-piece.dragging { z-index:50; cursor:grabbing; transform:scale(1.07) rotate(-1deg); transition:none!important; filter:brightness(1.08); }
