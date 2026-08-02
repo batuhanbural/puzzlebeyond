@@ -80,11 +80,11 @@ function edgeProfile(seed: string, row: number, col: number, axis: "h" | "v") {
   const unsigned = hash >>> 0;
   return {
     sign: unsigned % 2 === 0 ? 1 : -1,
-    center: 0.4 + ((unsigned >>> 3) % 21) / 100,
-    spread: 0.16 + ((unsigned >>> 8) % 7) / 100,
-    neck: 0.07 + ((unsigned >>> 12) % 6) / 100,
-    crown: 0.22 + ((unsigned >>> 16) % 9) / 100,
-    depth: 0.82 + ((unsigned >>> 20) % 35) / 100,
+    center: 0.43 + ((unsigned >>> 3) % 15) / 100,
+    spread: 0.19 + ((unsigned >>> 8) % 5) / 100,
+    neck: 0.11 + ((unsigned >>> 12) % 4) / 100,
+    crown: 0.22 + ((unsigned >>> 16) % 6) / 100,
+    depth: 0.74 + ((unsigned >>> 20) % 23) / 100,
   };
 }
 
@@ -150,15 +150,15 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
         const baseEnd = point(center + spread, 0);
         context.lineTo(baseStart.x, baseStart.y);
         let control1 = point(center - spread + 0.035, 0);
-        let control2 = point(center - neck - 0.01, depth * 0.04);
+        let control2 = point(center - neck + 0.055, depth * 0.04);
         context.bezierCurveTo(control1.x, control1.y, control2.x, control2.y, neckLeft.x, neckLeft.y);
-        control1 = point(center - crown, depth * 0.38);
-        control2 = point(center - crown * 0.9, depth * 0.9);
+        control1 = point(center - neck - 0.08, depth * 0.46);
+        control2 = point(center - crown * 0.35, depth);
         context.bezierCurveTo(control1.x, control1.y, control2.x, control2.y, crownTop.x, crownTop.y);
-        control1 = point(center + crown * 0.9, depth * 0.9);
-        control2 = point(center + crown, depth * 0.38);
+        control1 = point(center + crown * 0.35, depth);
+        control2 = point(center + neck + 0.08, depth * 0.46);
         context.bezierCurveTo(control1.x, control1.y, control2.x, control2.y, neckRight.x, neckRight.y);
-        control1 = point(center + neck + 0.01, depth * 0.04);
+        control1 = point(center + neck - 0.055, depth * 0.04);
         control2 = point(center + spread - 0.035, 0);
         context.bezierCurveTo(control1.x, control1.y, control2.x, control2.y, baseEnd.x, baseEnd.y);
         context.lineTo(endX, endY);
@@ -183,6 +183,8 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       const offsetY = (boardHeight - drawHeight) / 2;
       context.drawImage(image, pad + offsetX - col * cellWidth, pad + offsetY - row * cellHeight, drawWidth, drawHeight);
       context.restore();
+      context.lineJoin = "round";
+      context.lineCap = "round";
       context.strokeStyle = "rgba(21,21,21,.92)";
       context.lineWidth = 3;
       context.stroke();
