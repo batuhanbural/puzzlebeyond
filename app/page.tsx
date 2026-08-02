@@ -285,6 +285,7 @@ export default function Home() {
   const [notice, setNotice] = useState("Yeni bir oda kurabilir ya da arkadaşlarının kodunu girebilirsin.");
   const [busy, setBusy] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
+  const [lastHeldPieceId, setLastHeldPieceId] = useState<number | null>(null);
   const [playerName] = useState(() => typeof window === "undefined" ? "Sen" : localStorage.getItem("puzzle-name") || "Sen");
   const boardRef = useRef<HTMLDivElement>(null);
   const lastLocalMove = useRef(0);
@@ -313,7 +314,9 @@ export default function Home() {
   const solvedCount = pieces.filter((piece) => piece.locked).length;
   const remainingCount = pieceCount - solvedCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);
-  const hintPiece = pieces.find((piece) => !piece.locked);
+  const hintPiece = lastHeldPieceId === null
+    ? pieces.find((piece) => !piece.locked)
+    : pieces.find((piece) => piece.id === lastHeldPieceId);
 
   const pushMove = useCallback(async (nextPieces: Piece[], movedId: number) => {
     if (!room) return;
@@ -369,6 +372,7 @@ export default function Home() {
       if (!response.ok || !data.room) throw new Error(data.error || "Oda oluşturulamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl);
+      setLastHeldPieceId(null);
       setDialog(null); setNotice(`${data.room.code} kodlu oda hazır. Kodu arkadaşlarına gönder!`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Oda oluşturulamadı.");
@@ -384,6 +388,7 @@ export default function Home() {
       if (!response.ok || !data.room) throw new Error(data.error || "Oda bulunamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl);
+      setLastHeldPieceId(null);
       setDialog(null); setNotice(`${data.room.code} odasına katıldın. İyi eğlenceler!`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Odaya katılınamadı.");
@@ -445,14 +450,16 @@ export default function Home() {
     }
     if (hintTimer.current) window.clearTimeout(hintTimer.current);
     setHintVisible(true);
-    setNotice("İpucu 3 saniye boyunca açık: parlayan hücreye dikkat et.");
+    setNotice(lastHeldPieceId === null
+      ? "İpucu 3 saniye boyunca açık: parlayan hücreye dikkat et."
+      : "Son tuttuğun parçanın doğru yeri 3 saniye boyunca gösteriliyor.");
     hintTimer.current = window.setTimeout(() => setHintVisible(false), 3200);
   };
 
   return (
     <main className="site-shell">
       <header className="topbar">
-        <button className="brand" onClick={() => { setRoom(null); setPieces(scatteredPieces(3, 4)); setPreviewSeed(crypto.randomUUID()); setImageUrl(createDefaultImage()); }} aria-label="Parça ana sayfa">
+        <button className="brand" onClick={() => { setRoom(null); setPieces(scatteredPieces(3, 4)); setLastHeldPieceId(null); setPreviewSeed(crypto.randomUUID()); setImageUrl(createDefaultImage()); }} aria-label="Parça ana sayfa">
           <span className="brand-mark">P</span><span>parça</span>
         </button>
         <div className="header-actions">
@@ -542,6 +549,8 @@ export default function Home() {
                 }}
                 onPointerDown={(event) => {
                   if (piece.locked || !boardRef.current) return;
+                  setLastHeldPieceId(piece.id);
+                  setHintVisible(false);
                   event.currentTarget.setPointerCapture(event.pointerId);
                   const rect = boardRef.current.getBoundingClientRect();
                   event.currentTarget.classList.add("dragging");
