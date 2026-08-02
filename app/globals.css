@@ -41,6 +41,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(42px,5vw,78px); line-height:.87;
 .divider { height:2px; background:var(--ink); margin-top:22px!important; }
 .players { margin-top:0!important; }
 .player { display:flex; align-items:center; gap:9px; min-height:42px; border-bottom:1px solid #cbc7bd; font-size:12px; font-weight:800; }
+.waiting-player { color:#77736b; font-family:Georgia,serif; font-size:11px; line-height:1.45; }
 .avatar { width:28px; height:28px; display:grid; place-items:center; border:1.5px solid var(--ink); font-size:11px; font-weight:950; }
 .player small { margin-left:auto; padding:2px 4px; background:#e7e3d8; font-size:7px; letter-spacing:.6px; }
 .online-dot { width:7px; height:7px; border-radius:50%; background:#40b866; box-shadow:0 0 0 2px #d9f2df; }
@@ -63,7 +64,6 @@ h1 { margin:0; max-width:780px; font-size:clamp(42px,5vw,78px); line-height:.87;
 .hint-preview.visible { opacity:.48; }
 .board-grid { position:absolute; z-index:1; inset:0; display:grid; }
 .board-grid span { border:1px dashed rgba(21,21,21,.2); }
-.board-grid span.magnet-ready { position:relative; z-index:3; border:3px solid var(--coral); background:rgba(216,255,99,.48); box-shadow:inset 0 0 18px rgba(255,111,97,.5); animation:magnetPulse .5s ease-in-out infinite alternate; }
 .hint-target { position:absolute; z-index:12; display:grid; place-items:center; border:3px solid var(--coral); background:rgba(216,255,99,.34); box-shadow:0 0 0 5px rgba(255,111,97,.22); pointer-events:none; animation:hintPulse .8s ease-in-out infinite alternate; }
 .hint-target span { width:26px; height:26px; display:grid; place-items:center; border:2px solid var(--ink); border-radius:50%; background:var(--lime); font-size:10px; font-weight:950; }
 @keyframes hintPulse { from { transform:scale(.94); opacity:.72; } to { transform:scale(1.04); opacity:1; } }
@@ -74,7 +74,6 @@ h1 { margin:0; max-width:780px; font-size:clamp(42px,5vw,78px); line-height:.87;
 .puzzle-piece.dragging { z-index:50; cursor:grabbing; transform:scale(1.07) rotate(-1deg); transition:none!important; filter:brightness(1.08); }
 .puzzle-piece.locked { z-index:4; cursor:default; filter:drop-shadow(0 0 4px rgba(216,255,99,.8)); }
 .puzzle-piece.locked:hover { transform:none; filter:drop-shadow(0 0 4px rgba(216,255,99,.8)); }
-@keyframes magnetPulse { from { opacity:.65; } to { opacity:1; } }
 .piece-number { position:absolute; left:5px; top:5px; min-width:19px; height:19px; padding:0 4px; display:grid; place-items:center; background:rgba(21,21,21,.77); color:white; font-size:8px; font-weight:900; opacity:0; }
 .puzzle-piece:hover .piece-number { opacity:1; }
 .complete-badge { position:absolute; z-index:20; left:50%; top:50%; transform:translate(-50%,-50%) rotate(-2deg); padding:13px 20px; border:3px solid var(--ink); background:var(--lime); box-shadow:7px 7px 0 var(--ink); font-size:22px; font-weight:950; white-space:nowrap; }
@@ -92,6 +91,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(42px,5vw,78px); line-height:.87;
 .activity p { margin:0; font-family:Georgia,serif; font-size:10px; line-height:1.35; }
 .activity p b { font-family:Inter,sans-serif; }
 .activity small { display:block; margin-top:2px; color:#8f8b83; }
+.activity-empty { padding:14px 0; color:#77736b!important; line-height:1.55; }
 .create-main { margin-top:24px!important; width:calc(100% - 32px); }
 .create-main span { float:right; }
 .notice { max-width:1500px; min-height:48px; margin:0 auto; padding:0 4vw; display:flex; align-items:center; gap:9px; border:2px solid var(--ink); border-bottom:0; background:var(--lime); font-family:Georgia,serif; font-size:12px; }

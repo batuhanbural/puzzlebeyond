@@ -195,7 +195,6 @@ export default function Home() {
     currentX: number;
     currentY: number;
     element: HTMLDivElement;
-    targetCell: HTMLSpanElement | null;
   } | null>(null);
 
   useEffect(() => setImageUrl(createDefaultImage()), []);
@@ -301,18 +300,12 @@ export default function Home() {
     drag.currentY = y;
     drag.element.style.left = `${x * 100}%`;
     drag.element.style.top = `${y * 100}%`;
-    const targetX = BOARD.left + (drag.id % cols) * (BOARD.width / cols);
-    const targetY = BOARD.top + Math.floor(drag.id / cols) * (BOARD.height / rows);
-    const isNear = Math.abs(x - targetX) < (BOARD.width / cols) * 0.9
-      && Math.abs(y - targetY) < (BOARD.height / rows) * 0.9;
-    drag.targetCell?.classList.toggle("magnet-ready", isNear);
   };
 
   const endMove = () => {
     if (!dragRef.current) return;
     const drag = dragRef.current;
     const movingId = drag.id;
-    drag.targetCell?.classList.remove("magnet-ready");
     drag.element.classList.remove("dragging");
     dragRef.current = null;
     setPieces((current) => {
@@ -377,16 +370,15 @@ export default function Home() {
               <button className="room-code" onClick={copyCode} title="Kopyala">{room.code}<span>⧉</span></button>
               <p className="room-hint">Arkadaşların bu kodu girerek aynı tahtaya bağlanabilir.</p>
               <div className="divider" />
-              <p className="muted-label">OYUNCULAR · 3</p>
+              <p className="muted-label">OYUNCULAR · 1</p>
               <div className="players">
-                {[playerName, "Deniz", "Mert"].map((name, index) => (
-                  <div className="player" key={name}>
-                    <span className="avatar" style={{ background: avatarColor(index) }}>{name.slice(0, 1)}</span>
-                    <span>{name}</span>{index === 0 && <small>SEN</small>}
-                    <i className="online-dot" />
-                  </div>
-                ))}
+                <div className="player">
+                  <span className="avatar" style={{ background: avatarColor(0) }}>{playerName.slice(0, 1)}</span>
+                  <span>{playerName}</span><small>SEN</small>
+                  <i className="online-dot" />
+                </div>
               </div>
+              <p className="waiting-player">Diğer oyuncular kodla katıldığında burada görünür.</p>
               <button className="outline-button full" onClick={copyCode}>Davet kodunu kopyala</button>
             </>
           ) : (
@@ -416,7 +408,7 @@ export default function Home() {
             <div className="puzzle-board-guide">
               <div className={`hint-preview ${hintVisible ? "visible" : ""}`} style={{ backgroundImage: `url(${imageUrl})` }} />
               <div className="board-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}>
-                {Array.from({ length: pieceCount }).map((_, i) => <span key={i} data-cell-id={i} />)}
+                {Array.from({ length: pieceCount }).map((_, i) => <span key={i} />)}
               </div>
               <p>PARÇALARI BURAYA YERLEŞTİR</p>
             </div>
@@ -443,7 +435,6 @@ export default function Home() {
                   if (piece.locked || !boardRef.current) return;
                   event.currentTarget.setPointerCapture(event.pointerId);
                   const rect = boardRef.current.getBoundingClientRect();
-                  const targetCell = boardRef.current.querySelector<HTMLSpanElement>(`[data-cell-id="${piece.id}"]`);
                   event.currentTarget.classList.add("dragging");
                   dragRef.current = {
                     id: piece.id,
@@ -452,7 +443,6 @@ export default function Home() {
                     currentX: piece.x,
                     currentY: piece.y,
                     element: event.currentTarget,
-                    targetCell,
                   };
                 }}
                 role="button" tabIndex={0} aria-label={`${piece.id + 1}. puzzle parçası`}
@@ -475,9 +465,8 @@ export default function Home() {
           <div className="progress-track"><i style={{ width: `${progress}%` }} /></div>
           <p><b>{solvedCount}</b> / {pieceCount} parça doğru yerde</p>
           <div className="divider" />
-          <p className="muted-label">SON HAMLELER</p>
-          <div className="activity"><span className="avatar mini" style={{ background: "#ff6f61" }}>D</span><p><b>Deniz</b> bir parça yerleştirdi<small>az önce</small></p></div>
-          <div className="activity"><span className="avatar mini" style={{ background: "#4864ff", color: "white" }}>M</span><p><b>Mert</b> odaya katıldı<small>2 dk önce</small></p></div>
+          <p className="muted-label">ODA DURUMU</p>
+          <p className="activity-empty">İlerleme, yerleştirilen gerçek parçalarla güncellenir.</p>
           {!room && <button className="primary-button full create-main" onClick={() => setDialog("create")}>FOTOĞRAFINLA BAŞLA <span>→</span></button>}
         </aside>
       </section>
