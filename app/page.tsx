@@ -80,8 +80,11 @@ function edgeProfile(seed: string, row: number, col: number, axis: "h" | "v") {
   const unsigned = hash >>> 0;
   return {
     sign: unsigned % 2 === 0 ? 1 : -1,
-    center: 0.46 + ((unsigned >>> 3) % 9) / 100,
-    scale: 0.9 + ((unsigned >>> 8) % 19) / 100,
+    center: 0.4 + ((unsigned >>> 3) % 21) / 100,
+    spread: 0.16 + ((unsigned >>> 8) % 7) / 100,
+    neck: 0.07 + ((unsigned >>> 12) % 6) / 100,
+    crown: 0.22 + ((unsigned >>> 16) % 9) / 100,
+    depth: 0.82 + ((unsigned >>> 20) % 35) / 100,
   };
 }
 
@@ -109,7 +112,7 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       if (!context) return;
       context.scale(scale, scale);
 
-      const flat = { sign: 0, center: 0.5, scale: 1 };
+      const flat = { sign: 0, center: 0.5, spread: 0.18, neck: 0.1, crown: 0.26, depth: 1 };
       const topBoundary = row === 0 ? flat : edgeProfile(seed, row - 1, col, "h");
       const rightBoundary = col === cols - 1 ? flat : edgeProfile(seed, row, col, "v");
       const bottomBoundary = row === rows - 1 ? flat : edgeProfile(seed, row, col, "h");
@@ -123,7 +126,7 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       const addEdge = (
         startX: number, startY: number, endX: number, endY: number,
         normalX: number, normalY: number,
-        edge: { sign: number; center: number; scale: number },
+        edge: { sign: number; center: number; spread: number; neck: number; crown: number; depth: number },
       ) => {
         if (!edge.sign) {
           context.lineTo(endX, endY);
@@ -136,10 +139,10 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
           y: startY + deltaY * along + normalY * normal,
         });
         const center = edge.center;
-        const spread = 0.18 * edge.scale;
-        const neck = 0.11 * edge.scale;
-        const crown = 0.26 * edge.scale;
-        const depth = tab * edge.scale * edge.sign;
+        const spread = edge.spread;
+        const neck = edge.neck;
+        const crown = edge.crown;
+        const depth = tab * edge.depth * edge.sign;
         const baseStart = point(center - spread, 0);
         const neckLeft = point(center - neck, depth * 0.18);
         const crownTop = point(center, depth);
@@ -205,6 +208,7 @@ export default function Home() {
   const [room, setRoom] = useState<Room | null>(null);
   const [pieces, setPieces] = useState<Piece[]>(() => scatteredPieces(DEFAULT_ROWS, DEFAULT_COLS));
   const [imageUrl, setImageUrl] = useState("");
+  const [previewSeed, setPreviewSeed] = useState("PREVIEW");
   const [codeInput, setCodeInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("Hafta sonu buluşması");
@@ -227,7 +231,10 @@ export default function Home() {
     element: HTMLDivElement;
   } | null>(null);
 
-  useEffect(() => setImageUrl(createDefaultImage()), []);
+  useEffect(() => {
+    setImageUrl(createDefaultImage());
+    setPreviewSeed(crypto.randomUUID());
+  }, []);
   useEffect(() => () => {
     if (hintTimer.current) window.clearTimeout(hintTimer.current);
   }, []);
@@ -375,7 +382,7 @@ export default function Home() {
   return (
     <main className="site-shell">
       <header className="topbar">
-        <button className="brand" onClick={() => { setRoom(null); setPieces(scatteredPieces(3, 4)); setImageUrl(createDefaultImage()); }} aria-label="Parça ana sayfa">
+        <button className="brand" onClick={() => { setRoom(null); setPieces(scatteredPieces(3, 4)); setPreviewSeed(crypto.randomUUID()); setImageUrl(createDefaultImage()); }} aria-label="Parça ana sayfa">
           <span className="brand-mark">P</span><span>parça</span>
         </button>
         <div className="header-actions">
@@ -479,7 +486,7 @@ export default function Home() {
                 }}
                 role="button" tabIndex={0} aria-label={`${piece.id + 1}. puzzle parçası`}
               >
-                <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? "PARCA0"} imageUrl={imageUrl} />
+                <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
               </div>
             ))}
             {progress === 100 && <div className="complete-badge"><span>✓</span> TAMAMLANDI!</div>}
