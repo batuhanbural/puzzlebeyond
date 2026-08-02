@@ -15,7 +15,7 @@ type Room = {
 
 const DEFAULT_ROWS = 3;
 const DEFAULT_COLS = 4;
-const BOARD = { left: 0.18, top: 0.235, width: 0.64, height: 0.53 };
+const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 };
 const PUZZLE_SIZES = [
   { count: 12, rows: 3, cols: 4, label: "RAHAT" },
   { count: 20, rows: 4, cols: 5, label: "KOLAY" },
@@ -78,16 +78,17 @@ function scatteredPieces(rows: number, cols: number, seed?: string) {
   } : Math.random;
   if (rows * cols <= 20) {
     const ids = Array.from({ length: rows * cols }, (_, id) => id).sort(() => random() - 0.5);
-    const perSide = Math.ceil(ids.length / 4);
+    const perSide = Math.ceil(ids.length / 2);
+    const cellWidth = BOARD.width / cols;
+    const cellHeight = BOARD.height / rows;
     return ids.map((id, index) => {
-      const side = index % 4;
-      const slot = Math.floor(index / 4);
-      const along = (slot + 0.35 + random() * 0.3) / perSide;
-      const jitter = (random() - 0.5) * 0.035;
-      if (side === 0) return { id, x: 0.07 + along * 0.75, y: 0.025 + jitter, locked: false };
-      if (side === 1) return { id, x: 0.81 + jitter, y: 0.1 + along * 0.68, locked: false };
-      if (side === 2) return { id, x: 0.07 + along * 0.75, y: 0.82 + jitter, locked: false };
-      return { id, x: 0.025 + jitter, y: 0.1 + along * 0.68, locked: false };
+      const side = index % 2;
+      const slot = Math.floor(index / 2);
+      const y = Math.min(0.99 - cellHeight, ((slot + 0.18 + random() * 0.64) / perSide) * (0.99 - cellHeight));
+      const x = side === 0
+        ? 0.012 + random() * 0.018
+        : Math.min(0.99 - cellWidth, BOARD.left + BOARD.width + 0.014 + random() * 0.018);
+      return { id, x, y, locked: false };
     });
   }
   const shuffle = <T,>(values: T[]) => {
@@ -104,11 +105,9 @@ function scatteredPieces(rows: number, cols: number, seed?: string) {
   const stepY = cellHeight * 0.82;
   for (let y = 0.012; y <= 0.988 - cellHeight; y += stepY) {
     for (let x = 0.012; x <= 0.988 - cellWidth; x += stepX) {
-      const overlapsBoard = x + cellWidth * 0.9 > BOARD.left - 0.008
-        && x < BOARD.left + BOARD.width + 0.008
-        && y + cellHeight * 0.9 > BOARD.top - 0.008
-        && y < BOARD.top + BOARD.height + 0.008;
-      if (overlapsBoard) continue;
+      const fitsLeftTray = x + cellWidth * 0.9 < BOARD.left - 0.006;
+      const fitsRightTray = x > BOARD.left + BOARD.width + 0.006;
+      if (!fitsLeftTray && !fitsRightTray) continue;
       slots.push({
         x: Math.max(0.005, Math.min(0.99 - cellWidth, x + (random() - 0.5) * cellWidth * 0.12)),
         y: Math.max(0.005, Math.min(0.99 - cellHeight, y + (random() - 0.5) * cellHeight * 0.12)),
@@ -119,7 +118,9 @@ function scatteredPieces(rows: number, cols: number, seed?: string) {
   const ids = shuffle(Array.from({ length: rows * cols }, (_, id) => id));
   return ids.map((id, index) => ({
     id,
-    x: slots[index]?.x ?? 0.01 + random() * Math.max(0.01, 0.98 - cellWidth),
+    x: slots[index]?.x ?? (index % 2 === 0
+      ? 0.006 + random() * Math.max(0.006, BOARD.left - cellWidth - 0.018)
+      : BOARD.left + BOARD.width + 0.008 + random() * Math.max(0.006, 0.982 - BOARD.left - BOARD.width - cellWidth)),
     y: slots[index]?.y ?? 0.01 + random() * Math.max(0.01, 0.98 - cellHeight),
     locked: false,
   }));
