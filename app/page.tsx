@@ -400,7 +400,7 @@ export default function Home() {
   const onFile = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
     if (!selected) return;
-    if (selected.size > 8 * 1024 * 1024) { setNotice("Fotoğraf en fazla 8 MB olabilir."); return; }
+    if (selected.size > 4 * 1024 * 1024) { setNotice("Fotoğraf en fazla 4 MB olabilir."); return; }
     setFile(selected);
     setImageUrl(URL.createObjectURL(selected));
   };
@@ -627,7 +627,7 @@ export default function Home() {
                 <label className="field"><span>Puzzle adı</span><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={48} /></label>
                 <label className="upload-field">
                   {imageUrl ? <img src={imageUrl} alt="Seçilen puzzle ön izlemesi" /> : <span className="upload-icon">＋</span>}
-                  <div><b>{file ? file.name : "Fotoğrafını ekle"}</b><small>JPG, PNG veya WEBP · en fazla 8 MB</small></div>
+                  <div><b>{file ? file.name : "Fotoğrafını ekle"}</b><small>JPG, PNG veya WEBP · en fazla 4 MB</small></div>
                   <input type="file" accept="image/jpeg,image/png,image/webp" onChange={onFile} />
                 </label>
                 <fieldset><legend>Zorluk · 12–1024 parça</legend><div className="difficulty-options">
