@@ -478,30 +478,40 @@ export default function Home() {
 
       <section className="game-layout">
         <aside className="panel room-panel">
-          <div className="panel-heading"><span className="index">01</span><span>OYUN ODASI</span></div>
+          <div className="panel-heading panel-heading-rich">
+            <span className="index">01</span>
+            <span><b>ORTAK MASA</b><small>AYNI KOD, AYNI PUZZLE</small></span>
+          </div>
           {room ? (
-            <>
-              <p className="muted-label">ODA KODU</p>
-              <button className="room-code" onClick={copyCode} title="Kopyala">{room.code}<span>⧉</span></button>
-              <p className="room-hint">Arkadaşların bu kodu girerek aynı tahtaya bağlanabilir.</p>
-              <div className="room-state"><span className="live-dot" /><b>ODA AÇIK</b><span>{pieceCount} parça</span></div>
-              <div className="divider" />
-              <p className="muted-label">OYUNCULAR · 1</p>
-              <div className="players">
-                <div className="player">
-                  <span className="avatar" style={{ background: avatarColor(0) }}>{playerName.slice(0, 1)}</span>
-                  <span>{playerName}</span><small>SEN</small>
-                  <i className="online-dot" />
-                </div>
+            <div className="room-panel-content">
+              <div className="room-live-row">
+                <span className="status-beacon"><i /></span>
+                <span><b>BAĞLANTI AÇIK</b><small>{pieceCount} parçalık ortak oyun</small></span>
               </div>
-              <p className="waiting-player">Diğer oyuncular kodla katıldığında burada görünür.</p>
-              <button className="outline-button full" onClick={copyCode}>Davet kodunu kopyala</button>
-            </>
+              <button className="share-code-card" onClick={copyCode} title="Oda kodunu kopyala">
+                <span>DAVET KODU</span>
+                <strong>{room.code}</strong>
+                <small>KOPYALAMAK İÇİN DOKUN ↗</small>
+              </button>
+              <div className="invite-explainer">
+                <span>1</span><p>Kodu arkadaşlarına gönder.</p>
+                <span>2</span><p>Herkes aynı tahtaya bağlansın.</p>
+              </div>
+              <div className="current-player-card">
+                <span className="avatar" style={{ background: avatarColor(0) }}>{playerName.slice(0, 1)}</span>
+                <span><b>{playerName}</b><small>BU CİHAZ</small></span>
+                <i className="online-dot" />
+              </div>
+              <button className="outline-button full room-copy-button" onClick={copyCode}>KODU KOPYALA</button>
+            </div>
           ) : (
-            <div className="empty-room">
-              <span className="big-number">6</span>
-              <p>karakterlik bir kod, herkesi aynı puzzle&apos;da buluşturur.</p>
-              <button className="outline-button full" onClick={() => setDialog("join")}>KOD GİR</button>
+            <div className="room-start-card">
+              <span className="code-stamp">6</span>
+              <p className="room-start-kicker">KARAKTER · TEK MASA</p>
+              <h3>Arkadaşlarının puzzle&apos;ına katıl.</h3>
+              <p>Sana gönderilen oda kodu herkesi aynı canlı tahtada buluşturur.</p>
+              <button className="primary-button full" onClick={() => setDialog("join")}>KODLA KATIL →</button>
+              <button className="panel-text-button" onClick={() => setDialog("create")}>YA DA YENİ ODA KUR</button>
             </div>
           )}
         </aside>
@@ -577,16 +587,26 @@ export default function Home() {
         </section>
 
         <aside className="panel progress-panel">
-          <div className="panel-heading"><span className="index">02</span><span>İLERLEME</span></div>
-          <div className="progress-value"><strong>{progress}</strong><span>%</span></div>
-          <div className="progress-track"><i style={{ width: `${progress}%` }} /></div>
-          <div className="stat-grid">
-            <div><strong>{solvedCount}</strong><span>YERLEŞEN</span></div>
-            <div><strong>{remainingCount}</strong><span>KALAN</span></div>
+          <div className="panel-heading panel-heading-rich">
+            <span className="index coral">02</span>
+            <span><b>OYUN DURUMU</b><small>ANLIK İLERLEME</small></span>
           </div>
-          <div className="divider" />
-          <div className="tip-card"><span>NASIL OYNANIR?</span><p>Parçayı doğru yerine yakın bırakman yeterli; otomatik olarak yerine oturur.</p></div>
-          {!room && <button className="primary-button full create-main" onClick={() => setDialog("create")}>FOTOĞRAFINLA BAŞLA <span>→</span></button>}
+          <div className="progress-overview">
+            <div className="progress-dial" style={{ background: `conic-gradient(var(--coral) 0 ${progress}%, #ded8cb ${progress}% 100%)` }}>
+              <div><strong>{progress}</strong><span>%</span></div>
+            </div>
+            <p>{progress === 100 ? "Puzzle tamamlandı!" : progress > 0 ? "Görüntü ortaya çıkıyor." : "İlk parçayı sen yerleştir."}</p>
+          </div>
+          <div className="progress-counts">
+            <div><span>YERİNDE</span><strong>{solvedCount}</strong><i>PARÇA</i></div>
+            <div><span>BEKLİYOR</span><strong>{remainingCount}</strong><i>PARÇA</i></div>
+          </div>
+          <div className="progress-rail"><i style={{ width: `${progress}%` }} /></div>
+          <div className="panel-help">
+            <span>✦ KÜÇÜK İPUCU</span>
+            <p>Parçayı doğru yere yaklaştırıp bırak; yerine kendiliğinden oturur.</p>
+          </div>
+          {!room && <button className="primary-button full progress-create" onClick={() => setDialog("create")}>FOTOĞRAFINLA BAŞLA →</button>}
         </aside>
       </section>
 
