@@ -186,8 +186,17 @@ export default function Home() {
   const [playerName] = useState(() => typeof window === "undefined" ? "Sen" : localStorage.getItem("puzzle-name") || "Sen");
   const boardRef = useRef<HTMLDivElement>(null);
   const lastLocalMove = useRef(0);
+  const remoteUpdatedAt = useRef(0);
   const hintTimer = useRef<number | null>(null);
-  const dragRef = useRef<{ id: number; offsetX: number; offsetY: number } | null>(null);
+  const dragRef = useRef<{
+    id: number;
+    offsetX: number;
+    offsetY: number;
+    currentX: number;
+    currentY: number;
+    element: HTMLDivElement;
+    targetCell: HTMLSpanElement | null;
+  } | null>(null);
 
   useEffect(() => setImageUrl(createDefaultImage()), []);
   useEffect(() => () => {
@@ -205,11 +214,15 @@ export default function Home() {
     if (!room) return;
     lastLocalMove.current = Date.now();
     try {
-      await fetch("/api/room", {
+      const response = await fetch("/api/room", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: room.code, pieces: nextPieces }),
       });
+      if (response.ok) {
+        const data = await response.json() as { updatedAt?: number };
+        remoteUpdatedAt.current = data.updatedAt ?? remoteUpdatedAt.current;
+      }
     } catch {
       setNotice("Hamlen cihazında kaydedildi; bağlantı gelince tekrar eşitlenecek.");
     }
@@ -218,11 +231,13 @@ export default function Home() {
   useEffect(() => {
     if (!room) return;
     const timer = window.setInterval(async () => {
-      if (Date.now() - lastLocalMove.current < 1200) return;
+      if (dragRef.current || Date.now() - lastLocalMove.current < 1200) return;
       try {
         const response = await fetch(`/api/room?code=${room.code}`, { cache: "no-store" });
         if (!response.ok) return;
         const data = await response.json() as { room: Room };
+        if (data.room.updatedAt <= remoteUpdatedAt.current) return;
+        remoteUpdatedAt.current = data.room.updatedAt;
         setRoom(data.room);
         setPieces(normalizePieces(data.room));
       } catch { /* Keep the board usable during brief connection drops. */ }
@@ -245,6 +260,7 @@ export default function Home() {
       const response = await fetch("/api/room", { method: "POST", body: form });
       const data = await response.json() as { room?: Room; error?: string };
       if (!response.ok || !data.room) throw new Error(data.error || "Oda oluşturulamadı");
+      remoteUpdatedAt.current = data.room.updatedAt;
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl);
       setDialog(null); setNotice(`${data.room.code} kodlu oda hazır. Kodu arkadaşlarına gönder!`);
     } catch (error) {
@@ -259,6 +275,7 @@ export default function Home() {
       const response = await fetch(`/api/room?code=${codeInput}`, { cache: "no-store" });
       const data = await response.json() as { room?: Room; error?: string };
       if (!response.ok || !data.room) throw new Error(data.error || "Oda bulunamadı");
+      remoteUpdatedAt.current = data.room.updatedAt;
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl);
       setDialog(null); setNotice(`${data.room.code} odasına katıldın. İyi eğlenceler!`);
     } catch (error) {
@@ -276,26 +293,37 @@ export default function Home() {
 
   const movePiece = (event: PointerEvent<HTMLDivElement>) => {
     if (!dragRef.current || !boardRef.current) return;
+    const drag = dragRef.current;
     const rect = boardRef.current.getBoundingClientRect();
-    const x = Math.max(0.005, Math.min(0.91, (event.clientX - rect.left) / rect.width - dragRef.current.offsetX));
-    const y = Math.max(0.005, Math.min(0.89, (event.clientY - rect.top) / rect.height - dragRef.current.offsetY));
-    setPieces((current) => current.map((piece) => piece.id === dragRef.current?.id ? { ...piece, x, y } : piece));
+    const x = Math.max(0.005, Math.min(0.91, (event.clientX - rect.left) / rect.width - drag.offsetX));
+    const y = Math.max(0.005, Math.min(0.89, (event.clientY - rect.top) / rect.height - drag.offsetY));
+    drag.currentX = x;
+    drag.currentY = y;
+    drag.element.style.left = `${x * 100}%`;
+    drag.element.style.top = `${y * 100}%`;
+    const targetX = BOARD.left + (drag.id % cols) * (BOARD.width / cols);
+    const targetY = BOARD.top + Math.floor(drag.id / cols) * (BOARD.height / rows);
+    const isNear = Math.abs(x - targetX) < (BOARD.width / cols) * 0.9
+      && Math.abs(y - targetY) < (BOARD.height / rows) * 0.9;
+    drag.targetCell?.classList.toggle("magnet-ready", isNear);
   };
 
   const endMove = () => {
     if (!dragRef.current) return;
-    const movingId = dragRef.current.id;
+    const drag = dragRef.current;
+    const movingId = drag.id;
+    drag.targetCell?.classList.remove("magnet-ready");
+    drag.element.classList.remove("dragging");
     dragRef.current = null;
     setPieces((current) => {
-      const moving = current.find((piece) => piece.id === movingId)!;
       const correctCol = movingId % cols;
       const correctRow = Math.floor(movingId / cols);
       const targetX = BOARD.left + correctCol * (BOARD.width / cols);
       const targetY = BOARD.top + correctRow * (BOARD.height / rows);
-      const distance = Math.hypot(moving.x - targetX, moving.y - targetY);
-      const snaps = distance < Math.max(0.035, BOARD.width / cols * 0.32);
+      const snaps = Math.abs(drag.currentX - targetX) < (BOARD.width / cols) * 0.72
+        && Math.abs(drag.currentY - targetY) < (BOARD.height / rows) * 0.72;
       const next = current.map((piece) => piece.id === movingId
-        ? { ...piece, x: snaps ? targetX : piece.x, y: snaps ? targetY : piece.y, locked: snaps }
+        ? { ...piece, x: snaps ? targetX : drag.currentX, y: snaps ? targetY : drag.currentY, locked: snaps }
         : piece);
       void pushMove(next);
       if (snaps) setNotice("Tak! Parça doğru yerine oturdu.");
@@ -388,7 +416,7 @@ export default function Home() {
             <div className="puzzle-board-guide">
               <div className={`hint-preview ${hintVisible ? "visible" : ""}`} style={{ backgroundImage: `url(${imageUrl})` }} />
               <div className="board-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}>
-                {Array.from({ length: pieceCount }).map((_, i) => <span key={i} />)}
+                {Array.from({ length: pieceCount }).map((_, i) => <span key={i} data-cell-id={i} />)}
               </div>
               <p>PARÇALARI BURAYA YERLEŞTİR</p>
             </div>
@@ -415,12 +443,17 @@ export default function Home() {
                   if (piece.locked || !boardRef.current) return;
                   event.currentTarget.setPointerCapture(event.pointerId);
                   const rect = boardRef.current.getBoundingClientRect();
+                  const targetCell = boardRef.current.querySelector<HTMLSpanElement>(`[data-cell-id="${piece.id}"]`);
+                  event.currentTarget.classList.add("dragging");
                   dragRef.current = {
                     id: piece.id,
                     offsetX: (event.clientX - rect.left) / rect.width - piece.x,
                     offsetY: (event.clientY - rect.top) / rect.height - piece.y,
+                    currentX: piece.x,
+                    currentY: piece.y,
+                    element: event.currentTarget,
+                    targetCell,
                   };
-                  event.currentTarget.parentElement?.append(event.currentTarget);
                 }}
                 role="button" tabIndex={0} aria-label={`${piece.id + 1}. puzzle parçası`}
               >
