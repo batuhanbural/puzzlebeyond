@@ -521,7 +521,7 @@ export default function Home() {
             <div><span className="live-dot" /> {room ? "CANLI OYUN" : "ÖN İZLEME"}</div>
             <div className="toolbar-right">
               <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>
-              <div className="difficulty-pill">{pieceCount} PARÇA · {rows}×{cols}</div>
+              <div className="difficulty-pill" title={`${rows}×${cols}`}>{progress}% · {pieceCount} PARÇA</div>
             </div>
           </div>
           <div
