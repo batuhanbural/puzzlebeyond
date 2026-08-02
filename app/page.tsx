@@ -182,18 +182,24 @@ export default function Home() {
   const [dialog, setDialog] = useState<"create" | "join" | null>(null);
   const [notice, setNotice] = useState("Yeni bir oda kurabilir ya da arkadaşlarının kodunu girebilirsin.");
   const [busy, setBusy] = useState(false);
+  const [hintVisible, setHintVisible] = useState(false);
   const [playerName] = useState(() => typeof window === "undefined" ? "Sen" : localStorage.getItem("puzzle-name") || "Sen");
   const boardRef = useRef<HTMLDivElement>(null);
   const lastLocalMove = useRef(0);
+  const hintTimer = useRef<number | null>(null);
   const dragRef = useRef<{ id: number; offsetX: number; offsetY: number } | null>(null);
 
   useEffect(() => setImageUrl(createDefaultImage()), []);
+  useEffect(() => () => {
+    if (hintTimer.current) window.clearTimeout(hintTimer.current);
+  }, []);
 
   const rows = room?.rows ?? DEFAULT_ROWS;
   const cols = room?.cols ?? DEFAULT_COLS;
   const pieceCount = rows * cols;
   const solvedCount = pieces.filter((piece) => piece.locked).length;
   const progress = Math.round((solvedCount / pieceCount) * 100);
+  const hintPiece = pieces.find((piece) => !piece.locked);
 
   const pushMove = useCallback(async (nextPieces: Piece[]) => {
     if (!room) return;
@@ -303,6 +309,17 @@ export default function Home() {
     setNotice("Oda kodu panoya kopyalandı.");
   };
 
+  const showHint = () => {
+    if (!hintPiece) {
+      setNotice("Puzzle zaten tamamlandı — ipucuna ihtiyacın kalmadı!");
+      return;
+    }
+    if (hintTimer.current) window.clearTimeout(hintTimer.current);
+    setHintVisible(true);
+    setNotice("İpucu 3 saniye boyunca açık: parlayan hücreye dikkat et.");
+    hintTimer.current = window.setTimeout(() => setHintVisible(false), 3200);
+  };
+
   return (
     <main className="site-shell">
       <header className="topbar">
@@ -356,7 +373,10 @@ export default function Home() {
         <section className="board-section">
           <div className="board-toolbar">
             <div><span className="live-dot" /> {room ? "CANLI OYUN" : "ÖN İZLEME"}</div>
-            <div className="difficulty-pill">{pieceCount} PARÇA · {rows}×{cols}</div>
+            <div className="toolbar-right">
+              <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>
+              <div className="difficulty-pill">{pieceCount} PARÇA · {rows}×{cols}</div>
+            </div>
           </div>
           <div
             ref={boardRef}
@@ -366,11 +386,23 @@ export default function Home() {
             onPointerCancel={endMove}
           >
             <div className="puzzle-board-guide">
+              <div className={`hint-preview ${hintVisible ? "visible" : ""}`} style={{ backgroundImage: `url(${imageUrl})` }} />
               <div className="board-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}>
                 {Array.from({ length: pieceCount }).map((_, i) => <span key={i} />)}
               </div>
               <p>PARÇALARI BURAYA YERLEŞTİR</p>
             </div>
+            {hintVisible && hintPiece && (
+              <div
+                className="hint-target"
+                style={{
+                  left: `${(BOARD.left + (hintPiece.id % cols) * BOARD.width / cols) * 100}%`,
+                  top: `${(BOARD.top + Math.floor(hintPiece.id / cols) * BOARD.height / rows) * 100}%`,
+                  width: `${BOARD.width * 100 / cols}%`,
+                  height: `${BOARD.height * 100 / rows}%`,
+                }}
+              ><span>{hintPiece.id + 1}</span></div>
+            )}
             {pieces.map((piece) => (
               <div
                 key={piece.id}
