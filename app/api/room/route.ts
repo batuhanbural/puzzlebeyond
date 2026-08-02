@@ -88,8 +88,8 @@ export async function PATCH(request: Request) {
   if (!row) return Response.json({ error: "Oda bulunamadı." }, { status: 404 });
   if (payload.pieces.length !== row.rows * row.cols) return Response.json({ error: "Parça sayısı eşleşmiyor." }, { status: 400 });
   const pieces = payload.pieces.map((piece) => ({
-    id: Math.max(0, Math.floor(piece.id)), x: Math.max(0, Math.min(row.cols - 1, Math.floor(piece.x))),
-    y: Math.max(0, Math.min(row.rows - 1, Math.floor(piece.y))), locked: Boolean(piece.locked),
+    id: Math.max(0, Math.floor(piece.id)), x: Math.max(0, Math.min(1, Number(piece.x))),
+    y: Math.max(0, Math.min(1, Number(piece.y))), locked: Boolean(piece.locked),
   }));
   const now = Date.now();
   await env.DB.prepare("UPDATE puzzle_rooms SET pieces = ?, updated_at = ? WHERE code = ?").bind(JSON.stringify(pieces), now, code).run();
