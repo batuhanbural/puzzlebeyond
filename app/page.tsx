@@ -629,7 +629,12 @@ export default function Home() {
             {progress === 100 && <div className="complete-badge"><span>✓</span> TAMAMLANDI!</div>}
           </div>
           <div className="mobile-room-actions">
-            {!room && <button className="primary-button" onClick={() => setDialog("create")}>Yeni puzzle oluştur</button>}
+            {!room && (
+              <>
+                <button className="outline-button" onClick={() => setDialog("join")}>Kodla katıl</button>
+                <button className="primary-button" onClick={() => setDialog("create")}>Yeni puzzle oluştur</button>
+              </>
+            )}
             {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
           </div>
         </section>
