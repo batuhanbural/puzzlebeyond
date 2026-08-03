@@ -62,13 +62,15 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .current-player-card b { overflow:hidden; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
 .current-player-card small { color:#77736b; font-size:7px; font-weight:900; letter-spacing:.7px; }
 .online-dot { margin-left:auto; width:7px; height:7px; border-radius:50%; background:#40b866; box-shadow:0 0 0 2px #d9f2df; }
-.room-copy-button { min-height:42px; margin-top:14px; }
+.room-copy-button { min-height:46px; margin-top:14px; padding:0 9px; font-size:10px; letter-spacing:.55px; line-height:1.15; white-space:normal; }
 .room-start-card { min-height:410px; padding:28px 16px 22px; display:flex; flex-direction:column; justify-content:center; text-align:center; }
 .code-stamp { align-self:center; width:92px; height:92px; display:grid; place-items:center; border:3px solid var(--ink); border-radius:50%; background:var(--blue); color:#fff; font-size:62px; line-height:1; font-weight:950; box-shadow:7px 7px 0 var(--lime),9px 9px 0 var(--ink); transform:rotate(-5deg); }
 .room-start-kicker { margin:23px 0 7px; font-size:8px!important; font-family:Inter,sans-serif!important; font-weight:950; letter-spacing:1.1px; }
 .room-start-card h3 { margin:0; font-size:21px; line-height:1; letter-spacing:-1px; text-transform:uppercase; }
 .room-start-card>p:not(.room-start-kicker) { margin:14px 0 20px; color:#65615a; font-family:Georgia,serif; font-size:11px; line-height:1.5; }
-.panel-text-button { margin-top:14px; border:0; background:none; font-size:8px; font-weight:950; letter-spacing:.8px; text-decoration:underline; cursor:pointer; }
+.room-start-card .primary-button { min-height:50px; padding:7px 9px; font-size:11px; letter-spacing:.45px; line-height:1.15; white-space:normal; }
+.panel-text-button { width:100%; min-height:36px; margin-top:9px; padding:7px 5px; border:1.5px solid var(--ink); background:var(--white); box-shadow:2px 2px 0 var(--ink); font-size:10px; font-weight:950; letter-spacing:.35px; line-height:1.2; text-decoration:none; cursor:pointer; }
+.panel-text-button:hover { background:var(--ink); color:var(--paper); transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--ink); }
 .board-section { min-width:0; min-height:0; padding:0 18px 10px; display:grid; grid-template-rows:50px minmax(0,1fr) auto; align-items:center; overflow:hidden; background:#e6e0d3; }
 .board-toolbar { width:calc(100% + 36px); height:50px; margin:0 -18px; padding:0 18px; display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid var(--ink); background:var(--paper); font-size:10px; font-weight:950; letter-spacing:1.1px; }
 .live-dot { display:inline-block; width:8px; height:8px; margin-right:6px; border-radius:50%; background:#ff4d41; box-shadow:0 0 0 3px #ffc7c2; }
