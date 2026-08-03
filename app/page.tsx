@@ -227,10 +227,14 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       const boardHeight = boardWidth / imageRatio;
       const cellWidth = boardWidth / cols;
       const cellHeight = boardHeight / rows;
-      const pad = Math.min(cellWidth, cellHeight) * 0.34;
+      // Keep the canvas padding proportional to each cell axis. The canvas is
+      // rendered at 168% width/height and offset by 34%; using the same pad
+      // on both axes distorts the path whenever cells are not square.
+      const padX = cellWidth * 0.34;
+      const padY = cellHeight * 0.34;
       const tab = Math.min(cellWidth, cellHeight) * 0.28;
-      const width = cellWidth + pad * 2;
-      const height = cellHeight + pad * 2;
+      const width = cellWidth + padX * 2;
+      const height = cellHeight + padY * 2;
       const scale = 2;
       canvas.width = Math.ceil(width * scale);
       canvas.height = Math.ceil(height * scale);
@@ -247,7 +251,7 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       const right = rightBoundary;
       const bottom = bottomBoundary;
       const left = { ...leftBoundary, sign: -leftBoundary.sign };
-      const x0 = pad, y0 = pad, x1 = pad + cellWidth, y1 = pad + cellHeight;
+      const x0 = padX, y0 = padY, x1 = padX + cellWidth, y1 = padY + cellHeight;
 
       const addEdge = (
         startX: number, startY: number, endX: number, endY: number,
@@ -299,7 +303,7 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       context.closePath();
       context.save();
       context.clip();
-      context.drawImage(image, pad - col * cellWidth, pad - row * cellHeight, boardWidth, boardHeight);
+      context.drawImage(image, padX - col * cellWidth, padY - row * cellHeight, boardWidth, boardHeight);
       context.restore();
       context.lineJoin = "round";
       context.lineCap = "round";
