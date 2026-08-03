@@ -371,6 +371,7 @@ export default function Home() {
   const [previewSeed, setPreviewSeed] = useState("PREVIEW");
   const [codeInput, setCodeInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [uploadPreviewUrl, setUploadPreviewUrl] = useState("");
   const [title, setTitle] = useState("Hafta sonu buluşması");
   const [difficulty, setDifficulty] = useState("12");
   const [dialog, setDialog] = useState<"create" | "join" | null>(null);
@@ -419,6 +420,11 @@ export default function Home() {
     }).catch(() => { /* The file validation flow reports unreadable images. */ });
     return () => { cancelled = true; };
   }, [imageUrl]);
+  useEffect(() => {
+    return () => {
+      if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
+    };
+  }, [uploadPreviewUrl]);
   useEffect(() => {
     let cancelled = false;
     const fallback = () => setGalleryItems(createGalleryItems());
@@ -548,7 +554,7 @@ export default function Home() {
       const data = await readApiPayload<{ room?: Room }>(response);
       if (!response.ok || !data.room) throw new Error(data.error || "Oda oluşturulamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
-      setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl);
+      setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl); setUploadPreviewUrl("");
       setGalleryOpen(false);
       setLastHeldPieceId(null);
       setDialog(null); setNotice(`${data.room.code} kodlu oda hazır. Kodu arkadaşlarına gönder!`);
@@ -584,6 +590,7 @@ export default function Home() {
     setRoom(null);
     setGalleryOpen(false);
     setFile(null);
+    setUploadPreviewUrl("");
     setSelectedGalleryId(null);
     setImageUrl(createDefaultImage());
     setPieces(scatteredPieces(DEFAULT_ROWS, DEFAULT_COLS));
@@ -613,7 +620,7 @@ export default function Home() {
       await validateImage(selected);
       setFile(selected);
       setSelectedGalleryId(null);
-      setImageUrl(URL.createObjectURL(selected));
+      setUploadPreviewUrl(URL.createObjectURL(selected));
       setNotice(`${selected.name} kullanıma hazır.`);
     } catch (error) {
       event.target.value = "";
@@ -873,7 +880,7 @@ export default function Home() {
                 <h2 id="dialog-title">Puzzle odanı kur</h2>
                 <label className="field"><span>Puzzle adı</span><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={48} /></label>
                 <label className="upload-field">
-                  {imageUrl ? <img src={imageUrl} alt="Seçilen puzzle ön izlemesi" /> : <span className="upload-icon">＋</span>}
+                  {(uploadPreviewUrl || imageUrl) ? <img src={uploadPreviewUrl || imageUrl} alt="Seçilen puzzle ön izlemesi" /> : <span className="upload-icon">＋</span>}
                   <div><b>{file ? file.name : selectedGalleryId ? "Galeriden seçilen puzzle" : "Fotoğrafını ekle"}</b><small>{selectedGalleryId ? "Hazır görsel seçildi · istersen değiştirebilirsin" : "JPG, PNG veya WEBP · en fazla 4 MB"}</small></div>
                   <input type="file" accept="image/jpeg,image/png,image/webp" onChange={onFile} />
                 </label>
