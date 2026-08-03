@@ -344,13 +344,44 @@ async function readApiPayload<T>(response: Response): Promise<ApiPayload<T>> {
   }
 }
 
+function isSupportedImageType(type: string) {
+  return /^image\/(jpeg|jpg|png|webp)$/i.test(type);
+}
+
 async function validateImage(file: File) {
-  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
+  if (!isSupportedImageType(file.type)) {
     throw new Error("Yalnızca JPG, PNG veya WebP fotoğrafları kullanılabilir.");
   }
   const objectUrl = URL.createObjectURL(file);
   try {
     await loadPuzzleImage(objectUrl);
+  } finally {
+    puzzleImageCache.delete(objectUrl);
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function prepareUploadFile(file: File) {
+  const maxDimension = 2400;
+  const maxBytes = 2.8 * 1024 * 1024;
+  if (file.size <= maxBytes) {
+    return file;
+  }
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadPuzzleImage(objectUrl);
+    const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.fillStyle = "#fffdf7";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.84));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg", lastModified: Date.now() });
   } finally {
     puzzleImageCache.delete(objectUrl);
     URL.revokeObjectURL(objectUrl);
@@ -616,16 +647,21 @@ export default function Home() {
       event.target.value = "";
       return;
     }
+    setBusy(true);
+    setNotice("Fotoğraf hazırlanıyor…");
     try {
       await validateImage(selected);
-      setFile(selected);
+      const preparedFile = await prepareUploadFile(selected);
+      setFile(preparedFile);
       setSelectedGalleryId(null);
-      setUploadPreviewUrl(URL.createObjectURL(selected));
-      setNotice(`${selected.name} kullanıma hazır.`);
+      setUploadPreviewUrl(URL.createObjectURL(preparedFile));
+      setNotice(preparedFile === selected ? `${selected.name} kullanıma hazır.` : "Fotoğraf yükleme için optimize edildi.");
     } catch (error) {
       event.target.value = "";
       setFile(null);
       setNotice(error instanceof Error ? error.message : "Fotoğraf okunamadı.");
+    } finally {
+      setBusy(false);
     }
   };
 

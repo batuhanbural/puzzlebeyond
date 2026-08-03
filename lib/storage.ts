@@ -166,6 +166,10 @@ export async function putPuzzleImage(code: string, body: ArrayBuffer, contentTyp
   return imageKey;
 }
 
+export async function deletePuzzleImage(imageKey: string) {
+  await deleteStorageObject(imageKey);
+}
+
 export async function getPuzzleImageResponse(imageKey: string) {
   const { url, bucket } = config();
   return Response.redirect(`${url}/storage/v1/object/public/${bucket}/${imageKey}`, 307);

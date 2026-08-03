@@ -1,6 +1,7 @@
 import {
   createRoom as storeRoom,
   deleteRoom,
+  deletePuzzleImage,
   ensureSchema,
   getRoom,
   maybeCleanupExpiredRooms,
@@ -34,6 +35,20 @@ function roomJson(row: RoomRecord) {
   };
 }
 
+function normalizeImageType(type: string) {
+  return type.toLowerCase() === "image/jpg" ? "image/jpeg" : type.toLowerCase();
+}
+
+function uploadErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("SUPABASE_URL")) return "Vercel Supabase ortam değişkenleri eksik. SUPABASE_URL ve SUPABASE_SECRET_KEY ayarlarını kontrol et.";
+  if (/görsel yüklemesi başarısız \((401|403)\)/i.test(message)) return "Supabase anahtarı yükleme yetkisine sahip değil. SUPABASE_SECRET_KEY olarak service/secret key kullan.";
+  if (/görsel yüklemesi başarısız \(404\)/i.test(message)) return "Supabase Storage bucket bulunamadı. puzzle-images bucket'ını oluştur veya SUPABASE_STORAGE_BUCKET değerini kontrol et.";
+  if (message.includes("puzzle_rooms")) return "Supabase puzzle_rooms tablosu bulunamadı. supabase/schema.sql dosyasını SQL Editor'da çalıştır.";
+  if (/fetch failed|network|timeout/i.test(message)) return "Supabase'e bağlanılamadı. Vercel ortam değişkenleri ve Supabase URL'sini kontrol et.";
+  return "Fotoğraf yüklenemedi. Dosya biçimini ve Supabase ayarlarını kontrol edip tekrar dene.";
+}
+
 export async function GET(request: Request) {
   await ensureSchema();
   const now = Date.now();
@@ -57,6 +72,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  let imageKey = "";
+  let roomSaved = false;
   try {
     await ensureSchema();
     await maybeCleanupExpiredRooms(Date.now() - ROOM_TTL_MS);
@@ -72,9 +89,9 @@ export async function POST(request: Request) {
     let contentType = "image/jpeg";
     if (file instanceof File && file.size > 0) {
       if (file.size > 4 * 1024 * 1024) return Response.json({ error: "Fotoğraf en fazla 4 MB olabilir." }, { status: 413 });
-      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return Response.json({ error: "Yalnızca JPG, PNG veya WebP fotoğrafları kullanılabilir." }, { status: 415 });
+      contentType = normalizeImageType(file.type);
+      if (!/^image\/(jpeg|png|webp)$/.test(contentType)) return Response.json({ error: "Yalnızca JPG, PNG veya WebP fotoğrafları kullanılabilir." }, { status: 415 });
       imageBody = await file.arrayBuffer();
-      contentType = file.type;
     } else if (defaultImage.startsWith("data:image/")) {
       const [meta, payload] = defaultImage.split(",");
       contentType = meta.match(/data:(.*?);/)?.[1] || "image/jpeg";
@@ -88,13 +105,17 @@ export async function POST(request: Request) {
       if (!(await roomExists(code))) break;
       code = makeCode();
     }
-    const imageKey = await putPuzzleImage(code, imageBody, contentType);
+    imageKey = await putPuzzleImage(code, imageBody, contentType);
     const room = await storeRoom({ code, title, rows, cols, pieces, image_key: imageKey, updated_at: Date.now() });
+    roomSaved = true;
     return Response.json({ room: roomJson(room) }, { status: 201 });
   } catch (error) {
     console.error("Puzzle odası oluşturulamadı:", error);
+    if (imageKey && !roomSaved) {
+      try { await deletePuzzleImage(imageKey); } catch { /* Keep the original upload error. */ }
+    }
     return Response.json(
-      { error: "Fotoğraf yüklenemedi. Dosyayı kontrol edip tekrar deneyebilirsin." },
+      { error: uploadErrorMessage(error) },
       { status: 500 },
     );
   }
