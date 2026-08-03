@@ -13,7 +13,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title,
     description,
     icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
-    openGraph: { title, description, type: "website", locale: "tr_TR", images: [{ url: `${origin}/og.png`, width: 1728, height: 909, alt: "puzzlebeyond — Birlikte daha kolay" }] },
+    openGraph: { title, description, siteName: "puzzlebeyond", type: "website", locale: "tr_TR", images: [{ url: `${origin}/og.png`, width: 1728, height: 909, alt: "puzzlebeyond — Birlikte daha kolay" }] },
     twitter: { card: "summary_large_image", title, description, images: [`${origin}/og.png`] },
   };
 }
