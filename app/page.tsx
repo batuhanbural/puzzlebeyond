@@ -480,6 +480,7 @@ export default function Home() {
   const [previewReplay, setPreviewReplay] = useState(false);
   const [notice, setNotice] = useState("Yeni bir oda kurabilir ya da arkadaşlarının kodunu girebilirsin.");
   const [busy, setBusy] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
   const [lastHeldPieceId, setLastHeldPieceId] = useState<number | null>(null);
@@ -755,6 +756,31 @@ export default function Home() {
       setNotice("Hamlen cihazında kaydedildi; bağlantı gelince tekrar eşitlenecek.");
     }
   }, [room]);
+
+  const forceSyncRoom = async () => {
+    if (!room || syncBusy) return;
+    setSyncBusy(true);
+    setHintVisible(false);
+    if (dragRef.current) {
+      dragRef.current.element.classList.remove("dragging");
+      dragRef.current = null;
+    }
+    try {
+      const response = await fetch(`/api/room?code=${encodeURIComponent(room.code)}`, { cache: "no-store" });
+      const data = await readApiPayload<{ room?: Room }>(response);
+      if (!response.ok || !data.room) throw new Error(data.error || "Puzzle eşitlenemedi.");
+      remoteUpdatedAt.current = data.room.updatedAt;
+      lastLocalMove.current = Date.now();
+      setRoom(data.room);
+      setPieces(normalizePieces(data.room));
+      setLastHeldPieceId(null);
+      setNotice("Puzzle tüm katılımcılarla eşitlendi.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Puzzle eşitlenemedi.");
+    } finally {
+      setSyncBusy(false);
+    }
+  };
 
   useEffect(() => {
     const roomCode = room?.code;
@@ -1077,6 +1103,7 @@ export default function Home() {
             <div><span className="live-dot" /> {room ? "CANLI OYUN" : galleryVisible ? "PUZZLE GALERİSİ" : ""}</div>
             <div className="toolbar-right">
               {!room && !galleryVisible && <button className="skip-preview-button" onClick={skipPreviewPuzzle}><span className="skip-long">İLK PUZZLEI ATLA</span><span className="skip-short">ATLA</span> →</button>}
+              {room && <button className="sync-button" onClick={() => void forceSyncRoom()} disabled={syncBusy} title="Puzzle durumunu sunucudan yeniden al">{syncBusy ? "EŞİTLENİYOR…" : "↻ EŞİTLE"}</button>}
               {(room || !galleryVisible) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
               <div className="difficulty-pill" title={`${rows}×${cols}`}>{progress}% · {pieceCount} PARÇA</div>
             </div>
