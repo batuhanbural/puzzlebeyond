@@ -9,6 +9,24 @@ export type RoomRecord = {
   updated_at: number;
 };
 
+export type GalleryRecord = {
+  id: string;
+  title: string;
+  description: string;
+  image_key: string;
+  image_kind: "custom" | "sunset" | "garden" | "city";
+  rows: number;
+  cols: number;
+  accent: string;
+  created_at: number;
+};
+
+export type PresenceRecord = {
+  client_id: string;
+  room_code: string | null;
+  last_seen_at: number;
+};
+
 const WIPE_MARKER = "system/rooms-wiped-2026-08-03";
 let wipeChecked = false;
 let nextCleanupAt = 0;
@@ -151,4 +169,101 @@ export async function putPuzzleImage(code: string, body: ArrayBuffer, contentTyp
 export async function getPuzzleImageResponse(imageKey: string) {
   const { url, bucket } = config();
   return Response.redirect(`${url}/storage/v1/object/public/${bucket}/${imageKey}`, 307);
+}
+
+export async function getGalleryPuzzles() {
+  const response = await dataRequest("gallery_puzzles?select=*&order=created_at.asc");
+  return await response.json() as GalleryRecord[];
+}
+
+export async function getGalleryPuzzle(id: string) {
+  const response = await dataRequest(`gallery_puzzles?id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
+  const rows = await response.json() as GalleryRecord[];
+  return rows[0] ?? null;
+}
+
+export async function createGalleryPuzzle(puzzle: Omit<GalleryRecord, "created_at"> & { created_at: number }) {
+  const response = await dataRequest("gallery_puzzles", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Prefer: "return=representation" },
+    body: JSON.stringify(puzzle),
+  });
+  const rows = await response.json() as GalleryRecord[];
+  if (!rows[0]) throw new Error("Supabase galeri kaydı oluşturulamadı.");
+  return rows[0];
+}
+
+export async function putGalleryImage(id: string, body: ArrayBuffer, contentType: string) {
+  const { url, bucket } = config();
+  const imageKey = `gallery/${id}/original`;
+  const response = await fetch(`${url}/storage/v1/object/${bucket}/${imageKey}`, {
+    method: "POST",
+    headers: headers({ "Content-Type": contentType, "x-upsert": "true", "cache-control": "31536000" }),
+    body,
+  });
+  if (!response.ok) throw new Error(`Supabase galeri görseli yüklenemedi (${response.status}): ${await response.text()}`);
+  return imageKey;
+}
+
+async function deleteStorageObject(imageKey: string) {
+  const { url, bucket } = config();
+  const response = await fetch(`${url}/storage/v1/object/${bucket}/${imageKey}`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`Storage görseli silinemedi (${response.status}).`);
+  }
+}
+
+export async function deleteGalleryImage(imageKey: string) {
+  await deleteStorageObject(imageKey);
+}
+
+export async function deleteGalleryPuzzle(id: string) {
+  const puzzle = await getGalleryPuzzle(id);
+  if (!puzzle) return false;
+  if (puzzle.image_kind === "custom") await deleteStorageObject(puzzle.image_key);
+  await dataRequest(`gallery_puzzles?id=eq.${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { Prefer: "return=minimal" },
+  });
+  return true;
+}
+
+export async function getGalleryImageResponse(imageKey: string) {
+  const { url, bucket } = config();
+  const response = await fetch(`${url}/storage/v1/object/public/${bucket}/${imageKey}`, { cache: "no-store" });
+  if (!response.ok) return new Response(null, { status: response.status === 404 ? 404 : 502 });
+  return new Response(response.body, {
+    status: 200,
+    headers: {
+      "Content-Type": response.headers.get("content-type") || "image/jpeg",
+      "Cache-Control": "public, max-age=31536000, immutable",
+    },
+  });
+}
+
+export async function touchPresence(clientId: string, roomCode: string | null, lastSeenAt: number) {
+  await dataRequest("site_presence", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates,return=minimal",
+    },
+    body: JSON.stringify({ client_id: clientId, room_code: roomCode, last_seen_at: lastSeenAt }),
+  });
+}
+
+export async function removePresence(clientId: string) {
+  await dataRequest(`site_presence?client_id=eq.${encodeURIComponent(clientId)}`, {
+    method: "DELETE",
+    headers: { Prefer: "return=minimal" },
+  });
+}
+
+export async function getActiveUserCount(cutoff: number) {
+  const response = await dataRequest(`site_presence?last_seen_at=gt.${Math.floor(cutoff)}&select=client_id`);
+  const rows = await response.json() as Array<{ client_id: string }>;
+  return new Set(rows.map((row) => row.client_id)).size;
 }

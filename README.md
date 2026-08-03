@@ -1,37 +1,25 @@
 # Parça — Birlikte Puzzle
 
-Gerçek zamanlı, oda koduyla paylaşılan ve kullanıcı fotoğrafı yüklemeyi destekleyen ortak puzzle uygulaması.
-
-## Yerel geliştirme
-
-```bash
-npm install
-npm run dev
-```
-
-Cloudflare/Sites üretim derlemesi `npm run build`, Vercel uyumluluk derlemesi ise `npm run build:vercel` komutuyla alınır.
+Oda koduyla paylaşılan, gerçek zamanlı ortak puzzle uygulaması. Kullanıcılar kendi fotoğraflarını yükleyebilir ve aynı puzzle üzerinde birlikte çalışabilir.
 
 ## Vercel dağıtımı
 
-1. Vercel'de projeyi Git deposuna bağlayın.
-2. Vercel Marketplace üzerinden bir Supabase projesi bağlayın veya mevcut Supabase projenizi kullanın.
-3. Supabase SQL Editor içinde `supabase/schema.sql` dosyasını çalıştırın.
+1. Projeyi Vercel'de Git deposuna bağlayın.
+2. Supabase projenizi bağlayın.
+3. Supabase SQL Editor'da supabase/schema.sql dosyasını çalıştırın. Admin paneli ve aktif kullanıcı sayacı için supabase/migrations/001_admin_gallery.sql dosyasını da bir kez çalıştırın.
 4. Vercel proje ayarlarında aşağıdaki ortam değişkenlerini tanımlayın:
 
-```env
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_replace_me
 SUPABASE_STORAGE_BUCKET=puzzle-images
-```
+ADMIN_PASSWORD=change-this-to-a-long-private-password
 
-`SUPABASE_SECRET_KEY` yalnızca sunucu ortamında tutulmalıdır; `NEXT_PUBLIC_` öneki kullanmayın. `vercel.json`, Vercel'e doğal Next.js derlemesini (`npm run build:vercel`) kullanmasını söyler.
+SUPABASE_SECRET_KEY ve ADMIN_PASSWORD yalnızca sunucu ortamında tutulmalıdır; NEXT_PUBLIC_ öneki kullanmayın.
 
-Vercel Functions istek sınırına uyum sağlamak için fotoğraf yükleme boyutu 4 MB ile sınırlandırılmıştır.
+Admin paneli /admin adresindedir. ADMIN_PASSWORD ile korunan panelden aktif kullanıcı sayısını görebilir, galeriye JPG/PNG/WebP puzzle ekleyebilir veya puzzle silebilirsiniz.
 
-## Çift platform yapısı
+Vercel uyumluluk derlemesi:
 
-- `lib/storage.ts`: Vercel + Supabase REST/Storage adaptörü.
-- `lib/storage.cloudflare.ts`: mevcut Sites D1/R2 adaptörü.
-- `vite.config.ts`: Sites derlemesinde Cloudflare adaptörünü seçer.
-- Doğal Next.js/Vercel derlemesi varsayılan olarak Supabase adaptörünü kullanır.
-"# puzzlebeyond" 
+    npm run build:vercel
+
+Fotoğraf yükleme boyutu Vercel Functions sınırları için 4 MB ile sınırlıdır.

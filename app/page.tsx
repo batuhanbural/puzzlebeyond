@@ -1,6 +1,7 @@
 "use client";
 
-import { ChangeEvent, CSSProperties, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, CSSProperties, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { DEFAULT_GALLERY, type GalleryKind } from "@/lib/gallery";
 
 type Piece = { id: number; x: number; y: number; locked?: boolean };
 type Room = {
@@ -23,6 +24,7 @@ type GalleryItem = {
   cols: number;
   count: number;
   accent: string;
+  kind: GalleryKind;
 };
 
 const DEFAULT_ROWS = 3;
@@ -125,11 +127,7 @@ function createGalleryImage(kind: "sunset" | "garden" | "city") {
 }
 
 function createGalleryItems(): GalleryItem[] {
-  return [
-    { id: "sunset", title: "Gün batımı", description: "Sıcak renkler, uzun bir akşam.", imageUrl: createGalleryImage("sunset"), rows: 3, cols: 4, count: 12, accent: "#ff6f61" },
-    { id: "garden", title: "Çiçek bahçesi", description: "Renkli bir masa için kolay başlangıç.", imageUrl: createGalleryImage("garden"), rows: 4, cols: 5, count: 20, accent: "#d8ff63" },
-    { id: "city", title: "Gece şehri", description: "Biraz daha sakin, biraz daha zor.", imageUrl: createGalleryImage("city"), rows: 6, cols: 8, count: 48, accent: "#4864ff" },
-  ];
+  return DEFAULT_GALLERY.map((item) => ({ ...item, imageUrl: item.kind === "custom" ? "" : createGalleryImage(item.kind) }));
 }
 
 function scatteredPieces(rows: number, cols: number, seed?: string) {
@@ -369,7 +367,7 @@ export default function Home() {
   const [imageUrl, setImageUrl] = useState("");
   const [imageAspect, setImageAspect] = useState(DEFAULT_IMAGE_ASPECT);
   const [selectedGalleryId, setSelectedGalleryId] = useState<string | null>(null);
-  const galleryItems = useMemo(() => createGalleryItems(), []);
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [previewSeed, setPreviewSeed] = useState("PREVIEW");
   const [codeInput, setCodeInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -382,6 +380,15 @@ export default function Home() {
   const [hintVisible, setHintVisible] = useState(false);
   const [lastHeldPieceId, setLastHeldPieceId] = useState<number | null>(null);
   const [playerName] = useState(() => typeof window === "undefined" ? "Sen" : localStorage.getItem("puzzle-name") || "Sen");
+  const [clientId] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const storageKey = "parca-client-id";
+    const existing = localStorage.getItem(storageKey);
+    if (existing) return existing;
+    const value = window.crypto.randomUUID();
+    localStorage.setItem(storageKey, value);
+    return value;
+  });
   const boardRef = useRef<HTMLDivElement>(null);
   const lastLocalMove = useRef(0);
   const remoteUpdatedAt = useRef(0);
@@ -412,6 +419,58 @@ export default function Home() {
     }).catch(() => { /* The file validation flow reports unreadable images. */ });
     return () => { cancelled = true; };
   }, [imageUrl]);
+  useEffect(() => {
+    let cancelled = false;
+    const fallback = () => setGalleryItems(createGalleryItems());
+    void fetch("/api/gallery", { cache: "no-store" }).then(async (response) => {
+      if (!response.ok) throw new Error("Gallery request failed");
+      return await response.json() as { puzzles?: Array<GalleryItem & { kind?: GalleryKind; imageUrl?: string }>; setupRequired?: boolean };
+    }).then((payload) => {
+      if (cancelled) return;
+      const items = (payload.puzzles || []).map((item) => {
+        const kind = item.kind || "custom";
+        return {
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          imageUrl: kind === "custom" ? (item.imageUrl || "") : createGalleryImage(kind),
+          rows: item.rows,
+          cols: item.cols,
+          count: item.count || item.rows * item.cols,
+          accent: item.accent,
+          kind,
+        } satisfies GalleryItem;
+      });
+      setGalleryItems(payload.setupRequired ? createGalleryItems() : items);
+    }).catch(() => {
+      if (!cancelled) fallback();
+    });
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    if (!clientId) return;
+    const sendHeartbeat = () => {
+      void fetch("/api/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, roomCode: room?.code ?? null }),
+      }).catch(() => { /* Presence is optional until the Supabase migration is run. */ });
+    };
+    sendHeartbeat();
+    const timer = window.setInterval(sendHeartbeat, 20_000);
+    const leave = () => {
+      const body = JSON.stringify({ clientId, leave: true });
+      const beacon = new Blob([body], { type: "application/json" });
+      if (!navigator.sendBeacon("/api/presence", beacon)) {
+        void fetch("/api/presence", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+      }
+    };
+    window.addEventListener("pagehide", leave);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("pagehide", leave);
+    };
+  }, [clientId, room?.code]);
   useEffect(() => () => {
     if (hintTimer.current) window.clearTimeout(hintTimer.current);
   }, []);
@@ -448,11 +507,12 @@ export default function Home() {
   }, [room]);
 
   useEffect(() => {
-    if (!room) return;
+    const roomCode = room?.code;
+    if (!roomCode) return;
     const timer = window.setInterval(async () => {
       if (dragRef.current || Date.now() - lastLocalMove.current < 1200) return;
       try {
-        const response = await fetch(`/api/room?code=${room.code}&since=${remoteUpdatedAt.current}`, { cache: "no-store" });
+        const response = await fetch(`/api/room?code=${roomCode}&since=${remoteUpdatedAt.current}`, { cache: "no-store" });
         if (response.status === 204) return;
         if (!response.ok) return;
         const data = await readApiPayload<{ room: Room }>(response);
@@ -476,7 +536,12 @@ export default function Home() {
       form.append("rows", String(r));
       form.append("cols", String(c));
       form.append("pieces", JSON.stringify(nextPieces));
-      if (galleryItem) form.append("defaultImage", galleryItem.imageUrl);
+      if (galleryItem?.kind === "custom" && galleryItem.imageUrl.startsWith("/")) {
+        const galleryResponse = await fetch(galleryItem.imageUrl, { cache: "no-store" });
+        if (!galleryResponse.ok) throw new Error("Galeri görseli yüklenemedi.");
+        const galleryBlob = await galleryResponse.blob();
+        form.append("image", new File([galleryBlob], `${galleryItem.id}.jpg`, { type: galleryBlob.type || "image/jpeg" }));
+      } else if (galleryItem) form.append("defaultImage", galleryItem.imageUrl);
       else if (file) form.append("image", file);
       else form.append("defaultImage", imageUrl);
       const response = await fetch("/api/room", { method: "POST", body: form });
@@ -690,6 +755,7 @@ export default function Home() {
                 <p>Bir karta dokunduğunda ortak oda açılır; kodu arkadaşlarınla paylaşabilirsin.</p>
               </div>
               <div className="gallery-grid">
+                {galleryItems.length === 0 && <p className="gallery-empty">Şimdilik hazır puzzle yok. Kendi fotoğrafınla ilk odayı kurabilirsin.</p>}
                 {galleryItems.map((item) => (
                   <button key={item.id} className={`gallery-card ${selectedGalleryId === item.id ? "selected" : ""}`} onClick={() => selectGalleryPuzzle(item)} disabled={busy}>
                     <img src={item.imageUrl} alt={`${item.title} puzzle görseli`} />
