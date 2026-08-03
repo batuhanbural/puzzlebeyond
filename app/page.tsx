@@ -416,8 +416,9 @@ export default function Home() {
     if (hintTimer.current) window.clearTimeout(hintTimer.current);
   }, []);
 
-  const rows = room?.rows ?? DEFAULT_ROWS;
-  const cols = room?.cols ?? DEFAULT_COLS;
+  const localSize = PUZZLE_SIZES.find((option) => String(option.count) === difficulty) ?? PUZZLE_SIZES[0];
+  const rows = room?.rows ?? localSize.rows;
+  const cols = room?.cols ?? localSize.cols;
   const pieceCount = rows * cols;
   const solvedCount = pieces.filter((piece) => piece.locked).length;
   const remainingCount = pieceCount - solvedCount;
