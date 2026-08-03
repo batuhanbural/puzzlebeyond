@@ -111,6 +111,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .gallery-grid { width:min(100%,920px); margin:26px auto 0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
 .gallery-card { position:relative; min-width:0; padding:0; overflow:hidden; border:2px solid var(--ink); background:var(--white); text-align:left; cursor:pointer; box-shadow:5px 5px 0 var(--ink); transition:transform .15s,box-shadow .15s; }
 .gallery-card:hover,.gallery-card.selected { transform:translate(-2px,-2px); box-shadow:8px 8px 0 var(--ink); }
+.gallery-card:disabled { opacity:.62; cursor:wait; transform:none; box-shadow:5px 5px 0 var(--ink); }
 .gallery-card.selected { outline:3px solid var(--coral); outline-offset:3px; }
 .gallery-card img { width:100%; aspect-ratio:1.4; display:block; border-bottom:2px solid var(--ink); object-fit:cover; }
 .gallery-card-accent { position:absolute; top:10px; right:10px; width:18px; height:18px; border:2px solid var(--ink); border-radius:50%; box-shadow:2px 2px 0 var(--ink); }

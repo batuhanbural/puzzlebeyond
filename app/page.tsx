@@ -465,18 +465,19 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [room?.code]);
 
-  const createRoom = async () => {
+  const createRoom = async (galleryItem?: GalleryItem) => {
     setBusy(true);
-    const selectedSize = PUZZLE_SIZES.find((option) => String(option.count) === difficulty) ?? PUZZLE_SIZES[0];
+    const selectedSize = galleryItem ?? PUZZLE_SIZES.find((option) => String(option.count) === difficulty) ?? PUZZLE_SIZES[0];
     const { rows: r, cols: c } = selectedSize;
-    const nextPieces = scatteredPieces(r, c);
+    const nextPieces = scatteredPieces(r, c, galleryItem ? `${galleryItem.id}-${crypto.randomUUID()}` : undefined);
     try {
       const form = new FormData();
-      form.append("title", title.trim() || "Bizim puzzle");
+      form.append("title", galleryItem?.title || title.trim() || "Bizim puzzle");
       form.append("rows", String(r));
       form.append("cols", String(c));
       form.append("pieces", JSON.stringify(nextPieces));
-      if (file) form.append("image", file);
+      if (galleryItem) form.append("defaultImage", galleryItem.imageUrl);
+      else if (file) form.append("image", file);
       else form.append("defaultImage", imageUrl);
       const response = await fetch("/api/room", { method: "POST", body: form });
       const data = await readApiPayload<{ room?: Room }>(response);
@@ -509,18 +510,9 @@ export default function Home() {
   };
 
   const selectGalleryPuzzle = (item: GalleryItem) => {
-    setRoom(null);
-    setGalleryOpen(false);
-    setFile(null);
     setSelectedGalleryId(item.id);
-    setImageUrl(item.imageUrl);
-    setPreviewSeed(`${item.id}-${crypto.randomUUID()}`);
-    setPieces(scatteredPieces(item.rows, item.cols, `${item.id}-${crypto.randomUUID()}`));
-    setDifficulty(String(item.count));
-    setTitle(item.title);
-    setLastHeldPieceId(null);
-    setHintVisible(false);
-    setNotice(`${item.title} seçildi. Parçaları yerleştirmeye başlayabilirsin.`);
+    setNotice(`${item.title} için ortak oda hazırlanıyor…`);
+    void createRoom(item);
   };
 
   const resetPreviewPuzzle = () => {
@@ -695,14 +687,14 @@ export default function Home() {
                   <p className="eyebrow">Sıradaki masanı seç</p>
                   <h2 id="gallery-title">Hazır puzzlelar</h2>
                 </div>
-                <p>İstersen galeriden devam et, istersen kendi fotoğrafını getir.</p>
+                <p>Bir karta dokunduğunda ortak oda açılır; kodu arkadaşlarınla paylaşabilirsin.</p>
               </div>
               <div className="gallery-grid">
                 {galleryItems.map((item) => (
-                  <button key={item.id} className={`gallery-card ${selectedGalleryId === item.id ? "selected" : ""}`} onClick={() => selectGalleryPuzzle(item)}>
+                  <button key={item.id} className={`gallery-card ${selectedGalleryId === item.id ? "selected" : ""}`} onClick={() => selectGalleryPuzzle(item)} disabled={busy}>
                     <img src={item.imageUrl} alt={`${item.title} puzzle görseli`} />
                     <span className="gallery-card-accent" style={{ background: item.accent }} />
-                    <span className="gallery-card-copy"><b>{item.title}</b><small>{item.description}</small><em>{item.count} PARÇA · OYNA →</em></span>
+                    <span className="gallery-card-copy"><b>{item.title}</b><small>{item.description}</small><em>{item.count} PARÇA · ORTAK ODA KUR →</em></span>
                   </button>
                 ))}
               </div>
@@ -826,7 +818,7 @@ export default function Home() {
                     </button>
                   ))}
                 </div></fieldset>
-                <button className="primary-button full dialog-submit" onClick={createRoom} disabled={busy}>{busy ? "ODA HAZIRLANIYOR…" : "ODAYI OLUŞTUR →"}</button>
+                <button className="primary-button full dialog-submit" onClick={() => createRoom()} disabled={busy}>{busy ? "ODA HAZIRLANIYOR…" : "ODAYI OLUŞTUR →"}</button>
               </>
             ) : (
               <>
