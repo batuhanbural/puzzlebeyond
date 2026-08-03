@@ -136,6 +136,27 @@ export async function updateRoomPieces(code: string, pieces: Piece[], updatedAt:
   });
 }
 
+export async function broadcastRoomChange(
+  code: string,
+  change: { piece?: Piece; pieces?: Piece[]; updatedAt: number },
+) {
+  // A public key is also the opt-in switch for the browser WebSocket. Keep
+  // the legacy polling path untouched when a project has not configured it.
+  if (!process.env.SUPABASE_PUBLISHABLE_KEY && !process.env.SUPABASE_ANON_KEY) return;
+  const { url } = config();
+  const topic = `puzzlebeyond-room-${code}`;
+  const response = await fetch(`${url}/realtime/v1/api/broadcast/${encodeURIComponent(topic)}/events/piece-change`, {
+    method: "POST",
+    headers: headers({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ code, ...change }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(1200),
+  });
+  if (!response.ok) {
+    throw new Error(`Supabase Realtime yayını başarısız (${response.status}).`);
+  }
+}
+
 export async function touchRoomActivity(code: string, activeAt: number) {
   await dataRequest(`puzzle_rooms?code=eq.${encodeURIComponent(code)}`, {
     method: "PATCH",

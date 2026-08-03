@@ -2,6 +2,7 @@ import {
   createRoom as storeRoom,
   deleteRoom,
   deletePuzzleImage,
+  broadcastRoomChange,
   ensureSchema,
   getRoom,
   maybeCleanupExpiredRooms,
@@ -149,5 +150,16 @@ export async function PATCH(request: Request) {
   }
   const now = Date.now();
   await updateRoomPieces(code, pieces, now);
+  try {
+    await broadcastRoomChange(code, {
+      piece: payload.piece ? pieces.find((piece) => piece.id === normalizePiece(payload.piece!).id) : undefined,
+      pieces: payload.pieces ? pieces : undefined,
+      updatedAt: now,
+    });
+  } catch (error) {
+    // Realtime is an acceleration layer; the existing since-polling path is
+    // still authoritative when a project's public Realtime endpoint is off.
+    console.warn("Puzzle Realtime yayını gönderilemedi:", error);
+  }
   return Response.json({ ok: true, updatedAt: now });
 }

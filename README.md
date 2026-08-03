@@ -10,6 +10,7 @@ Oda koduyla paylaşılan, gerçek zamanlı ortak puzzle uygulaması. Kullanıcı
 4. Vercel proje ayarlarında aşağıdaki ortam değişkenlerini tanımlayın:
 
 SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_replace_me
 SUPABASE_SECRET_KEY=sb_secret_replace_me
 SUPABASE_STORAGE_BUCKET=puzzle-images
 ADMIN_PASSWORD=change-this-to-a-long-private-password
@@ -23,3 +24,5 @@ Vercel uyumluluk derlemesi:
     npm run build:vercel
 
 Fotoğraf yükleme boyutu Vercel Functions sınırları için 4 MB ile sınırlıdır.
+
+Realtime kurulum notu: Parça hareketlerinin anında yayılması için Vercel ortamına SUPABASE_PUBLISHABLE_KEY (eski projelerde SUPABASE_ANON_KEY) ekleyin. Bu anahtar istemciye açılabilir; SUPABASE_SECRET_KEY istemciye verilmemelidir. Publishable anahtar yoksa uygulama otomatik olarak polling yedeğini kullanır.
