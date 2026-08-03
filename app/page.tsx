@@ -1063,7 +1063,7 @@ export default function Home() {
               <h3>Arkadaşlarının puzzle&apos;ına katıl.</h3>
               <p>Sana gönderilen oda kodu herkesi aynı canlı tahtada buluşturur.</p>
               <button className="primary-button full" onClick={() => setDialog("join")}>KODLA KATIL →</button>
-              <button className="panel-text-button" onClick={() => setDialog("create")}>YA DA YENİ ODA KUR</button>
+              <button className="panel-text-button" onClick={() => setDialog("create")}>YENİ ODA KUR</button>
               <button className="panel-text-button" onClick={skipPreviewPuzzle}>İLK PUZZLEI ATLA · GALERİYE GEÇ</button>
             </div>
           )}
