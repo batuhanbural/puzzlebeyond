@@ -443,6 +443,7 @@ export default function Home() {
   const [pieces, setPieces] = useState<Piece[]>(() => scatteredPieces(DEFAULT_ROWS, DEFAULT_COLS));
   const [imageUrl, setImageUrl] = useState("");
   const [imageAspect, setImageAspect] = useState(DEFAULT_IMAGE_ASPECT);
+  const [pendingImageAspect, setPendingImageAspect] = useState<number | null>(null);
   const [selectedGalleryId, setSelectedGalleryId] = useState<string | null>(null);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [previewSeed, setPreviewSeed] = useState("PREVIEW");
@@ -592,7 +593,7 @@ export default function Home() {
   }, []);
 
   const localSize = PUZZLE_SIZES.find((option) => String(option.count) === difficulty) ?? PUZZLE_SIZES[0];
-  const selectedPuzzleSize = fitPuzzleSize(localSize, imageAspect);
+  const selectedPuzzleSize = fitPuzzleSize(localSize, pendingImageAspect ?? imageAspect);
   const rows = room?.rows ?? localSize.rows;
   const cols = room?.cols ?? localSize.cols;
   const pieceCount = rows * cols;
@@ -652,12 +653,11 @@ export default function Home() {
     setBusy(true);
     try {
       const imageSource = galleryItem?.imageUrl || uploadPreviewUrl || imageUrl;
-      let puzzleAspect = imageAspect;
+      let puzzleAspect = galleryItem ? imageAspect : pendingImageAspect ?? imageAspect;
       if (imageSource) {
         try {
           const image = await loadPuzzleImage(imageSource);
           puzzleAspect = image.naturalWidth / image.naturalHeight || puzzleAspect;
-          setImageAspect(puzzleAspect);
         } catch { /* The upload validation flow will report unreadable files. */ }
       }
       const requestedSize: PuzzleSize = galleryItem
@@ -684,6 +684,7 @@ export default function Home() {
       if (!response.ok || !data.room) throw new Error(data.error || "Oda oluşturulamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
       storeRoomCode(data.room.code);
+      setPendingImageAspect(null);
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl); setUploadPreviewUrl("");
       setIntroCompletion("idle");
       setGalleryOpen(false);
@@ -703,6 +704,7 @@ export default function Home() {
       if (!response.ok || !data.room) throw new Error(data.error || "Oda bulunamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
       storeRoomCode(data.room.code);
+      setPendingImageAspect(null);
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl);
       setIntroCompletion("idle");
       setGalleryOpen(false);
@@ -721,6 +723,7 @@ export default function Home() {
 
   const resetPreviewPuzzle = () => {
     storeRoomCode(null);
+    setPendingImageAspect(null);
     setRoom(null);
     setIntroCompletion("idle");
     setGalleryOpen(false);
@@ -755,7 +758,7 @@ export default function Home() {
     setNotice("Fotoğraf hazırlanıyor…");
     try {
       const selectedAspect = await validateImage(selected);
-      setImageAspect(selectedAspect);
+      setPendingImageAspect(selectedAspect);
       const preparedFile = await prepareUploadFile(selected);
       setFile(preparedFile);
       setSelectedGalleryId(null);
