@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, CSSProperties, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type Piece = { id: number; x: number; y: number; locked?: boolean };
 type Room = {
@@ -17,6 +17,7 @@ type ApiPayload<T> = T & { error?: string };
 
 const DEFAULT_ROWS = 3;
 const DEFAULT_COLS = 4;
+const DEFAULT_IMAGE_ASPECT = 4 / 3;
 const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 };
 const PUZZLE_SIZES = [
   { count: 12, rows: 3, cols: 4, label: "RAHAT" },
@@ -164,8 +165,11 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
         if (cancelled) return;
       const row = Math.floor(id / cols);
       const col = id % cols;
-      const cellWidth = 800 / cols;
-      const cellHeight = 600 / rows;
+      const imageRatio = image.naturalWidth / image.naturalHeight || DEFAULT_IMAGE_ASPECT;
+      const boardWidth = 800;
+      const boardHeight = boardWidth / imageRatio;
+      const cellWidth = boardWidth / cols;
+      const cellHeight = boardHeight / rows;
       const pad = Math.min(cellWidth, cellHeight) * 0.34;
       const tab = Math.min(cellWidth, cellHeight) * 0.28;
       const width = cellWidth + pad * 2;
@@ -238,15 +242,7 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       context.closePath();
       context.save();
       context.clip();
-      const boardWidth = cellWidth * cols;
-      const boardHeight = cellHeight * rows;
-      const imageRatio = image.naturalWidth / image.naturalHeight;
-      const boardRatio = boardWidth / boardHeight;
-      const drawWidth = imageRatio > boardRatio ? boardHeight * imageRatio : boardWidth;
-      const drawHeight = imageRatio > boardRatio ? boardHeight : boardWidth / imageRatio;
-      const offsetX = (boardWidth - drawWidth) / 2;
-      const offsetY = (boardHeight - drawHeight) / 2;
-      context.drawImage(image, pad + offsetX - col * cellWidth, pad + offsetY - row * cellHeight, drawWidth, drawHeight);
+      context.drawImage(image, pad - col * cellWidth, pad - row * cellHeight, boardWidth, boardHeight);
       context.restore();
       context.lineJoin = "round";
       context.lineCap = "round";
@@ -312,6 +308,7 @@ export default function Home() {
   const [room, setRoom] = useState<Room | null>(null);
   const [pieces, setPieces] = useState<Piece[]>(() => scatteredPieces(DEFAULT_ROWS, DEFAULT_COLS));
   const [imageUrl, setImageUrl] = useState("");
+  const [imageAspect, setImageAspect] = useState(DEFAULT_IMAGE_ASPECT);
   const [previewSeed, setPreviewSeed] = useState("PREVIEW");
   const [codeInput, setCodeInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -340,6 +337,16 @@ export default function Home() {
     setImageUrl(createDefaultImage());
     setPreviewSeed(crypto.randomUUID());
   }, []);
+  useEffect(() => {
+    if (!imageUrl) return;
+    let cancelled = false;
+    void loadPuzzleImage(imageUrl).then((image) => {
+      if (!cancelled && image.naturalWidth > 0 && image.naturalHeight > 0) {
+        setImageAspect(image.naturalWidth / image.naturalHeight);
+      }
+    }).catch(() => { /* The file validation flow reports unreadable images. */ });
+    return () => { cancelled = true; };
+  }, [imageUrl]);
   useEffect(() => () => {
     if (hintTimer.current) window.clearTimeout(hintTimer.current);
   }, []);
@@ -350,6 +357,7 @@ export default function Home() {
   const solvedCount = pieces.filter((piece) => piece.locked).length;
   const remainingCount = pieceCount - solvedCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);
+  const workspaceAspect = imageAspect * BOARD.height / BOARD.width;
   const hintPiece = lastHeldPieceId === null
     ? pieces.find((piece) => !piece.locked)
     : pieces.find((piece) => piece.id === lastHeldPieceId);
@@ -575,6 +583,7 @@ export default function Home() {
           <div
             ref={boardRef}
             className={`puzzle-workspace ${progress === 100 ? "is-complete" : ""}`}
+            style={{ "--workspace-aspect": workspaceAspect } as CSSProperties}
             onPointerMove={movePiece}
             onPointerUp={endMove}
             onPointerCancel={endMove}
