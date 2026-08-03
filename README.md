@@ -1,4 +1,4 @@
-# Parça — Birlikte Puzzle
+# puzzlebeyond — Birlikte Puzzle
 
 Oda koduyla paylaşılan, gerçek zamanlı ortak puzzle uygulaması. Kullanıcılar kendi fotoğraflarını yükleyebilir ve aynı puzzle üzerinde birlikte çalışabilir.
 

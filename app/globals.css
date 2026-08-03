@@ -186,8 +186,8 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
 @media (max-width:760px) {
   .site-shell { grid-template-rows:60px auto minmax(0,1fr) 38px; }
   .topbar { height:60px; padding:0 14px; }
-  .brand { font-size:21px; }
-  .brand-mark { width:31px; height:31px; }
+  .brand { gap:7px; font-size:18px; letter-spacing:-1.2px; }
+  .brand-mark { width:29px; height:29px; font-size:18px; }
   .header-actions { gap:8px; }
   .header-actions .text-button { display:block; padding:8px 2px; font-size:10px; white-space:nowrap; }
   .primary-button.small { min-height:36px; padding:0 11px; font-size:10px; }

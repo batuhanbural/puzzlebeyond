@@ -414,8 +414,8 @@ export default function Home() {
   const [playerName] = useState(() => typeof window === "undefined" ? "Sen" : localStorage.getItem("puzzle-name") || "Sen");
   const [clientId] = useState(() => {
     if (typeof window === "undefined") return "";
-    const storageKey = "parca-client-id";
-    const existing = localStorage.getItem(storageKey);
+    const storageKey = "puzzlebeyond-client-id";
+    const existing = localStorage.getItem(storageKey) || localStorage.getItem("parca-client-id");
     if (existing) return existing;
     const value = window.crypto.randomUUID();
     localStorage.setItem(storageKey, value);
@@ -721,8 +721,8 @@ export default function Home() {
   return (
     <main className="site-shell">
       <header className="topbar">
-        <button className="brand" onClick={resetPreviewPuzzle} aria-label="Parça ana sayfa">
-          <span className="brand-mark">P</span><span>parça</span>
+        <button className="brand" onClick={resetPreviewPuzzle} aria-label="puzzlebeyond ana sayfa">
+          <span className="brand-mark">P</span><span>puzzlebeyond</span>
         </button>
         <div className="header-actions">
           <button className="text-button" onClick={() => setDialog("join")}>Kodla katıl</button>
@@ -904,7 +904,7 @@ export default function Home() {
 
       <div className="notice" role="status"><span>i</span>{notice}</div>
 
-      <footer><span>PARÇA / 2026</span><p>Uzakta olsanız da aynı masadasınız.</p><span>MADE FOR TOGETHERNESS</span></footer>
+      <footer><span>PUZZLEBEYOND / 2026</span><p>Uzakta olsanız da aynı masadasınız.</p><span>MADE FOR TOGETHERNESS</span></footer>
 
       {dialog && (
         <div className="dialog-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setDialog(null)}>

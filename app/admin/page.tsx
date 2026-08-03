@@ -165,7 +165,7 @@ export default function AdminPage() {
     return (
       <main className="admin-shell admin-login-shell">
         <section className="admin-login-card">
-          <p className="eyebrow">PARÇA / YÖNETİM</p>
+          <p className="eyebrow">PUZZLEBEYOND / YÖNETİM</p>
           <h1>Admin paneli</h1>
           <p className="admin-muted">Bu alan yalnızca site sahibinin parolasıyla açılır.</p>
           {!configured && <p className="admin-error">Vercel’de <code>ADMIN_PASSWORD</code> tanımlanmamış.</p>}
@@ -183,7 +183,7 @@ export default function AdminPage() {
   return (
     <main className="admin-shell">
       <header className="admin-topbar">
-        <div><p className="eyebrow">PARÇA / YÖNETİM</p><h1>Admin paneli</h1></div>
+        <div><p className="eyebrow">PUZZLEBEYOND / YÖNETİM</p><h1>Admin paneli</h1></div>
         <div className="admin-top-actions"><Link className="outline-button" href="/">SİTEYE DÖN</Link><button className="text-button" onClick={logout}>ÇIKIŞ</button></div>
       </header>
       <section className="admin-content">
