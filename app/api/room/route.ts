@@ -1,9 +1,12 @@
 import {
   createRoom as storeRoom,
+  deleteRoom,
   ensureSchema,
   getRoom,
+  maybeCleanupExpiredRooms,
   putPuzzleImage,
   roomExists,
+  touchRoomActivity,
   updateRoomPieces,
   type Piece,
   type RoomRecord,
@@ -12,6 +15,8 @@ import {
 export const runtime = "nodejs";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
+const ACTIVITY_TOUCH_INTERVAL_MS = 60 * 1000;
 
 function makeCode() {
   return Array.from({ length: 6 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join("");
@@ -24,19 +29,29 @@ function roomJson(row: RoomRecord) {
     rows: row.rows,
     cols: row.cols,
     pieces: row.pieces,
-    imageUrl: `/api/image?code=${row.code}&v=${row.updated_at}`,
+    imageUrl: `/api/image?code=${row.code}`,
     updatedAt: row.updated_at,
   };
 }
 
 export async function GET(request: Request) {
   await ensureSchema();
+  const now = Date.now();
+  await maybeCleanupExpiredRooms(now - ROOM_TTL_MS);
   const url = new URL(request.url);
   const code = url.searchParams.get("code")?.trim().toUpperCase();
   const since = Number(url.searchParams.get("since") || 0);
   if (!code) return Response.json({ error: "Oda kodu gerekli." }, { status: 400 });
   const room = await getRoom(code);
   if (!room) return Response.json({ error: "Bu kodla bir oda bulunamadı." }, { status: 404 });
+  if (now - room.updated_at >= ROOM_TTL_MS) {
+    await deleteRoom(room.code, room.image_key);
+    return Response.json({ error: "Bu odanın süresi dolmuş." }, { status: 404 });
+  }
+  if (now - room.updated_at >= ACTIVITY_TOUCH_INTERVAL_MS) {
+    await touchRoomActivity(room.code, now);
+    room.updated_at = now;
+  }
   if (since > 0 && room.updated_at <= since) return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
   return Response.json({ room: roomJson(room) }, { headers: { "Cache-Control": "no-store" } });
 }
@@ -44,6 +59,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await ensureSchema();
+    await maybeCleanupExpiredRooms(Date.now() - ROOM_TTL_MS);
     const form = await request.formData();
     const title = String(form.get("title") || "Bizim puzzle").slice(0, 48);
     const rows = Math.max(2, Math.min(32, Number(form.get("rows")) || 3));
@@ -91,6 +107,10 @@ export async function PATCH(request: Request) {
   if (!code || (!Array.isArray(payload.pieces) && !payload.piece)) return Response.json({ error: "Geçersiz hamle." }, { status: 400 });
   const room = await getRoom(code);
   if (!room) return Response.json({ error: "Oda bulunamadı." }, { status: 404 });
+  if (Date.now() - room.updated_at >= ROOM_TTL_MS) {
+    await deleteRoom(room.code, room.image_key);
+    return Response.json({ error: "Bu odanın süresi dolmuş." }, { status: 404 });
+  }
   if (payload.pieces && payload.pieces.length !== room.rows * room.cols) return Response.json({ error: "Parça sayısı eşleşmiyor." }, { status: 400 });
   const normalizePiece = (piece: Piece) => ({
     id: Math.max(0, Math.floor(piece.id)),

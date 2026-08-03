@@ -9,6 +9,10 @@ export type RoomRecord = {
   updated_at: number;
 };
 
+const WIPE_MARKER = "system/rooms-wiped-2026-08-03";
+let wipeChecked = false;
+let nextCleanupAt = 0;
+
 function config() {
   const url = process.env.SUPABASE_URL?.replace(/\/$/, "");
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -48,6 +52,27 @@ function normalizeRoom(row: Omit<RoomRecord, "pieces"> & { pieces: Piece[] | str
 
 export async function ensureSchema() {
   config();
+  if (wipeChecked) return;
+  const { url, bucket } = config();
+  const marker = await fetch(`${url}/storage/v1/object/${bucket}/${WIPE_MARKER}`, { headers: headers(), cache: "no-store" });
+  if (marker.ok) {
+    wipeChecked = true;
+    return;
+  }
+  if (marker.status !== 404) throw new Error(`Oda temizleme durumu okunamadı (${marker.status}).`);
+
+  const response = await dataRequest("puzzle_rooms?select=code,image_key");
+  const rooms = await response.json() as Array<{ code: string; image_key: string }>;
+  for (const room of rooms) {
+    await deleteRoom(room.code, room.image_key);
+  }
+  const saved = await fetch(`${url}/storage/v1/object/${bucket}/${WIPE_MARKER}`, {
+    method: "POST",
+    headers: headers({ "Content-Type": "text/plain", "x-upsert": "true" }),
+    body: new TextEncoder().encode(String(Date.now())),
+  });
+  if (!saved.ok) throw new Error(`Oda temizleme durumu kaydedilemedi (${saved.status}).`);
+  wipeChecked = true;
 }
 
 export async function getRoom(code: string) {
@@ -77,6 +102,38 @@ export async function updateRoomPieces(code: string, pieces: Piece[], updatedAt:
     headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
     body: JSON.stringify({ pieces, updated_at: updatedAt }),
   });
+}
+
+export async function touchRoomActivity(code: string, activeAt: number) {
+  await dataRequest(`puzzle_rooms?code=eq.${encodeURIComponent(code)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
+    body: JSON.stringify({ updated_at: activeAt }),
+  });
+}
+
+export async function deleteRoom(code: string, imageKey: string) {
+  const { url, bucket } = config();
+  const imageResponse = await fetch(`${url}/storage/v1/object/${bucket}/${imageKey}`, {
+    method: "DELETE",
+    headers: headers(),
+  });
+  if (!imageResponse.ok && imageResponse.status !== 404) {
+    throw new Error(`Oda görseli silinemedi (${imageResponse.status}).`);
+  }
+  await dataRequest(`puzzle_rooms?code=eq.${encodeURIComponent(code)}`, {
+    method: "DELETE",
+    headers: { Prefer: "return=minimal" },
+  });
+}
+
+export async function maybeCleanupExpiredRooms(cutoff: number) {
+  const now = Date.now();
+  if (now < nextCleanupAt) return;
+  nextCleanupAt = now + 60_000;
+  const response = await dataRequest(`puzzle_rooms?updated_at=lt.${cutoff}&select=code,image_key&limit=100`);
+  const rooms = await response.json() as Array<{ code: string; image_key: string }>;
+  for (const room of rooms) await deleteRoom(room.code, room.image_key);
 }
 
 export async function putPuzzleImage(code: string, body: ArrayBuffer, contentType: string) {

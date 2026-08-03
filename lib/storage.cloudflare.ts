@@ -3,6 +3,10 @@ import type { Piece, RoomRecord } from "./storage";
 
 type RoomRow = Omit<RoomRecord, "pieces"> & { pieces: string };
 
+const WIPE_MARKER = "system/rooms-wiped-2026-08-03";
+let wipeChecked = false;
+let nextCleanupAt = 0;
+
 export async function ensureSchema() {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS puzzle_rooms (
     code TEXT PRIMARY KEY,
@@ -13,6 +17,21 @@ export async function ensureSchema() {
     image_key TEXT NOT NULL,
     updated_at INTEGER NOT NULL
   )`).run();
+  if (wipeChecked) return;
+  if (await env.BUCKET.head(WIPE_MARKER)) {
+    wipeChecked = true;
+    return;
+  }
+
+  let cursor: string | undefined;
+  do {
+    const page = await env.BUCKET.list({ prefix: "puzzles/", cursor });
+    if (page.objects.length > 0) await env.BUCKET.delete(page.objects.map((object) => object.key));
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  await env.DB.prepare("DELETE FROM puzzle_rooms").run();
+  await env.BUCKET.put(WIPE_MARKER, String(Date.now()), { httpMetadata: { contentType: "text/plain" } });
+  wipeChecked = true;
 }
 
 export async function getRoom(code: string): Promise<RoomRecord | null> {
@@ -33,6 +52,24 @@ export async function createRoom(room: RoomRecord) {
 export async function updateRoomPieces(code: string, pieces: Piece[], updatedAt: number) {
   await env.DB.prepare("UPDATE puzzle_rooms SET pieces = ?, updated_at = ? WHERE code = ?")
     .bind(JSON.stringify(pieces), updatedAt, code).run();
+}
+
+export async function touchRoomActivity(code: string, activeAt: number) {
+  await env.DB.prepare("UPDATE puzzle_rooms SET updated_at = ? WHERE code = ?").bind(activeAt, code).run();
+}
+
+export async function deleteRoom(code: string, imageKey: string) {
+  await env.BUCKET.delete(imageKey);
+  await env.DB.prepare("DELETE FROM puzzle_rooms WHERE code = ?").bind(code).run();
+}
+
+export async function maybeCleanupExpiredRooms(cutoff: number) {
+  const now = Date.now();
+  if (now < nextCleanupAt) return;
+  nextCleanupAt = now + 60_000;
+  const result = await env.DB.prepare("SELECT code, image_key FROM puzzle_rooms WHERE updated_at < ? LIMIT 100")
+    .bind(cutoff).all<{ code: string; image_key: string }>();
+  for (const room of result.results) await deleteRoom(room.code, room.image_key);
 }
 
 export async function putPuzzleImage(code: string, body: ArrayBuffer, contentType: string) {
