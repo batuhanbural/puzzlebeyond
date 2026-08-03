@@ -19,6 +19,7 @@ button:focus-visible,input:focus-visible { outline:3px solid var(--blue); outlin
 .primary-button:disabled { opacity:.55; cursor:wait; }
 .primary-button.small { min-height:40px; padding:0 16px; }
 .primary-button.small span { font-size:19px; margin-right:4px; }
+.header-gallery { display:none; }
 .outline-button { background:transparent; }
 .outline-button:hover { background:var(--ink); color:var(--paper); }
 .full { width:100%; }
@@ -172,6 +173,11 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
   .board-section { border-left:0; }
   .mobile-room-actions { display:flex; justify-content:center; margin-top:24px; }
   .gallery-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+@media (min-width:1051px) {
+  .header-actions .text-button { display:none; }
+  .header-new-setup { display:none; }
+  .skip-preview-button { display:none; }
 }
 @media (max-width:760px) {
   .site-shell { grid-template-rows:60px auto minmax(0,1fr) 38px; }

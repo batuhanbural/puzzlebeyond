@@ -625,7 +625,7 @@ export default function Home() {
         </button>
         <div className="header-actions">
           <button className="text-button" onClick={() => setDialog("join")}>Kodla katıl</button>
-          <button className="primary-button small" onClick={() => setDialog("create")}><span>＋</span> Yeni puzzle</button>
+          <button className={`primary-button small ${room ? "" : galleryVisible ? "header-gallery" : "header-new-setup"}`} onClick={() => setDialog("create")}><span>＋</span> Yeni puzzle</button>
         </div>
       </header>
 
@@ -770,12 +770,6 @@ export default function Home() {
                 {progress === 100 && <div className="complete-badge"><span>✓</span> TAMAMLANDI!</div>}
               </div>
               <div className="mobile-room-actions">
-                {!room && (
-                  <>
-                    <button className="outline-button" onClick={() => setDialog("join")}>Kodla katıl</button>
-                    <button className="primary-button" onClick={() => setDialog("create")}>Yeni puzzle oluştur</button>
-                  </>
-                )}
                 {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
               </div>
             </>
