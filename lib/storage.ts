@@ -46,11 +46,13 @@ function config() {
 
 function headers(extra?: HeadersInit) {
   const { key } = config();
-  return {
-    apikey: key,
-    Authorization: `Bearer ${key}`,
-    ...extra,
-  };
+  // New sb_publishable/sb_secret keys are not JWTs and must only be sent in
+  // the apikey header. Legacy anon/service_role JWTs still need Bearer auth.
+  const result = new Headers(extra);
+  result.set("apikey", key);
+  if (key.startsWith("sb_")) result.delete("Authorization");
+  else result.set("Authorization", `Bearer ${key}`);
+  return result;
 }
 
 async function dataRequest(path: string, init?: RequestInit) {
