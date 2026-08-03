@@ -873,7 +873,7 @@ export default function Home() {
                     <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
                   </div>
                 ))}
-                {progress === 100 && <div className="complete-badge"><span>✓</span> TAMAMLANDI!</div>}
+                {room && progress === 100 && <div className="complete-badge"><span>✓</span> TAMAMLANDI!</div>}
               </div>
               <div className="mobile-room-actions">
                 {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
@@ -891,7 +891,7 @@ export default function Home() {
             <div className="progress-dial" style={{ background: `conic-gradient(var(--coral) 0 ${progress}%, #ded8cb ${progress}% 100%)` }}>
               <div><strong>{progress}</strong><span>%</span></div>
             </div>
-            <p>{progress === 100 ? "Puzzle tamamlandı!" : progress > 0 ? "Görüntü ortaya çıkıyor." : "İlk parçayı sen yerleştir."}</p>
+            <p>{progress === 100 ? (room ? "Puzzle tamamlandı." : "Hazır puzzleları keşfet.") : progress > 0 ? "Görüntü ortaya çıkıyor." : "İlk parçayı sen yerleştir."}</p>
           </div>
           <div className="progress-counts">
             <div><span>YERİNDE</span><strong>{solvedCount}</strong><i>PARÇA</i></div>
