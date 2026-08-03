@@ -58,6 +58,29 @@ function loadPuzzleImage(src: string) {
   return pending;
 }
 
+type PuzzleSize = { count: number; rows: number; cols: number; label: string };
+
+function fitPuzzleSize(size: PuzzleSize, aspect: number) {
+  const safeAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : DEFAULT_IMAGE_ASPECT;
+  // Keep the requested count, then choose its factor pair with the least-stretched cells.
+  let bestRows = size.rows;
+  let bestCols = size.cols;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (let rows = 2; rows <= 32; rows++) {
+    for (let cols = 2; cols <= 32; cols++) {
+      if (rows * cols !== size.count) continue;
+      const cellAspect = safeAspect * rows / cols;
+      const score = Math.abs(Math.log(cellAspect));
+      if (score < bestScore) {
+        bestScore = score;
+        bestRows = rows;
+        bestCols = cols;
+      }
+    }
+  }
+  return { ...size, rows: bestRows, cols: bestCols };
+}
+
 function createDefaultImage() {
   if (typeof document === "undefined") return "";
   const canvas = document.createElement("canvas");
@@ -359,7 +382,8 @@ async function validateImage(file: File) {
   }
   const objectUrl = URL.createObjectURL(file);
   try {
-    await loadPuzzleImage(objectUrl);
+    const image = await loadPuzzleImage(objectUrl);
+    return image.naturalWidth / image.naturalHeight || DEFAULT_IMAGE_ASPECT;
   } finally {
     puzzleImageCache.delete(objectUrl);
     URL.revokeObjectURL(objectUrl);
@@ -625,10 +649,22 @@ export default function Home() {
 
   const createRoom = async (galleryItem?: GalleryItem) => {
     setBusy(true);
-    const selectedSize = galleryItem ?? PUZZLE_SIZES.find((option) => String(option.count) === difficulty) ?? PUZZLE_SIZES[0];
-    const { rows: r, cols: c } = selectedSize;
-    const nextPieces = scatteredPieces(r, c, galleryItem ? `${galleryItem.id}-${crypto.randomUUID()}` : undefined);
     try {
+      const imageSource = galleryItem?.imageUrl || uploadPreviewUrl || imageUrl;
+      let puzzleAspect = imageAspect;
+      if (imageSource) {
+        try {
+          const image = await loadPuzzleImage(imageSource);
+          puzzleAspect = image.naturalWidth / image.naturalHeight || puzzleAspect;
+          setImageAspect(puzzleAspect);
+        } catch { /* The upload validation flow will report unreadable files. */ }
+      }
+      const requestedSize: PuzzleSize = galleryItem
+        ? { count: galleryItem.rows * galleryItem.cols, rows: galleryItem.rows, cols: galleryItem.cols, label: "" }
+        : PUZZLE_SIZES.find((option) => String(option.count) === difficulty) ?? PUZZLE_SIZES[0];
+      const selectedSize = fitPuzzleSize(requestedSize, puzzleAspect);
+      const { rows: r, cols: c } = selectedSize;
+      const nextPieces = scatteredPieces(r, c, galleryItem ? `${galleryItem.id}-${crypto.randomUUID()}` : undefined);
       const form = new FormData();
       form.append("title", galleryItem?.title || title.trim() || "Bizim puzzle");
       form.append("rows", String(r));
@@ -717,7 +753,8 @@ export default function Home() {
     setBusy(true);
     setNotice("Fotoğraf hazırlanıyor…");
     try {
-      await validateImage(selected);
+      const selectedAspect = await validateImage(selected);
+      setImageAspect(selectedAspect);
       const preparedFile = await prepareUploadFile(selected);
       setFile(preparedFile);
       setSelectedGalleryId(null);
