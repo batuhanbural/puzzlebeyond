@@ -30,7 +30,7 @@ export const DEFAULT_GALLERY: GalleryDefinition[] = [
     rows: 4,
     cols: 5,
     count: 20,
-    accent: "#d8ff63",
+    accent: "#d3d3ff",
   },
   {
     id: "city",

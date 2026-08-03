@@ -37,7 +37,7 @@ export default function AdminPage() {
   const [description, setDescription] = useState("");
   const [rows, setRows] = useState("3");
   const [cols, setCols] = useState("4");
-  const [accent, setAccent] = useState("#d8ff63");
+  const [accent, setAccent] = useState("#d3d3ff");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -114,7 +114,7 @@ export default function AdminPage() {
       setDescription("");
       setRows("3");
       setCols("4");
-      setAccent("#d8ff63");
+      setAccent("#d3d3ff");
       setFile(null);
       const input = document.getElementById("admin-image") as HTMLInputElement | null;
       if (input) input.value = "";

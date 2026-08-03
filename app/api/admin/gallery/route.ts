@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     const description = String(form.get("description") || "").trim();
     const rows = Number(form.get("rows"));
     const cols = Number(form.get("cols"));
-    const accent = String(form.get("accent") || "#d8ff63").trim();
+    const accent = String(form.get("accent") || "#d3d3ff").trim();
     const file = form.get("image");
     if (!title || title.length > 80) return Response.json({ error: "Başlık 1–80 karakter olmalı." }, { status: 400 });
     if (description.length > 200) return Response.json({ error: "Açıklama 200 karakteri geçemez." }, { status: 400 });

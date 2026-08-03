@@ -65,7 +65,7 @@ function createDefaultImage() {
   const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = "#f4f0e6";
   ctx.fillRect(0, 0, 1200, 900);
-  ctx.fillStyle = "#d8ff63";
+  ctx.fillStyle = "#d3d3ff";
   ctx.fillRect(0, 0, 1200, 210);
   ctx.fillStyle = "#ff6f61";
   ctx.beginPath(); ctx.arc(950, 265, 205, 0, Math.PI * 2); ctx.fill();
@@ -80,7 +80,7 @@ function createDefaultImage() {
   ctx.fillText("!", 405, 615);
   ctx.fillStyle = "#151515";
   ctx.beginPath(); ctx.arc(870, 610, 88, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#d8ff63";
+  ctx.fillStyle = "#d3d3ff";
   ctx.beginPath(); ctx.arc(870, 610, 42, 0, Math.PI * 2); ctx.fill();
   return canvas.toDataURL("image/jpeg", 0.9);
 }
@@ -97,11 +97,11 @@ function createGalleryImage(kind: "sunset" | "garden" | "city") {
     ctx.fillStyle = sky; ctx.fillRect(0, 0, 1200, 800);
     ctx.fillStyle = "#ffd84d"; ctx.beginPath(); ctx.arc(830, 300, 118, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#151515"; ctx.beginPath(); ctx.moveTo(0, 590); ctx.lineTo(230, 370); ctx.lineTo(430, 565); ctx.lineTo(650, 315); ctx.lineTo(910, 590); ctx.lineTo(1080, 430); ctx.lineTo(1200, 555); ctx.lineTo(1200, 800); ctx.lineTo(0, 800); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#d8ff63"; ctx.fillRect(0, 650, 1200, 150);
+    ctx.fillStyle = "#d3d3ff"; ctx.fillRect(0, 650, 1200, 150);
     ctx.fillStyle = "#151515"; ctx.font = "900 62px Arial"; ctx.fillText("GÜN BATIMI", 58, 735);
   } else if (kind === "garden") {
     ctx.fillStyle = "#f4f0e6"; ctx.fillRect(0, 0, 1200, 800);
-    ctx.fillStyle = "#d8ff63"; ctx.fillRect(0, 0, 1200, 170);
+    ctx.fillStyle = "#d3d3ff"; ctx.fillRect(0, 0, 1200, 170);
     ctx.fillStyle = "#4864ff"; ctx.fillRect(0, 570, 1200, 230);
     ctx.fillStyle = "#ff6f61"; ctx.beginPath(); ctx.arc(210, 300, 135, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = "#ffd84d"; ctx.beginPath(); ctx.arc(510, 245, 92, 0, Math.PI * 2); ctx.fill();
@@ -117,7 +117,7 @@ function createGalleryImage(kind: "sunset" | "garden" | "city") {
     ctx.fillStyle = "#ffd84d"; ctx.beginPath(); ctx.arc(950, 150, 72, 0, Math.PI * 2); ctx.fill();
     const buildings = [[70, 300, 190, 500], [290, 230, 220, 570], [545, 350, 155, 450], [730, 180, 210, 620], [980, 290, 150, 510]];
     buildings.forEach(([x, y, width, height], index) => {
-      ctx.fillStyle = index % 2 ? "#d8ff63" : "#ff6f61"; ctx.fillRect(x, y, width, height);
+      ctx.fillStyle = index % 2 ? "#d3d3ff" : "#ff6f61"; ctx.fillRect(x, y, width, height);
       ctx.fillStyle = "#151515";
       for (let row = y + 32; row < y + height - 20; row += 52) for (let col = x + 24; col < x + width - 18; col += 48) ctx.fillRect(col, row, 18, 24);
     });
@@ -389,7 +389,7 @@ async function prepareUploadFile(file: File) {
 }
 
 function avatarColor(index: number) {
-  return ["#d8ff63", "#ff6f61", "#4864ff", "#ffd84d"][index % 4];
+  return ["#d3d3ff", "#ff6f61", "#4864ff", "#ffd84d"][index % 4];
 }
 
 export default function Home() {
