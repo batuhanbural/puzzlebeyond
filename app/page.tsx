@@ -592,6 +592,7 @@ export default function Home() {
   }, []);
 
   const localSize = PUZZLE_SIZES.find((option) => String(option.count) === difficulty) ?? PUZZLE_SIZES[0];
+  const selectedPuzzleSize = fitPuzzleSize(localSize, imageAspect);
   const rows = room?.rows ?? localSize.rows;
   const cols = room?.cols ?? localSize.cols;
   const pieceCount = rows * cols;
@@ -1025,13 +1026,13 @@ export default function Home() {
                   <div><b>{file ? file.name : selectedGalleryId ? "Galeriden seçilen puzzle" : "Fotoğrafını ekle"}</b><small>{selectedGalleryId ? "Hazır görsel seçildi · istersen değiştirebilirsin" : "JPG, PNG veya WEBP · en fazla 4 MB"}</small></div>
                   <input type="file" accept="image/jpeg,image/png,image/webp" onChange={onFile} />
                 </label>
-                <fieldset><legend>Zorluk · 12–1024 parça</legend><div className="difficulty-options">
+                <fieldset><legend>Zorluk · hedef parça sayısı</legend><div className="difficulty-options">
                   {PUZZLE_SIZES.map((option) => (
                     <button key={option.count} className={difficulty === String(option.count) ? "selected" : ""} onClick={() => setDifficulty(String(option.count))}>
                       <b>{option.count}</b><span>{option.label}</span>
                     </button>
                   ))}
-                </div></fieldset>
+                </div><p className="difficulty-result" aria-live="polite"><span><b>{selectedPuzzleSize.rows}×{selectedPuzzleSize.cols}</b> düzen</span><strong>{selectedPuzzleSize.count} PARÇA</strong><small>Görsel oranına göre dengelendi</small></p></fieldset>
                 <button className="primary-button full dialog-submit" onClick={() => createRoom()} disabled={busy}>{busy ? "ODA HAZIRLANIYOR…" : "ODAYI OLUŞTUR →"}</button>
               </>
             ) : (
