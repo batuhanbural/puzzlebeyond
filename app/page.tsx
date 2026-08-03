@@ -1071,7 +1071,7 @@ export default function Home() {
 
         <section className="board-section">
           <div className="board-toolbar">
-            <div><span className="live-dot" /> {room ? "CANLI OYUN" : galleryVisible ? "PUZZLE GALERİSİ" : "ÖN İZLEME"}</div>
+            <div><span className="live-dot" /> {room ? "CANLI OYUN" : galleryVisible ? "PUZZLE GALERİSİ" : ""}</div>
             <div className="toolbar-right">
               {!room && !galleryVisible && <button className="skip-preview-button" onClick={skipPreviewPuzzle}><span className="skip-long">İLK PUZZLEI ATLA</span><span className="skip-short">ATLA</span> →</button>}
               {(room || !galleryVisible) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
