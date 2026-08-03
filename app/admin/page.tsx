@@ -15,9 +15,17 @@ type AdminPuzzle = {
   kind: string;
 };
 
+type AdminSession = {
+  clientId: string;
+  roomCode: string | null;
+  lastSeenAt: number;
+  lastSeenLabel: string;
+};
+
 type AdminData = {
   activeUsers: number;
   puzzles: AdminPuzzle[];
+  sessions: AdminSession[];
 };
 
 async function responsePayload<T>(response: Response) {
@@ -43,14 +51,23 @@ export default function AdminPage() {
   const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/admin/gallery", { cache: "no-store" });
-    if (response.status === 401) {
+    const [galleryResponse, sessionsResponse] = await Promise.all([
+      fetch("/api/admin/gallery", { cache: "no-store" }),
+      fetch("/api/admin/sessions", { cache: "no-store" }),
+    ]);
+    if (galleryResponse.status === 401 || sessionsResponse.status === 401) {
       setAuthenticated(false);
       return;
     }
-    const payload = await responsePayload<AdminData>(response);
-    if (!response.ok) throw new Error(payload.error || "Admin verileri okunamadı.");
-    setData(payload);
+    const galleryPayload = await responsePayload<{ activeUsers: number; puzzles: AdminPuzzle[] }>(galleryResponse);
+    const sessionsPayload = await responsePayload<{ activeUsers: number; sessions: AdminSession[] }>(sessionsResponse);
+    if (!galleryResponse.ok) throw new Error(galleryPayload.error || "Admin verileri okunamadı.");
+    if (!sessionsResponse.ok) throw new Error(sessionsPayload.error || "Oturumlar okunamadı.");
+    setData({
+      activeUsers: sessionsPayload.activeUsers ?? galleryPayload.activeUsers,
+      puzzles: galleryPayload.puzzles || [],
+      sessions: sessionsPayload.sessions || [],
+    });
     setAuthenticated(true);
   }, []);
 
@@ -144,6 +161,65 @@ export default function AdminPage() {
     }
   };
 
+  const closeSession = async (session: AdminSession) => {
+    if (!window.confirm(`${session.clientId.slice(0, 8)}… oturumu kapatılsın mı?`)) return;
+    setBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: session.clientId }),
+      });
+      const payload = await responsePayload<{ closed?: number }>(response);
+      if (!response.ok) throw new Error(payload.error || "Oturum kapatılamadı.");
+      setNotice("Oturum kapatıldı.");
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Oturum kapatılamadı.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteSession = async (session: AdminSession) => {
+    if (!window.confirm(`${session.clientId.slice(0, 8)}… oturum kaydı silinsin mi?`)) return;
+    setBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch(`/api/admin/sessions?clientId=${encodeURIComponent(session.clientId)}`, { method: "DELETE" });
+      const payload = await responsePayload<{ deleted?: number }>(response);
+      if (!response.ok) throw new Error(payload.error || "Oturum silinemedi.");
+      setNotice("Oturum kaydı silindi.");
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Oturum silinemedi.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const closeAllSessions = async () => {
+    if (!data?.sessions.length || !window.confirm(`${data.sessions.length} aktif oturum kapatılsın mı?`)) return;
+    setBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/admin/sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true }),
+      });
+      const payload = await responsePayload<{ closed?: number }>(response);
+      if (!response.ok) throw new Error(payload.error || "Oturumlar kapatılamadı.");
+      setNotice(`${payload.closed || data.sessions.length} oturum kapatıldı.`);
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Oturumlar kapatılamadı.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const logout = async () => {
     await fetch("/api/admin/auth", { method: "DELETE" });
     setAuthenticated(false);
@@ -191,6 +267,24 @@ export default function AdminPage() {
           <div className="admin-stat-card"><span>ŞU ANDA</span><strong>{data?.activeUsers ?? "—"}</strong><b>AKTİF KULLANICI</b><button className="outline-button" onClick={() => void load()} disabled={busy}>YENİLE ↻</button></div>
           <div className="admin-note-card"><span>GÜVENLİK</span><p>Parola sunucuda tutulur; bu panelin oturumu HttpOnly çerez ile korunur.</p></div>
         </div>
+        <section className="admin-section admin-sessions-section">
+          <div className="admin-section-heading">
+            <div><p className="eyebrow">CANLI İZLEME</p><h2>Aktif oturumlar</h2></div>
+            <div className="admin-session-heading-actions"><span className="admin-count">{data?.sessions.length ?? 0} OTURUM</span><button className="outline-button" onClick={() => void load()} disabled={busy}>YENİLE</button><button className="admin-session-close-all" onClick={() => void closeAllSessions()} disabled={busy || !data?.sessions.length}>HEPSİNİ KAPAT</button></div>
+          </div>
+          {data?.sessions.length ? (
+            <div className="admin-session-list">
+              {data.sessions.map((session) => (
+                <article className="admin-session-row" key={session.clientId}>
+                  <div className="admin-session-main"><i className="admin-session-dot" /><div><b>{session.roomCode ? `${session.roomCode} odası` : "Ana menü"}</b><small>{session.clientId.slice(0, 12)}…</small></div></div>
+                  <div className="admin-session-seen"><span>SON GÖRÜLME</span><b>{session.lastSeenLabel}</b></div>
+                  <div className="admin-session-actions"><button className="outline-button" onClick={() => void closeSession(session)} disabled={busy}>KAPAT</button><button className="admin-delete-button" onClick={() => void deleteSession(session)} disabled={busy}>SİL</button></div>
+                </article>
+              ))}
+            </div>
+          ) : <p className="admin-session-empty">Şu anda aktif oturum bulunmuyor.</p>}
+          <p className="admin-session-note">Kapatılan oturumların heartbeat isteği durdurulur; silme işlemi yalnızca kaydı kaldırır.</p>
+        </section>
         <section className="admin-section">
           <div className="admin-section-heading"><div><p className="eyebrow">YENİ İÇERİK</p><h2>Galeriye puzzle ekle</h2></div><span className="admin-count">{data?.puzzles.length ?? 0} PUZZLE</span></div>
           <form className="admin-add-form" onSubmit={addPuzzle}>

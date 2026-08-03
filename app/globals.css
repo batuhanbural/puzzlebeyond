@@ -264,6 +264,26 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
 .admin-section-heading h2 { margin:5px 0 0; font-size:clamp(25px,3vw,38px); line-height:.95; letter-spacing:-2px; text-transform:uppercase; }
 .admin-section-heading .eyebrow { margin:0; }
 .admin-count { padding:8px 10px; border:1.5px solid var(--ink); background:var(--white); white-space:nowrap; }
+.admin-session-heading-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+.admin-session-heading-actions .outline-button { min-height:34px; padding:0 10px; font-size:8px; }
+.admin-session-close-all { min-height:34px; padding:0 10px; border:1.5px solid var(--ink); background:var(--coral); font-size:8px; font-weight:950; cursor:pointer; }
+.admin-session-close-all:hover { background:var(--ink); color:var(--paper); }
+.admin-session-close-all:disabled { opacity:.55; cursor:wait; }
+.admin-session-list { display:grid; gap:8px; }
+.admin-session-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:16px; min-height:68px; padding:10px 12px; border:1.5px solid var(--ink); background:var(--white); }
+.admin-session-main { min-width:0; display:flex; align-items:center; gap:10px; }
+.admin-session-main>div { min-width:0; display:grid; gap:3px; }
+.admin-session-main b { overflow:hidden; font-size:12px; text-overflow:ellipsis; white-space:nowrap; text-transform:uppercase; }
+.admin-session-main small { color:#77736b; overflow:hidden; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.admin-session-dot { width:10px; height:10px; flex:0 0 auto; border:1px solid var(--ink); border-radius:50%; background:#40b866; box-shadow:0 0 0 3px #d9f2df; }
+.admin-session-seen { min-width:78px; display:grid; gap:3px; text-align:right; }
+.admin-session-seen span { color:#77736b; font-size:7px; font-weight:950; letter-spacing:.7px; }
+.admin-session-seen b { font-size:10px; }
+.admin-session-actions { display:flex; align-items:center; gap:7px; }
+.admin-session-actions .outline-button { min-height:32px; padding:0 9px; border-width:1.5px; font-size:8px; }
+.admin-session-actions .admin-delete-button { margin-top:0; min-height:32px; padding:0 9px; }
+.admin-session-empty { margin:0; padding:22px; border:1.5px dashed var(--ink); background:var(--white); color:#68645d; font-family:Georgia,serif; text-align:center; }
+.admin-session-note { margin:12px 0 0; color:#77736b; font-family:Georgia,serif; font-size:11px; line-height:1.4; }
 .admin-add-form { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .admin-add-form>label:nth-child(2),.admin-add-form>.admin-form-row,.admin-add-form>.admin-file-label,.admin-add-form>button { grid-column:1 / -1; }
 .admin-form-row { display:grid; grid-template-columns:1fr 1fr 100px; gap:14px; }
@@ -294,6 +314,10 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
   .admin-note-card p { font-size:13px; }
   .admin-section { padding:14px; margin-top:22px; }
   .admin-section-heading h2 { font-size:27px; }
+  .admin-session-heading-actions { width:100%; justify-content:flex-start; }
+  .admin-session-row { grid-template-columns:1fr; gap:10px; }
+  .admin-session-seen { text-align:left; }
+  .admin-session-actions { justify-content:flex-start; }
   .admin-add-form { grid-template-columns:1fr; }
   .admin-add-form>label:nth-child(2),.admin-add-form>.admin-form-row,.admin-add-form>.admin-file-label,.admin-add-form>button { grid-column:auto; }
   .admin-form-row { grid-template-columns:1fr 1fr 80px; gap:8px; }

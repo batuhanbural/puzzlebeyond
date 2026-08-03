@@ -25,6 +25,7 @@ export type PresenceRecord = {
   client_id: string;
   room_code: string | null;
   last_seen_at: number;
+  revoked_at?: number | null;
 };
 
 const WIPE_MARKER = "system/rooms-wiped-2026-08-03";
@@ -255,25 +256,59 @@ export async function getGalleryImageResponse(imageKey: string) {
 }
 
 export async function touchPresence(clientId: string, roomCode: string | null, lastSeenAt: number) {
-  await dataRequest("site_presence", {
+  const response = await dataRequest("site_presence", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Prefer: "resolution=merge-duplicates,return=minimal",
+      Prefer: "resolution=merge-duplicates,return=representation",
     },
     body: JSON.stringify({ client_id: clientId, room_code: roomCode, last_seen_at: lastSeenAt }),
   });
+  const rows = await response.json() as Array<{ revoked_at?: number | null }>;
+  return rows[0]?.revoked_at == null;
 }
 
 export async function removePresence(clientId: string) {
+  const baseQuery = `site_presence?client_id=eq.${encodeURIComponent(clientId)}`;
+  try {
+    await dataRequest(`${baseQuery}&revoked_at=is.null`, {
+      method: "DELETE",
+      headers: { Prefer: "return=minimal" },
+    });
+  } catch (error) {
+    // Keep leave-beacon compatibility until the additive session migration is run.
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes("revoked_at")) throw error;
+    await dataRequest(baseQuery, {
+      method: "DELETE",
+      headers: { Prefer: "return=minimal" },
+    });
+  }
+}
+
+export async function revokePresence(clientId: string, revokedAt: number) {
   await dataRequest(`site_presence?client_id=eq.${encodeURIComponent(clientId)}`, {
-    method: "DELETE",
-    headers: { Prefer: "return=minimal" },
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
+    body: JSON.stringify({ revoked_at: revokedAt, room_code: null }),
   });
 }
 
+export async function getActivePresences(cutoff: number) {
+  const query = `site_presence?last_seen_at=gt.${Math.floor(cutoff)}&select=client_id,room_code,last_seen_at&order=last_seen_at.desc`;
+  try {
+    const response = await dataRequest(`${query}&revoked_at=is.null`);
+    return await response.json() as PresenceRecord[];
+  } catch (error) {
+    // Keep the admin panel usable until the additive session migration is run.
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes("revoked_at")) throw error;
+    const response = await dataRequest(query);
+    return await response.json() as PresenceRecord[];
+  }
+}
+
 export async function getActiveUserCount(cutoff: number) {
-  const response = await dataRequest(`site_presence?last_seen_at=gt.${Math.floor(cutoff)}&select=client_id`);
-  const rows = await response.json() as Array<{ client_id: string }>;
+  const rows = await getActivePresences(cutoff);
   return new Set(rows.map((row) => row.client_id)).size;
 }

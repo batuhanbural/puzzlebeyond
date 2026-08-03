@@ -428,6 +428,7 @@ export default function Home() {
   const boardRef = useRef<HTMLDivElement>(null);
   const lastLocalMove = useRef(0);
   const remoteUpdatedAt = useRef(0);
+  const presenceRevoked = useRef(false);
   const hintTimer = useRef<number | null>(null);
   const dragRef = useRef<{
     id: number;
@@ -490,16 +491,24 @@ export default function Home() {
   }, []);
   useEffect(() => {
     if (!clientId) return;
-    const sendHeartbeat = () => {
-      void fetch("/api/presence", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId, roomCode: room?.code ?? null }),
-      }).catch(() => { /* Presence is optional until the Supabase migration is run. */ });
+    const sendHeartbeat = async () => {
+      if (presenceRevoked.current) return;
+      try {
+        const response = await fetch("/api/presence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientId, roomCode: room?.code ?? null }),
+        });
+        if (response.status === 410) {
+          presenceRevoked.current = true;
+          setNotice("Bu oturum admin tarafından kapatıldı.");
+        }
+      } catch { /* Presence is optional until the Supabase migration is run. */ }
     };
     sendHeartbeat();
     const timer = window.setInterval(sendHeartbeat, 20_000);
     const leave = () => {
+      if (presenceRevoked.current) return;
       const body = JSON.stringify({ clientId, leave: true });
       const beacon = new Blob([body], { type: "application/json" });
       if (!navigator.sendBeacon("/api/presence", beacon)) {

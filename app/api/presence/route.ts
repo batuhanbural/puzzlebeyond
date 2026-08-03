@@ -11,7 +11,8 @@ export async function POST(request: Request) {
       await removePresence(clientId);
     } else {
       const roomCode = payload.roomCode?.trim().toUpperCase() || null;
-      await touchPresence(clientId, roomCode && /^[A-Z0-9]{6}$/.test(roomCode) ? roomCode : null, Date.now());
+      const active = await touchPresence(clientId, roomCode && /^[A-Z0-9]{6}$/.test(roomCode) ? roomCode : null, Date.now());
+      if (!active) return Response.json({ error: "Bu oturum admin taraf\u0131ndan kapat\u0131ld\u0131.", revoked: true }, { status: 410 });
     }
     return new Response(null, { status: 204 });
   } catch (error) {

@@ -6,7 +6,7 @@ Oda koduyla paylaşılan, gerçek zamanlı ortak puzzle uygulaması. Kullanıcı
 
 1. Projeyi Vercel'de Git deposuna bağlayın.
 2. Supabase projenizi bağlayın.
-3. Supabase SQL Editor'da supabase/schema.sql dosyasını çalıştırın. Admin paneli ve aktif kullanıcı sayacı için supabase/migrations/001_admin_gallery.sql dosyasını da bir kez çalıştırın.
+3. Supabase SQL Editor'da supabase/schema.sql dosyasını çalıştırın. Admin paneli ve aktif kullanıcı sayacı için supabase/migrations/001_admin_gallery.sql dosyasını; aktif oturumları kapatmak için supabase/migrations/002_admin_sessions.sql dosyasını da bir kez çalıştırın.
 4. Vercel proje ayarlarında aşağıdaki ortam değişkenlerini tanımlayın:
 
 SUPABASE_URL=https://your-project.supabase.co
@@ -16,7 +16,7 @@ ADMIN_PASSWORD=change-this-to-a-long-private-password
 
 SUPABASE_SECRET_KEY ve ADMIN_PASSWORD yalnızca sunucu ortamında tutulmalıdır; NEXT_PUBLIC_ öneki kullanmayın.
 
-Admin paneli /admin adresindedir. ADMIN_PASSWORD ile korunan panelden aktif kullanıcı sayısını görebilir, galeriye JPG/PNG/WebP puzzle ekleyebilir veya puzzle silebilirsiniz.
+Admin paneli /admin adresindedir. ADMIN_PASSWORD ile korunan panelden aktif kullanıcı ve oturumları görebilir, oturumları kapatıp silebilir, galeriye JPG/PNG/WebP puzzle ekleyebilir veya puzzle silebilirsiniz.
 
 Vercel uyumluluk derlemesi:
 

@@ -21,14 +21,18 @@ grant select, insert, update, delete on table public.gallery_puzzles to service_
 create table if not exists public.site_presence (
   client_id text primary key,
   room_code text,
-  last_seen_at bigint not null
+  last_seen_at bigint not null,
+  revoked_at bigint
 );
+
+alter table public.site_presence add column if not exists revoked_at bigint;
 
 alter table public.site_presence enable row level security;
 revoke all on table public.site_presence from anon, authenticated;
 grant select, insert, update, delete on table public.site_presence to service_role;
 
 create index if not exists site_presence_last_seen_idx on public.site_presence (last_seen_at);
+create index if not exists site_presence_active_idx on public.site_presence (last_seen_at, revoked_at);
 
 insert into public.gallery_puzzles (id, title, description, image_key, image_kind, rows, cols, accent, created_at)
 values
