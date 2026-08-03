@@ -77,7 +77,13 @@ export async function ensureSchema() {
     wipeChecked = true;
     return;
   }
-  if (marker.status !== 404) throw new Error(`Oda temizleme durumu okunamadı (${marker.status}).`);
+  const markerDetail = await marker.text();
+  const markerMissing = marker.status === 404 || (
+    marker.status === 400 && /not[\s-]?found|resource was not found|does not exist/i.test(markerDetail)
+  );
+  if (!markerMissing) {
+    throw new Error(`Oda temizleme durumu okunamadı (${marker.status}): ${markerDetail}`);
+  }
 
   const response = await dataRequest("puzzle_rooms?select=code,image_key");
   const rooms = await response.json() as Array<{ code: string; image_key: string }>;
@@ -89,7 +95,7 @@ export async function ensureSchema() {
     headers: headers({ "Content-Type": "text/plain", "x-upsert": "true" }),
     body: new TextEncoder().encode(String(Date.now())),
   });
-  if (!saved.ok) throw new Error(`Oda temizleme durumu kaydedilemedi (${saved.status}).`);
+  if (!saved.ok) throw new Error(`Oda temizleme durumu kaydedilemedi (${saved.status}): ${await saved.text()}`);
   wipeChecked = true;
 }
 
