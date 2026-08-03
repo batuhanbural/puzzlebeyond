@@ -1077,15 +1077,20 @@ export default function Home() {
                     <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
                   </div>
                 ))}
-                {((room && progress === 100) || (!room && introCompletion === "showing")) && (
+                {!room && introCompletion === "showing" && (
                   <div className={`complete-badge ${room ? "" : "intro-complete"}`}>
                     <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
-                    {room && <button className="download-image-button" type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => void downloadCompletedImage()} disabled={downloadBusy}>{downloadBusy ? "HAZIRLANIYOR…" : "GÖRSELİ İNDİR ↓"}</button>}
                   </div>
                 )}
               </div>
               <div className="mobile-room-actions">
                 {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
+                {room && progress === 100 && (
+                  <div className="mobile-completion-card">
+                    <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
+                    <button className="download-image-button" type="button" onClick={() => void downloadCompletedImage()} disabled={downloadBusy}>{downloadBusy ? "HAZIRLANIYOR…" : "GÖRSELİ İNDİR ↓"}</button>
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -1107,6 +1112,12 @@ export default function Home() {
             <div><span>BEKLİYOR</span><strong>{remainingCount}</strong><i>PARÇA</i></div>
           </div>
           <div className="progress-rail"><i style={{ width: `${progress}%` }} /></div>
+          {room && progress === 100 && (
+            <div className="side-completion-card">
+              <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
+              <button className="download-image-button" type="button" onClick={() => void downloadCompletedImage()} disabled={downloadBusy}>{downloadBusy ? "HAZIRLANIYOR…" : "GÖRSELİ İNDİR ↓"}</button>
+            </div>
+          )}
           <div className="panel-help">
             <span>✦ KÜÇÜK İPUCU</span>
             <p>Parçayı doğru yere yaklaştırıp bırak; yerine kendiliğinden oturur.</p>
