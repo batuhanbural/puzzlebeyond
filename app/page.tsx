@@ -30,6 +30,7 @@ type GalleryItem = {
 const DEFAULT_ROWS = 3;
 const DEFAULT_COLS = 4;
 const DEFAULT_IMAGE_ASPECT = 4 / 3;
+const ROOM_STORAGE_KEY = "puzzlebeyond-active-room";
 const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 };
 const PUZZLE_SIZES = [
   { count: 12, rows: 3, cols: 4, label: "RAHAT" },
@@ -396,6 +397,23 @@ function avatarColor(index: number) {
   return ["#d3d3ff", "#ff6f61", "#4864ff", "#ffd84d"][index % 4];
 }
 
+function getStoredRoomCode() {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.sessionStorage.getItem(ROOM_STORAGE_KEY)?.trim().toUpperCase() || "";
+  } catch {
+    return "";
+  }
+}
+
+function storeRoomCode(code: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (code) window.sessionStorage.setItem(ROOM_STORAGE_KEY, code);
+    else window.sessionStorage.removeItem(ROOM_STORAGE_KEY);
+  } catch { /* Storage can be unavailable in private browsing contexts. */ }
+}
+
 export default function Home() {
   const [room, setRoom] = useState<Room | null>(null);
   const [pieces, setPieces] = useState<Piece[]>(() => scatteredPieces(DEFAULT_ROWS, DEFAULT_COLS));
@@ -487,6 +505,29 @@ export default function Home() {
       setGalleryItems(payload.setupRequired ? createGalleryItems() : items);
     }).catch(() => {
       if (!cancelled) fallback();
+    });
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    const storedCode = getStoredRoomCode();
+    if (!storedCode) return;
+    let cancelled = false;
+    void fetch(`/api/room?code=${encodeURIComponent(storedCode)}`, { cache: "no-store" }).then(async (response) => {
+      const data = await readApiPayload<{ room?: Room }>(response);
+      if (!response.ok || !data.room) {
+        if (response.status === 404) storeRoomCode(null);
+        throw new Error(data.error || "Oda yeniden yüklenemedi.");
+      }
+      if (cancelled) return;
+      remoteUpdatedAt.current = data.room.updatedAt;
+      setRoom(data.room);
+      setPieces(normalizePieces(data.room));
+      setImageUrl(data.room.imageUrl);
+      setGalleryOpen(false);
+      setIntroCompletion("idle");
+      setNotice(`${data.room.code} odasına yeniden bağlandın.`);
+    }).catch((error) => {
+      if (!cancelled) setNotice(error instanceof Error ? error.message : "Oda yeniden yüklenemedi.");
     });
     return () => { cancelled = true; };
   }, []);
@@ -605,6 +646,7 @@ export default function Home() {
       const data = await readApiPayload<{ room?: Room }>(response);
       if (!response.ok || !data.room) throw new Error(data.error || "Oda oluşturulamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
+      storeRoomCode(data.room.code);
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl); setUploadPreviewUrl("");
       setIntroCompletion("idle");
       setGalleryOpen(false);
@@ -623,6 +665,7 @@ export default function Home() {
       const data = await readApiPayload<{ room?: Room }>(response);
       if (!response.ok || !data.room) throw new Error(data.error || "Oda bulunamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
+      storeRoomCode(data.room.code);
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl);
       setIntroCompletion("idle");
       setGalleryOpen(false);
@@ -640,6 +683,7 @@ export default function Home() {
   };
 
   const resetPreviewPuzzle = () => {
+    storeRoomCode(null);
     setRoom(null);
     setIntroCompletion("idle");
     setGalleryOpen(false);
