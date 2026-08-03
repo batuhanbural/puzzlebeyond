@@ -376,6 +376,7 @@ export default function Home() {
   const [title, setTitle] = useState("Hafta sonu buluşması");
   const [difficulty, setDifficulty] = useState("12");
   const [dialog, setDialog] = useState<"create" | "join" | null>(null);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [notice, setNotice] = useState("Yeni bir oda kurabilir ya da arkadaşlarının kodunu girebilirsin.");
   const [busy, setBusy] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
@@ -421,6 +422,7 @@ export default function Home() {
   const solvedCount = pieces.filter((piece) => piece.locked).length;
   const remainingCount = pieceCount - solvedCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);
+  const galleryVisible = !room && (galleryOpen || progress === 100);
   const workspaceAspect = imageAspect * BOARD.height / BOARD.width;
   const hintPiece = lastHeldPieceId === null
     ? pieces.find((piece) => !piece.locked)
@@ -480,6 +482,7 @@ export default function Home() {
       if (!response.ok || !data.room) throw new Error(data.error || "Oda oluşturulamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl);
+      setGalleryOpen(false);
       setLastHeldPieceId(null);
       setDialog(null); setNotice(`${data.room.code} kodlu oda hazır. Kodu arkadaşlarına gönder!`);
     } catch (error) {
@@ -496,6 +499,7 @@ export default function Home() {
       if (!response.ok || !data.room) throw new Error(data.error || "Oda bulunamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl);
+      setGalleryOpen(false);
       setLastHeldPieceId(null);
       setDialog(null); setNotice(`${data.room.code} odasına katıldın. İyi eğlenceler!`);
     } catch (error) {
@@ -505,6 +509,7 @@ export default function Home() {
 
   const selectGalleryPuzzle = (item: GalleryItem) => {
     setRoom(null);
+    setGalleryOpen(false);
     setFile(null);
     setSelectedGalleryId(item.id);
     setImageUrl(item.imageUrl);
@@ -519,6 +524,7 @@ export default function Home() {
 
   const resetPreviewPuzzle = () => {
     setRoom(null);
+    setGalleryOpen(false);
     setFile(null);
     setSelectedGalleryId(null);
     setImageUrl(createDefaultImage());
@@ -529,6 +535,12 @@ export default function Home() {
     setHintVisible(false);
     setPreviewSeed(crypto.randomUUID());
     setNotice("Yeni ön izleme puzzle’ı hazır.");
+  };
+
+  const skipPreviewPuzzle = () => {
+    setGalleryOpen(true);
+    setHintVisible(false);
+    setNotice("Ön izleme atlandı. Hazır puzzlelardan birini seçebilirsin.");
   };
 
   const onFile = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -661,19 +673,21 @@ export default function Home() {
               <p>Sana gönderilen oda kodu herkesi aynı canlı tahtada buluşturur.</p>
               <button className="primary-button full" onClick={() => setDialog("join")}>KODLA KATIL →</button>
               <button className="panel-text-button" onClick={() => setDialog("create")}>YA DA YENİ ODA KUR</button>
+              <button className="panel-text-button" onClick={skipPreviewPuzzle}>İLK PUZZLEI ATLA · GALERİYE GEÇ</button>
             </div>
           )}
         </aside>
 
         <section className="board-section">
           <div className="board-toolbar">
-            <div><span className="live-dot" /> {room ? "CANLI OYUN" : progress === 100 ? "PUZZLE GALERİSİ" : "ÖN İZLEME"}</div>
+            <div><span className="live-dot" /> {room ? "CANLI OYUN" : galleryVisible ? "PUZZLE GALERİSİ" : "ÖN İZLEME"}</div>
             <div className="toolbar-right">
-              {(room || progress < 100) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
+              {!room && !galleryVisible && <button className="skip-preview-button" onClick={skipPreviewPuzzle}><span className="skip-long">İLK PUZZLEI ATLA</span><span className="skip-short">ATLA</span> →</button>}
+              {(room || !galleryVisible) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
               <div className="difficulty-pill" title={`${rows}×${cols}`}>{progress}% · {pieceCount} PARÇA</div>
             </div>
           </div>
-          {!room && progress === 100 ? (
+          {galleryVisible ? (
             <section className="gallery-view" aria-labelledby="gallery-title">
               <div className="gallery-heading">
                 <div>

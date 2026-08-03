@@ -74,6 +74,9 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .toolbar-right { display:flex; align-items:center; gap:8px; }
 .hint-button { height:28px; padding:0 10px; border:1.5px solid var(--ink); background:var(--lime); font-size:9px; font-weight:950; letter-spacing:.8px; cursor:pointer; box-shadow:2px 2px 0 var(--ink); }
 .hint-button:hover,.hint-button.active { background:var(--coral); transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--ink); }
+.skip-preview-button { height:28px; padding:0 8px; border:1.5px dashed var(--ink); background:var(--white); font-size:8px; font-weight:950; letter-spacing:.7px; cursor:pointer; }
+.skip-preview-button:hover { background:var(--coral); box-shadow:2px 2px 0 var(--ink); transform:translate(-1px,-1px); }
+.skip-short { display:none; }
 .difficulty-pill { padding:5px 8px; border:1.5px solid var(--ink); background:var(--white); }
 .puzzle-workspace { --workspace-aspect:1.55; position:relative; width:min(100%,calc((100dvh - 280px) * var(--workspace-aspect))); max-height:100%; min-width:0; min-height:0; aspect-ratio:var(--workspace-aspect); margin:auto; background:#d8d1c3; border:3px solid var(--ink); box-shadow:7px 7px 0 rgba(21,21,21,.22); overflow:hidden; touch-action:none; user-select:none; }
 .puzzle-workspace::before { content:""; position:absolute; inset:0; opacity:.22; background-image:radial-gradient(#151515 0.8px,transparent 0.8px); background-size:13px 13px; pointer-events:none; }
@@ -187,6 +190,7 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
   .board-toolbar { width:calc(100% + 12px); height:44px; margin:0 -6px; padding:0 9px; }
   .toolbar-right { gap:5px; }
   .difficulty-pill { padding:4px 5px; font-size:8px; }
+  .skip-preview-button { padding:0 6px; font-size:8px; }
   .puzzle-workspace { width:min(100%,calc((100dvh - 310px) * var(--workspace-aspect))); min-height:0; box-shadow:4px 4px 0 rgba(21,21,21,.25); }
   .puzzle-board-guide>p { font-size:7px; letter-spacing:.7px; }
   .mobile-room-actions { width:100%; margin-top:6px; display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; }
