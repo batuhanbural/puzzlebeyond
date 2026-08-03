@@ -34,3 +34,4 @@ Vercel Functions istek sınırına uyum sağlamak için fotoğraf yükleme boyut
 - `lib/storage.cloudflare.ts`: mevcut Sites D1/R2 adaptörü.
 - `vite.config.ts`: Sites derlemesinde Cloudflare adaptörünü seçer.
 - Doğal Next.js/Vercel derlemesi varsayılan olarak Supabase adaptörünü kullanır.
+"# puzzlebeyond" 
