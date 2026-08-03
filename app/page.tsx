@@ -477,6 +477,7 @@ export default function Home() {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [pendingGalleryItem, setPendingGalleryItem] = useState<GalleryItem | null>(null);
   const [introCompletion, setIntroCompletion] = useState<"idle" | "showing" | "gallery">("idle");
+  const [previewReplay, setPreviewReplay] = useState(false);
   const [notice, setNotice] = useState("Yeni bir oda kurabilir ya da arkadaşlarının kodunu girebilirsin.");
   const [busy, setBusy] = useState(false);
   const [downloadBusy, setDownloadBusy] = useState(false);
@@ -864,6 +865,8 @@ export default function Home() {
   };
 
   const resetPreviewPuzzle = () => {
+    setPreviewReplay(true);
+    window.setTimeout(() => setPreviewReplay(false), 700);
     storeRoomCode(null);
     setPendingImageAspect(null);
     setRoom(null);
@@ -1106,7 +1109,7 @@ export default function Home() {
             <>
               <div
                 ref={boardRef}
-                className="puzzle-workspace"
+                className={`puzzle-workspace ${previewReplay ? "preview-replay" : ""}`}
                 style={{ "--workspace-aspect": workspaceAspect } as CSSProperties}
                 onPointerMove={movePiece}
                 onPointerUp={endMove}
