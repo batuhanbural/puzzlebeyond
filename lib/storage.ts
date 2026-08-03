@@ -9,6 +9,8 @@ export type RoomRecord = {
   updated_at: number;
 };
 
+export type RoomSummary = Pick<RoomRecord, "code" | "title" | "rows" | "cols" | "updated_at">;
+
 export type GalleryRecord = {
   id: string;
   title: string;
@@ -109,6 +111,11 @@ export async function getRoom(code: string) {
 export async function roomExists(code: string) {
   const response = await dataRequest(`puzzle_rooms?code=eq.${encodeURIComponent(code)}&select=code&limit=1`);
   return ((await response.json()) as Array<{ code: string }>).length > 0;
+}
+
+export async function getRoomSummaries() {
+  const response = await dataRequest("puzzle_rooms?select=code,title,rows,cols,updated_at&order=updated_at.desc&limit=500");
+  return await response.json() as RoomSummary[];
 }
 
 export async function createRoom(room: RoomRecord) {

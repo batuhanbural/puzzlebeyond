@@ -22,10 +22,24 @@ type AdminSession = {
   lastSeenLabel: string;
 };
 
+type AdminEmptyRoom = {
+  code: string;
+  title: string;
+  rows: number;
+  cols: number;
+  lastActivityAt: number;
+  lastActivityLabel: string;
+  expiresAt: number;
+  expiresLabel: string;
+  remainingMs: number;
+  remainingLabel: string;
+};
+
 type AdminData = {
   activeUsers: number;
   puzzles: AdminPuzzle[];
   sessions: AdminSession[];
+  emptyRooms: AdminEmptyRoom[];
 };
 
 async function responsePayload<T>(response: Response) {
@@ -60,13 +74,14 @@ export default function AdminPage() {
       return;
     }
     const galleryPayload = await responsePayload<{ activeUsers: number; puzzles: AdminPuzzle[] }>(galleryResponse);
-    const sessionsPayload = await responsePayload<{ activeUsers: number; sessions: AdminSession[] }>(sessionsResponse);
+    const sessionsPayload = await responsePayload<{ activeUsers: number; sessions: AdminSession[]; emptyRooms: AdminEmptyRoom[] }>(sessionsResponse);
     if (!galleryResponse.ok) throw new Error(galleryPayload.error || "Admin verileri okunamadı.");
     if (!sessionsResponse.ok) throw new Error(sessionsPayload.error || "Oturumlar okunamadı.");
     setData({
       activeUsers: sessionsPayload.activeUsers ?? galleryPayload.activeUsers,
       puzzles: galleryPayload.puzzles || [],
       sessions: sessionsPayload.sessions || [],
+      emptyRooms: sessionsPayload.emptyRooms || [],
     });
     setAuthenticated(true);
   }, []);
@@ -84,6 +99,14 @@ export default function AdminPage() {
       setNotice("Admin servisine ulaşılamadı.");
     });
   }, [load]);
+
+  useEffect(() => {
+    if (authenticated !== true) return;
+    const timer = window.setInterval(() => {
+      if (!busy) void load().catch((error) => setNotice(error instanceof Error ? error.message : "Admin verileri yenilenemedi."));
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [authenticated, busy, load]);
 
   const login = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -284,6 +307,24 @@ export default function AdminPage() {
             </div>
           ) : <p className="admin-session-empty">Şu anda aktif oturum bulunmuyor.</p>}
           <p className="admin-session-note">Kapatılan oturumların heartbeat isteği durdurulur; silme işlemi yalnızca kaydı kaldırır.</p>
+        </section>
+        <section className="admin-section admin-empty-rooms-section">
+          <div className="admin-section-heading">
+            <div><p className="eyebrow">BEKLEYEN ODALAR</p><h2>Boş, silinmeyi bekleyenler</h2></div>
+            <span className="admin-count">{data?.emptyRooms.length ?? 0} ODA</span>
+          </div>
+          {data?.emptyRooms.length ? (
+            <div className="admin-empty-room-list">
+              {data.emptyRooms.map((room) => (
+                <article className="admin-empty-room-row" key={room.code}>
+                  <div className="admin-empty-room-main"><i className="admin-empty-room-dot" /><div><b>{room.title || "Başlıksız puzzle"}</b><small>{room.code} · {room.rows}×{room.cols} · kullanıcı yok</small></div></div>
+                  <div className="admin-empty-room-activity"><span>SON AKTİVİTE</span><b>{room.lastActivityLabel}</b></div>
+                  <div className="admin-empty-room-expiry"><span>SİLİNMESİNE KALAN</span><b>{room.remainingLabel}</b><small>{room.expiresLabel} civarı</small></div>
+                </article>
+              ))}
+            </div>
+          ) : <p className="admin-session-empty">Şu anda boş ve silinmeyi bekleyen oda yok.</p>}
+          <p className="admin-session-note">Kullanıcısı olmayan odalar son aktiviteden 24 saat sonra temizlenir. Liste yenilendikçe kalan süre güncellenir.</p>
         </section>
         <section className="admin-section">
           <div className="admin-section-heading"><div><p className="eyebrow">YENİ İÇERİK</p><h2>Galeriye puzzle ekle</h2></div><span className="admin-count">{data?.puzzles.length ?? 0} PUZZLE</span></div>

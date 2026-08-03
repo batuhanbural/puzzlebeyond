@@ -1,9 +1,10 @@
-import { getActivePresences, removePresence, revokePresence, type PresenceRecord } from "@/lib/storage";
+import { getActivePresences, getRoomSummaries, removePresence, revokePresence, type PresenceRecord, type RoomSummary } from "@/lib/storage";
 import { isAdminRequest } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 
 const ACTIVE_WINDOW_MS = 90_000;
+const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
 
 function unauthorized() {
   return Response.json({ error: "Yetkisiz eri\u015fim." }, { status: 401 });
@@ -15,6 +16,34 @@ function sessionJson(row: PresenceRecord) {
     roomCode: row.room_code,
     lastSeenAt: row.last_seen_at,
     lastSeenLabel: new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(row.last_seen_at),
+  };
+}
+
+function emptyRoomJson(row: RoomSummary, now: number) {
+  const lastActivityAt = Number(row.updated_at);
+  const expiresAt = lastActivityAt + ROOM_TTL_MS;
+  const remainingMs = Math.max(0, expiresAt - now);
+  const totalMinutes = Math.max(1, Math.ceil(remainingMs / 60_000));
+  const days = Math.floor(totalMinutes / 1_440);
+  const hours = Math.floor((totalMinutes % 1_440) / 60);
+  const minutes = totalMinutes % 60;
+  const remainingLabel = days > 0
+    ? `${days} gün ${hours} saat`
+    : hours > 0
+      ? `${hours} saat ${minutes} dk`
+      : `${minutes} dk`;
+  const timeLabel = (timestamp: number) => new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }).format(timestamp);
+  return {
+    code: row.code,
+    title: row.title,
+    rows: row.rows,
+    cols: row.cols,
+    lastActivityAt,
+    lastActivityLabel: timeLabel(lastActivityAt),
+    expiresAt,
+    expiresLabel: timeLabel(expiresAt),
+    remainingMs,
+    remainingLabel,
   };
 }
 
@@ -30,9 +59,14 @@ async function activeSessions() {
 export async function GET(request: Request) {
   if (!isAdminRequest(request)) return unauthorized();
   try {
-    const sessions = await activeSessions();
+    const now = Date.now();
+    const [sessions, rooms] = await Promise.all([activeSessions(), getRoomSummaries()]);
+    const activeRoomCodes = new Set(sessions.map((session) => session.room_code).filter((code): code is string => Boolean(code)));
+    const emptyRooms = rooms
+      .filter((room) => !activeRoomCodes.has(room.code) && Number(room.updated_at) + ROOM_TTL_MS > now)
+      .map((room) => emptyRoomJson(room, now));
     return Response.json(
-      { activeUsers: sessions.length, sessions: sessions.map(sessionJson) },
+      { activeUsers: sessions.length, sessions: sessions.map(sessionJson), emptyRooms },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

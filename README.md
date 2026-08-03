@@ -16,7 +16,7 @@ ADMIN_PASSWORD=change-this-to-a-long-private-password
 
 SUPABASE_SECRET_KEY ve ADMIN_PASSWORD yalnızca sunucu ortamında tutulmalıdır; NEXT_PUBLIC_ öneki kullanmayın.
 
-Admin paneli /admin adresindedir. ADMIN_PASSWORD ile korunan panelden aktif kullanıcı ve oturumları görebilir, oturumları kapatıp silebilir, galeriye JPG/PNG/WebP puzzle ekleyebilir veya puzzle silebilirsiniz.
+Admin paneli /admin adresindedir. ADMIN_PASSWORD ile korunan panelden aktif kullanıcı ve oturumları görebilir, boş odaların 24 saatlik silinme süresini takip edebilir, oturumları kapatıp silebilir, galeriye JPG/PNG/WebP puzzle ekleyebilir veya puzzle silebilirsiniz.
 
 Vercel uyumluluk derlemesi:
 
