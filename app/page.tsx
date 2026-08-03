@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, CSSProperties, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, CSSProperties, PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Piece = { id: number; x: number; y: number; locked?: boolean };
 type Room = {
@@ -14,6 +14,16 @@ type Room = {
 };
 
 type ApiPayload<T> = T & { error?: string };
+type GalleryItem = {
+  id: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  rows: number;
+  cols: number;
+  count: number;
+  accent: string;
+};
 
 const DEFAULT_ROWS = 3;
 const DEFAULT_COLS = 4;
@@ -71,6 +81,55 @@ function createDefaultImage() {
   ctx.fillStyle = "#d8ff63";
   ctx.beginPath(); ctx.arc(870, 610, 42, 0, Math.PI * 2); ctx.fill();
   return canvas.toDataURL("image/jpeg", 0.9);
+}
+
+function createGalleryImage(kind: "sunset" | "garden" | "city") {
+  if (typeof document === "undefined") return "";
+  const canvas = document.createElement("canvas");
+  canvas.width = 1200;
+  canvas.height = 800;
+  const ctx = canvas.getContext("2d")!;
+  if (kind === "sunset") {
+    const sky = ctx.createLinearGradient(0, 0, 0, 800);
+    sky.addColorStop(0, "#ff9f7f"); sky.addColorStop(.52, "#ff6f61"); sky.addColorStop(1, "#4864ff");
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, 1200, 800);
+    ctx.fillStyle = "#ffd84d"; ctx.beginPath(); ctx.arc(830, 300, 118, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#151515"; ctx.beginPath(); ctx.moveTo(0, 590); ctx.lineTo(230, 370); ctx.lineTo(430, 565); ctx.lineTo(650, 315); ctx.lineTo(910, 590); ctx.lineTo(1080, 430); ctx.lineTo(1200, 555); ctx.lineTo(1200, 800); ctx.lineTo(0, 800); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#d8ff63"; ctx.fillRect(0, 650, 1200, 150);
+    ctx.fillStyle = "#151515"; ctx.font = "900 62px Arial"; ctx.fillText("GÜN BATIMI", 58, 735);
+  } else if (kind === "garden") {
+    ctx.fillStyle = "#f4f0e6"; ctx.fillRect(0, 0, 1200, 800);
+    ctx.fillStyle = "#d8ff63"; ctx.fillRect(0, 0, 1200, 170);
+    ctx.fillStyle = "#4864ff"; ctx.fillRect(0, 570, 1200, 230);
+    ctx.fillStyle = "#ff6f61"; ctx.beginPath(); ctx.arc(210, 300, 135, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#ffd84d"; ctx.beginPath(); ctx.arc(510, 245, 92, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#151515"; ctx.fillRect(870, 250, 38, 390);
+    ctx.fillStyle = "#40b866"; ctx.beginPath(); ctx.arc(890, 190, 110, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#ff6f61"; ctx.beginPath(); ctx.arc(760, 400, 68, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fffdf7"; ctx.beginPath(); ctx.arc(760, 400, 24, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#151515"; ctx.font = "900 62px Arial"; ctx.fillText("ÇİÇEK BAHÇESİ", 58, 112);
+  } else {
+    const night = ctx.createLinearGradient(0, 0, 0, 800);
+    night.addColorStop(0, "#151515"); night.addColorStop(1, "#4864ff");
+    ctx.fillStyle = night; ctx.fillRect(0, 0, 1200, 800);
+    ctx.fillStyle = "#ffd84d"; ctx.beginPath(); ctx.arc(950, 150, 72, 0, Math.PI * 2); ctx.fill();
+    const buildings = [[70, 300, 190, 500], [290, 230, 220, 570], [545, 350, 155, 450], [730, 180, 210, 620], [980, 290, 150, 510]];
+    buildings.forEach(([x, y, width, height], index) => {
+      ctx.fillStyle = index % 2 ? "#d8ff63" : "#ff6f61"; ctx.fillRect(x, y, width, height);
+      ctx.fillStyle = "#151515";
+      for (let row = y + 32; row < y + height - 20; row += 52) for (let col = x + 24; col < x + width - 18; col += 48) ctx.fillRect(col, row, 18, 24);
+    });
+    ctx.fillStyle = "#fffdf7"; ctx.font = "900 62px Arial"; ctx.fillText("GECE ŞEHRİ", 58, 112);
+  }
+  return canvas.toDataURL("image/jpeg", 0.88);
+}
+
+function createGalleryItems(): GalleryItem[] {
+  return [
+    { id: "sunset", title: "Gün batımı", description: "Sıcak renkler, uzun bir akşam.", imageUrl: createGalleryImage("sunset"), rows: 3, cols: 4, count: 12, accent: "#ff6f61" },
+    { id: "garden", title: "Çiçek bahçesi", description: "Renkli bir masa için kolay başlangıç.", imageUrl: createGalleryImage("garden"), rows: 4, cols: 5, count: 20, accent: "#d8ff63" },
+    { id: "city", title: "Gece şehri", description: "Biraz daha sakin, biraz daha zor.", imageUrl: createGalleryImage("city"), rows: 6, cols: 8, count: 48, accent: "#4864ff" },
+  ];
 }
 
 function scatteredPieces(rows: number, cols: number, seed?: string) {
@@ -309,6 +368,8 @@ export default function Home() {
   const [pieces, setPieces] = useState<Piece[]>(() => scatteredPieces(DEFAULT_ROWS, DEFAULT_COLS));
   const [imageUrl, setImageUrl] = useState("");
   const [imageAspect, setImageAspect] = useState(DEFAULT_IMAGE_ASPECT);
+  const [selectedGalleryId, setSelectedGalleryId] = useState<string | null>(null);
+  const galleryItems = useMemo(() => createGalleryItems(), []);
   const [previewSeed, setPreviewSeed] = useState("PREVIEW");
   const [codeInput, setCodeInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -334,8 +395,11 @@ export default function Home() {
   } | null>(null);
 
   useEffect(() => {
-    setImageUrl(createDefaultImage());
-    setPreviewSeed(crypto.randomUUID());
+    const frame = window.requestAnimationFrame(() => {
+      setImageUrl(createDefaultImage());
+      setPreviewSeed(crypto.randomUUID());
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
   useEffect(() => {
     if (!imageUrl) return;
@@ -439,6 +503,34 @@ export default function Home() {
     } finally { setBusy(false); }
   };
 
+  const selectGalleryPuzzle = (item: GalleryItem) => {
+    setRoom(null);
+    setFile(null);
+    setSelectedGalleryId(item.id);
+    setImageUrl(item.imageUrl);
+    setPreviewSeed(`${item.id}-${crypto.randomUUID()}`);
+    setPieces(scatteredPieces(item.rows, item.cols, `${item.id}-${crypto.randomUUID()}`));
+    setDifficulty(String(item.count));
+    setTitle(item.title);
+    setLastHeldPieceId(null);
+    setHintVisible(false);
+    setNotice(`${item.title} seçildi. Parçaları yerleştirmeye başlayabilirsin.`);
+  };
+
+  const resetPreviewPuzzle = () => {
+    setRoom(null);
+    setFile(null);
+    setSelectedGalleryId(null);
+    setImageUrl(createDefaultImage());
+    setPieces(scatteredPieces(DEFAULT_ROWS, DEFAULT_COLS));
+    setDifficulty("12");
+    setTitle("Hafta sonu buluşması");
+    setLastHeldPieceId(null);
+    setHintVisible(false);
+    setPreviewSeed(crypto.randomUUID());
+    setNotice("Yeni ön izleme puzzle’ı hazır.");
+  };
+
   const onFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
     if (!selected) return;
@@ -450,6 +542,7 @@ export default function Home() {
     try {
       await validateImage(selected);
       setFile(selected);
+      setSelectedGalleryId(null);
       setImageUrl(URL.createObjectURL(selected));
       setNotice(`${selected.name} kullanıma hazır.`);
     } catch (error) {
@@ -515,7 +608,7 @@ export default function Home() {
   return (
     <main className="site-shell">
       <header className="topbar">
-        <button className="brand" onClick={() => { setRoom(null); setPieces(scatteredPieces(3, 4)); setLastHeldPieceId(null); setPreviewSeed(crypto.randomUUID()); setImageUrl(createDefaultImage()); }} aria-label="Parça ana sayfa">
+        <button className="brand" onClick={resetPreviewPuzzle} aria-label="Parça ana sayfa">
           <span className="brand-mark">P</span><span>parça</span>
         </button>
         <div className="header-actions">
@@ -574,78 +667,105 @@ export default function Home() {
 
         <section className="board-section">
           <div className="board-toolbar">
-            <div><span className="live-dot" /> {room ? "CANLI OYUN" : "ÖN İZLEME"}</div>
+            <div><span className="live-dot" /> {room ? "CANLI OYUN" : progress === 100 ? "PUZZLE GALERİSİ" : "ÖN İZLEME"}</div>
             <div className="toolbar-right">
-              <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>
+              {(room || progress < 100) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
               <div className="difficulty-pill" title={`${rows}×${cols}`}>{progress}% · {pieceCount} PARÇA</div>
             </div>
           </div>
-          <div
-            ref={boardRef}
-            className={`puzzle-workspace ${progress === 100 ? "is-complete" : ""}`}
-            style={{ "--workspace-aspect": workspaceAspect } as CSSProperties}
-            onPointerMove={movePiece}
-            onPointerUp={endMove}
-            onPointerCancel={endMove}
-          >
-            <div className="puzzle-board-guide">
-              <div className={`hint-preview ${hintVisible ? "visible" : ""}`} style={{ backgroundImage: `url(${imageUrl})` }} />
-              <div className="board-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}>
-                {Array.from({ length: pieceCount }).map((_, i) => <span key={i} />)}
+          {!room && progress === 100 ? (
+            <section className="gallery-view" aria-labelledby="gallery-title">
+              <div className="gallery-heading">
+                <div>
+                  <p className="eyebrow">Sıradaki masanı seç</p>
+                  <h2 id="gallery-title">Hazır puzzlelar</h2>
+                </div>
+                <p>İstersen galeriden devam et, istersen kendi fotoğrafını getir.</p>
               </div>
-              <p>PARÇALARI BURAYA YERLEŞTİR</p>
-            </div>
-            {hintVisible && hintPiece && (
+              <div className="gallery-grid">
+                {galleryItems.map((item) => (
+                  <button key={item.id} className={`gallery-card ${selectedGalleryId === item.id ? "selected" : ""}`} onClick={() => selectGalleryPuzzle(item)}>
+                    <img src={item.imageUrl} alt={`${item.title} puzzle görseli`} />
+                    <span className="gallery-card-accent" style={{ background: item.accent }} />
+                    <span className="gallery-card-copy"><b>{item.title}</b><small>{item.description}</small><em>{item.count} PARÇA · OYNA →</em></span>
+                  </button>
+                ))}
+              </div>
+              <div className="gallery-actions">
+                <button className="outline-button" onClick={resetPreviewPuzzle}>Ön izlemeyi tekrar oyna</button>
+                <button className="primary-button" onClick={() => setDialog("create")}>Kendi fotoğrafını ekle</button>
+              </div>
+            </section>
+          ) : (
+            <>
               <div
-                className="hint-target"
-                style={{
-                  left: `${(BOARD.left + (hintPiece.id % cols) * BOARD.width / cols) * 100}%`,
-                  top: `${(BOARD.top + Math.floor(hintPiece.id / cols) * BOARD.height / rows) * 100}%`,
-                  width: `${BOARD.width * 100 / cols}%`,
-                  height: `${BOARD.height * 100 / rows}%`,
-                }}
-              ><span>{hintPiece.id + 1}</span></div>
-            )}
-            {pieces.map((piece) => (
-              <div
-                key={piece.id}
-                className={`puzzle-piece ${piece.locked ? "locked" : ""} ${piece.id === lastHeldPieceId ? "recent" : ""} ${pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : ""}`}
-                style={{
-                  width: `${BOARD.width * 100 / cols}%`, height: `${BOARD.height * 100 / rows}%`,
-                  left: `${piece.x * 100}%`, top: `${piece.y * 100}%`,
-                }}
-                onPointerDown={(event) => {
-                  if (piece.locked || !boardRef.current) return;
-                  setLastHeldPieceId(piece.id);
-                  setHintVisible(false);
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                  const rect = boardRef.current.getBoundingClientRect();
-                  event.currentTarget.classList.add("dragging");
-                  dragRef.current = {
-                    id: piece.id,
-                    offsetX: (event.clientX - rect.left) / rect.width - piece.x,
-                    offsetY: (event.clientY - rect.top) / rect.height - piece.y,
-                    currentX: piece.x,
-                    currentY: piece.y,
-                    element: event.currentTarget,
-                  };
-                }}
-                role="button" tabIndex={0} aria-label={`${piece.id + 1}. puzzle parçası`}
+                ref={boardRef}
+                className="puzzle-workspace"
+                style={{ "--workspace-aspect": workspaceAspect } as CSSProperties}
+                onPointerMove={movePiece}
+                onPointerUp={endMove}
+                onPointerCancel={endMove}
               >
-                <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
+                <div className="puzzle-board-guide">
+                  <div className={`hint-preview ${hintVisible ? "visible" : ""}`} style={{ backgroundImage: `url(${imageUrl})` }} />
+                  <div className="board-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}>
+                    {Array.from({ length: pieceCount }).map((_, i) => <span key={i} />)}
+                  </div>
+                  <p>PARÇALARI BURAYA YERLEŞTİR</p>
+                </div>
+                {hintVisible && hintPiece && (
+                  <div
+                    className="hint-target"
+                    style={{
+                      left: `${(BOARD.left + (hintPiece.id % cols) * BOARD.width / cols) * 100}%`,
+                      top: `${(BOARD.top + Math.floor(hintPiece.id / cols) * BOARD.height / rows) * 100}%`,
+                      width: `${BOARD.width * 100 / cols}%`,
+                      height: `${BOARD.height * 100 / rows}%`,
+                    }}
+                  ><span>{hintPiece.id + 1}</span></div>
+                )}
+                {pieces.map((piece) => (
+                  <div
+                    key={piece.id}
+                    className={`puzzle-piece ${piece.locked ? "locked" : ""} ${piece.id === lastHeldPieceId ? "recent" : ""} ${pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : ""}`}
+                    style={{
+                      width: `${BOARD.width * 100 / cols}%`, height: `${BOARD.height * 100 / rows}%`,
+                      left: `${piece.x * 100}%`, top: `${piece.y * 100}%`,
+                    }}
+                    onPointerDown={(event) => {
+                      if (piece.locked || !boardRef.current) return;
+                      setLastHeldPieceId(piece.id);
+                      setHintVisible(false);
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      const rect = boardRef.current.getBoundingClientRect();
+                      event.currentTarget.classList.add("dragging");
+                      dragRef.current = {
+                        id: piece.id,
+                        offsetX: (event.clientX - rect.left) / rect.width - piece.x,
+                        offsetY: (event.clientY - rect.top) / rect.height - piece.y,
+                        currentX: piece.x,
+                        currentY: piece.y,
+                        element: event.currentTarget,
+                      };
+                    }}
+                    role="button" tabIndex={0} aria-label={`${piece.id + 1}. puzzle parçası`}
+                  >
+                    <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
+                  </div>
+                ))}
+                {progress === 100 && <div className="complete-badge"><span>✓</span> TAMAMLANDI!</div>}
               </div>
-            ))}
-            {progress === 100 && <div className="complete-badge"><span>✓</span> TAMAMLANDI!</div>}
-          </div>
-          <div className="mobile-room-actions">
-            {!room && (
-              <>
-                <button className="outline-button" onClick={() => setDialog("join")}>Kodla katıl</button>
-                <button className="primary-button" onClick={() => setDialog("create")}>Yeni puzzle oluştur</button>
-              </>
-            )}
-            {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
-          </div>
+              <div className="mobile-room-actions">
+                {!room && (
+                  <>
+                    <button className="outline-button" onClick={() => setDialog("join")}>Kodla katıl</button>
+                    <button className="primary-button" onClick={() => setDialog("create")}>Yeni puzzle oluştur</button>
+                  </>
+                )}
+                {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
+              </div>
+            </>
+          )}
         </section>
 
         <aside className="panel progress-panel">
@@ -687,7 +807,7 @@ export default function Home() {
                 <label className="field"><span>Puzzle adı</span><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={48} /></label>
                 <label className="upload-field">
                   {imageUrl ? <img src={imageUrl} alt="Seçilen puzzle ön izlemesi" /> : <span className="upload-icon">＋</span>}
-                  <div><b>{file ? file.name : "Fotoğrafını ekle"}</b><small>JPG, PNG veya WEBP · en fazla 4 MB</small></div>
+                  <div><b>{file ? file.name : selectedGalleryId ? "Galeriden seçilen puzzle" : "Fotoğrafını ekle"}</b><small>{selectedGalleryId ? "Hazır görsel seçildi · istersen değiştirebilirsin" : "JPG, PNG veya WEBP · en fazla 4 MB"}</small></div>
                   <input type="file" accept="image/jpeg,image/png,image/webp" onChange={onFile} />
                 </label>
                 <fieldset><legend>Zorluk · 12–1024 parça</legend><div className="difficulty-options">
