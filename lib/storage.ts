@@ -189,6 +189,24 @@ export async function getPuzzleImageResponse(imageKey: string) {
   return Response.redirect(`${url}/storage/v1/object/public/${bucket}/${imageKey}`, 307);
 }
 
+export async function getPuzzleImageDownloadResponse(imageKey: string, filename: string) {
+  const { url, bucket } = config();
+  const response = await fetch(`${url}/storage/v1/object/public/${bucket}/${imageKey}`, { cache: "no-store" });
+  if (!response.ok) return new Response(null, { status: response.status === 404 ? 404 : 502 });
+  const contentType = response.headers.get("content-type") || "image/jpeg";
+  const extension = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
+  const safeBase = filename.replace(/\.[^.]+$/, "").replace(/[^a-z0-9._-]/gi, "-");
+  const safeFilename = `${safeBase}.${extension}`;
+  return new Response(response.body, {
+    status: 200,
+    headers: {
+      "Content-Type": contentType,
+      "Content-Disposition": `attachment; filename="${safeFilename}"`,
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 export async function getGalleryPuzzles() {
   const response = await dataRequest("gallery_puzzles?select=*&order=created_at.asc");
   return await response.json() as GalleryRecord[];

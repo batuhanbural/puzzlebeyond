@@ -457,6 +457,7 @@ export default function Home() {
   const [introCompletion, setIntroCompletion] = useState<"idle" | "showing" | "gallery">("idle");
   const [notice, setNotice] = useState("Yeni bir oda kurabilir ya da arkadaşlarının kodunu girebilirsin.");
   const [busy, setBusy] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
   const [lastHeldPieceId, setLastHeldPieceId] = useState<number | null>(null);
   const [playerName] = useState(() => typeof window === "undefined" ? "Sen" : localStorage.getItem("puzzle-name") || "Sen");
@@ -827,6 +828,30 @@ export default function Home() {
     hintTimer.current = window.setTimeout(() => setHintVisible(false), 3200);
   };
 
+  const downloadCompletedImage = async () => {
+    if (!room || progress !== 100 || downloadBusy) return;
+    setDownloadBusy(true);
+    try {
+      const response = await fetch(`/api/image?code=${encodeURIComponent(room.code)}&download=1`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Görsel indirilemedi.");
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      const extension = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+      link.download = `puzzlebeyond-${room.code}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      setNotice("Tamamlanan görsel indiriliyor.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Görsel indirilemedi.");
+    } finally {
+      setDownloadBusy(false);
+    }
+  };
+
   return (
     <main className="site-shell">
       <header className="topbar">
@@ -978,7 +1003,12 @@ export default function Home() {
                     <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
                   </div>
                 ))}
-                {((room && progress === 100) || (!room && introCompletion === "showing")) && <div className={`complete-badge ${room ? "" : "intro-complete"}`}><span>✓</span> TAMAMLANDI!</div>}
+                {((room && progress === 100) || (!room && introCompletion === "showing")) && (
+                  <div className={`complete-badge ${room ? "" : "intro-complete"}`}>
+                    <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
+                    {room && <button className="download-image-button" type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => void downloadCompletedImage()} disabled={downloadBusy}>{downloadBusy ? "HAZIRLANIYOR…" : "GÖRSELİ İNDİR ↓"}</button>}
+                  </div>
+                )}
               </div>
               <div className="mobile-room-actions">
                 {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
