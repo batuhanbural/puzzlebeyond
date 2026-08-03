@@ -62,6 +62,11 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .current-player-card b { overflow:hidden; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
 .current-player-card small { color:#77736b; font-size:7px; font-weight:900; letter-spacing:.7px; }
 .online-dot { margin-left:auto; width:7px; height:7px; border-radius:50%; background:#40b866; box-shadow:0 0 0 2px #d9f2df; }
+.room-players { margin-top:18px; display:grid; gap:8px; }
+.room-players-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.room-players-heading b { font-size:8px; letter-spacing:1px; }
+.room-players-heading small { color:#77736b; font-size:7px; font-weight:900; letter-spacing:.7px; }
+.room-players .current-player-card { min-height:48px; padding:7px; }
 .room-copy-button { min-height:46px; margin-top:14px; padding:0 9px; font-size:10px; letter-spacing:.55px; line-height:1.15; white-space:normal; }
 .room-start-card { min-height:410px; padding:28px 16px 22px; display:flex; flex-direction:column; justify-content:center; text-align:center; }
 .code-stamp { align-self:center; width:92px; height:92px; display:grid; place-items:center; border:3px solid var(--ink); border-radius:50%; background:var(--blue); color:#fff; font-size:62px; line-height:1; font-weight:950; box-shadow:7px 7px 0 var(--lime),9px 9px 0 var(--ink); transform:rotate(-5deg); }

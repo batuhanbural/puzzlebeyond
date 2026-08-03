@@ -35,6 +35,7 @@ grant select, insert, update, delete on table public.gallery_puzzles to service_
 create table if not exists public.site_presence (
   client_id text primary key,
   room_code text,
+  nickname text not null default 'Misafir',
   last_seen_at bigint not null,
   revoked_at bigint
 );

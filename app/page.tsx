@@ -15,6 +15,12 @@ type Room = {
   updatedAt: number;
 };
 
+type RoomPlayer = {
+  clientId: string;
+  nickname: string;
+  lastSeenAt: number;
+};
+
 type ApiPayload<T> = T & { error?: string };
 type GalleryItem = {
   id: string;
@@ -32,6 +38,7 @@ const DEFAULT_ROWS = 3;
 const DEFAULT_COLS = 4;
 const DEFAULT_IMAGE_ASPECT = 4 / 3;
 const ROOM_STORAGE_KEY = "puzzlebeyond-active-room";
+const NICKNAME_STORAGE_KEY = "puzzle-name";
 const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 };
 const PUZZLE_SIZES = [
   { count: 12, rows: 3, cols: 4, label: "RAHAT" },
@@ -44,6 +51,19 @@ const PUZZLE_SIZES = [
 ] as const;
 
 const puzzleImageCache = new Map<string, Promise<HTMLImageElement>>();
+
+function normalizeNickname(value: string) {
+  return value.trim().replace(/\s+/g, " ").slice(0, 24);
+}
+
+function getStoredNickname() {
+  if (typeof window === "undefined") return "";
+  try {
+    return normalizeNickname(window.localStorage.getItem(NICKNAME_STORAGE_KEY) || "");
+  } catch {
+    return "";
+  }
+}
 
 function loadPuzzleImage(src: string) {
   const cached = puzzleImageCache.get(src);
@@ -453,15 +473,18 @@ export default function Home() {
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState("");
   const [title, setTitle] = useState("Hafta sonu buluşması");
   const [difficulty, setDifficulty] = useState("12");
-  const [dialog, setDialog] = useState<"create" | "join" | null>(null);
+  const [dialog, setDialog] = useState<"create" | "join" | "nickname" | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [pendingGalleryItem, setPendingGalleryItem] = useState<GalleryItem | null>(null);
   const [introCompletion, setIntroCompletion] = useState<"idle" | "showing" | "gallery">("idle");
   const [notice, setNotice] = useState("Yeni bir oda kurabilir ya da arkadaşlarının kodunu girebilirsin.");
   const [busy, setBusy] = useState(false);
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
   const [lastHeldPieceId, setLastHeldPieceId] = useState<number | null>(null);
-  const [playerName] = useState(() => typeof window === "undefined" ? "Sen" : localStorage.getItem("puzzle-name") || "Sen");
+  const [playerName, setPlayerName] = useState(() => getStoredNickname() || "Sen");
+  const [nicknameInput, setNicknameInput] = useState(() => getStoredNickname());
+  const [roomPlayers, setRoomPlayers] = useState<RoomPlayer[]>([]);
   const [clientId] = useState(() => {
     if (typeof window === "undefined") return "";
     const storageKey = "puzzlebeyond-client-id";
@@ -553,6 +576,7 @@ export default function Home() {
       remoteUpdatedAt.current = data.room.updatedAt;
       setRoom(data.room);
       setPieces(normalizePieces(data.room));
+      setRoomPlayers([]);
       setImageUrl(data.room.imageUrl);
       setGalleryOpen(false);
       setIntroCompletion("idle");
@@ -570,7 +594,7 @@ export default function Home() {
         const response = await fetch("/api/presence", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clientId, roomCode: room?.code ?? null }),
+          body: JSON.stringify({ clientId, roomCode: room?.code ?? null, nickname: playerName }),
         });
         if (response.status === 410) {
           presenceRevoked.current = true;
@@ -593,7 +617,27 @@ export default function Home() {
       window.clearInterval(timer);
       window.removeEventListener("pagehide", leave);
     };
-  }, [clientId, room?.code]);
+  }, [clientId, playerName, room?.code]);
+  useEffect(() => {
+    const roomCode = room?.code;
+    if (!roomCode) {
+      return;
+    }
+    let cancelled = false;
+    const loadPlayers = async () => {
+      try {
+        const response = await fetch(`/api/presence?roomCode=${encodeURIComponent(roomCode)}`, { cache: "no-store" });
+        const data = await readApiPayload<{ players?: RoomPlayer[] }>(response);
+        if (response.ok && !cancelled) setRoomPlayers(data.players || []);
+      } catch { /* The local player card remains visible during brief outages. */ }
+    };
+    void loadPlayers();
+    const timer = window.setInterval(loadPlayers, 5_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [room?.code]);
   useEffect(() => () => {
     if (hintTimer.current) window.clearTimeout(hintTimer.current);
   }, []);
@@ -665,6 +709,23 @@ export default function Home() {
   const hintPiece = lastHeldPieceId === null
     ? pieces.find((piece) => !piece.locked)
     : pieces.find((piece) => piece.id === lastHeldPieceId);
+  const commitNickname = () => {
+    const name = normalizeNickname(nicknameInput);
+    if (!name) {
+      setNotice("Odaya girmek için bir nickname yazmalısın.");
+      return null;
+    }
+    try { window.localStorage.setItem(NICKNAME_STORAGE_KEY, name); } catch { /* Keep the name in memory if storage is unavailable. */ }
+    setNicknameInput(name);
+    setPlayerName(name);
+    return name;
+  };
+  const fallbackPlayer: RoomPlayer = { clientId, nickname: playerName, lastSeenAt: 0 };
+  const visibleRoomPlayers = roomPlayers.length === 0
+    ? [fallbackPlayer]
+    : roomPlayers.some((player) => player.clientId === clientId)
+      ? roomPlayers
+      : [fallbackPlayer, ...roomPlayers];
 
   useEffect(() => {
     if (room || introCompletion !== "showing") return;
@@ -715,6 +776,7 @@ export default function Home() {
   }, [room?.code]);
 
   const createRoom = async (galleryItem?: GalleryItem) => {
+    if (!commitNickname()) return;
     setBusy(true);
     try {
       const imageSource = galleryItem?.imageUrl || uploadPreviewUrl || imageUrl;
@@ -750,7 +812,7 @@ export default function Home() {
       remoteUpdatedAt.current = data.room.updatedAt;
       storeRoomCode(data.room.code);
       setPendingImageAspect(null);
-      setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl); setUploadPreviewUrl("");
+      setRoom(data.room); setPieces(normalizePieces(data.room)); setRoomPlayers([]); setImageUrl(data.room.imageUrl); setUploadPreviewUrl("");
       setIntroCompletion("idle");
       setGalleryOpen(false);
       setLastHeldPieceId(null);
@@ -762,6 +824,7 @@ export default function Home() {
 
   const joinRoom = async () => {
     if (codeInput.length !== 6) { setNotice("Oda kodu 6 karakter olmalı."); return; }
+    if (!commitNickname()) return;
     setBusy(true);
     try {
       const response = await fetch(`/api/room?code=${codeInput}`, { cache: "no-store" });
@@ -770,7 +833,7 @@ export default function Home() {
       remoteUpdatedAt.current = data.room.updatedAt;
       storeRoomCode(data.room.code);
       setPendingImageAspect(null);
-      setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl);
+      setRoom(data.room); setPieces(normalizePieces(data.room)); setRoomPlayers([]); setImageUrl(data.room.imageUrl);
       setIntroCompletion("idle");
       setGalleryOpen(false);
       setLastHeldPieceId(null);
@@ -782,14 +845,29 @@ export default function Home() {
 
   const selectGalleryPuzzle = (item: GalleryItem) => {
     setSelectedGalleryId(item.id);
+    if (!nicknameInput.trim()) {
+      setPendingGalleryItem(item);
+      setDialog("nickname");
+      setNotice("Odaya katılmadan önce nickname'ini yaz.");
+      return;
+    }
     setNotice(`${item.title} için ortak oda hazırlanıyor…`);
     void createRoom(item);
+  };
+
+  const submitNickname = () => {
+    if (!commitNickname()) return;
+    const galleryItem = pendingGalleryItem;
+    setPendingGalleryItem(null);
+    setDialog(null);
+    if (galleryItem) void createRoom(galleryItem);
   };
 
   const resetPreviewPuzzle = () => {
     storeRoomCode(null);
     setPendingImageAspect(null);
     setRoom(null);
+    setRoomPlayers([]);
     setIntroCompletion("idle");
     setGalleryOpen(false);
     setFile(null);
@@ -933,7 +1011,7 @@ export default function Home() {
         </button>
         <div className="header-actions">
           <button className="text-button" onClick={() => setDialog("join")}>Kodla katıl</button>
-          <button className={`primary-button small ${room ? "" : galleryVisible ? "header-gallery" : "header-new-setup"}`} onClick={() => setDialog("create")}><span>＋</span> Yeni puzzle</button>
+          {!room && <button className={`primary-button small ${galleryVisible ? "header-gallery" : "header-new-setup"}`} onClick={() => setDialog("create")}><span>＋</span> Yeni puzzle</button>}
         </div>
       </header>
 
@@ -966,10 +1044,15 @@ export default function Home() {
                 <span>1</span><p>Kodu arkadaşlarına gönder.</p>
                 <span>2</span><p>Herkes aynı tahtaya bağlansın.</p>
               </div>
-              <div className="current-player-card">
-                <span className="avatar" style={{ background: avatarColor(0) }}>{playerName.slice(0, 1)}</span>
-                <span><b>{playerName}</b><small>BU CİHAZ</small></span>
-                <i className="online-dot" />
+              <div className="room-players" aria-label="Odada çözen kişiler">
+                <div className="room-players-heading"><b>ÇÖZENLER</b><small>{visibleRoomPlayers.length} KİŞİ</small></div>
+                {visibleRoomPlayers.map((player, index) => (
+                  <div className="current-player-card" key={player.clientId}>
+                    <span className="avatar" style={{ background: avatarColor(index) }}>{player.nickname.slice(0, 1).toUpperCase()}</span>
+                    <span><b>{player.nickname}</b><small>{player.clientId === clientId ? "BU CİHAZ" : "ÇÖZÜYOR"}</small></span>
+                    <i className="online-dot" />
+                  </div>
+                ))}
               </div>
               <button className="outline-button full room-copy-button" onClick={copyCode}>KODU KOPYALA</button>
             </div>
@@ -1085,6 +1168,7 @@ export default function Home() {
               </div>
               <div className="mobile-room-actions">
                 {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
+                {room && <button className="primary-button" onClick={() => setDialog("create")}>YENİ PUZZLE KUR</button>}
                 {room && progress === 100 && (
                   <div className="mobile-completion-card">
                     <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
@@ -1122,7 +1206,7 @@ export default function Home() {
             <span>✦ KÜÇÜK İPUCU</span>
             <p>Parçayı doğru yere yaklaştırıp bırak; yerine kendiliğinden oturur.</p>
           </div>
-          {!room && <button className="primary-button full progress-create" onClick={() => setDialog("create")}>FOTOĞRAFINLA BAŞLA →</button>}
+          <button className="primary-button full progress-create" onClick={() => setDialog("create")}>{room ? "YENİ PUZZLE KUR →" : "FOTOĞRAFINLA BAŞLA →"}</button>
         </aside>
       </section>
 
@@ -1138,6 +1222,7 @@ export default function Home() {
               <>
                 <p className="eyebrow">YENİ BİR ANIYI PARÇALA</p>
                 <h2 id="dialog-title">Puzzle odanı kur</h2>
+                <label className="field"><span>Nickname</span><input value={nicknameInput} onChange={(e) => setNicknameInput(e.target.value)} maxLength={24} placeholder="Örn. Zeynep" /></label>
                 <label className="field"><span>Puzzle adı</span><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={48} /></label>
                 <label className="upload-field">
                   {(uploadPreviewUrl || imageUrl) ? <img src={uploadPreviewUrl || imageUrl} alt="Seçilen puzzle ön izlemesi" /> : <span className="upload-icon">＋</span>}
@@ -1153,13 +1238,22 @@ export default function Home() {
                 </div><p className="difficulty-result" aria-live="polite"><span><b>{selectedPuzzleSize.rows}×{selectedPuzzleSize.cols}</b> düzen</span><strong>{selectedPuzzleSize.count} PARÇA</strong><small>Görsel oranına göre dengelendi</small></p></fieldset>
                 <button className="primary-button full dialog-submit" onClick={() => createRoom()} disabled={busy}>{busy ? "ODA HAZIRLANIYOR…" : "ODAYI OLUŞTUR →"}</button>
               </>
-            ) : (
+            ) : dialog === "join" ? (
               <>
                 <p className="eyebrow">ARKADAŞLARIN SENİ BEKLİYOR</p>
                 <h2 id="dialog-title">Kodu gir, parçanı koy</h2>
                 <p className="dialog-copy">Sana gönderilen 6 karakterlik oda kodunu aşağıya yaz.</p>
+                <label className="field"><span>Nickname</span><input value={nicknameInput} onChange={(e) => setNicknameInput(e.target.value)} maxLength={24} placeholder="Örn. Zeynep" /></label>
                 <input className="code-input" autoFocus value={codeInput} onChange={(e) => setCodeInput(formatCode(e.target.value))} placeholder="A7K2P9" onKeyDown={(e) => e.key === "Enter" && joinRoom()} />
                 <button className="primary-button full dialog-submit" onClick={joinRoom} disabled={busy}>{busy ? "BAĞLANIYOR…" : "ODAYA KATIL →"}</button>
+              </>
+            ) : (
+              <>
+                <p className="eyebrow">ORTAK MASA İÇİN HAZIR</p>
+                <h2 id="dialog-title">Nickname&apos;in ne?</h2>
+                <p className="dialog-copy">Aynı odadaki kişiler seni bu adla görecek.</p>
+                <label className="field"><span>Nickname</span><input autoFocus value={nicknameInput} onChange={(e) => setNicknameInput(e.target.value)} maxLength={24} placeholder="Örn. Zeynep" onKeyDown={(e) => e.key === "Enter" && submitNickname()} /></label>
+                <button className="primary-button full dialog-submit" onClick={submitNickname}>DEVAM ET →</button>
               </>
             )}
           </section>

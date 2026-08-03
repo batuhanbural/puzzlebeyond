@@ -26,6 +26,7 @@ export type GalleryRecord = {
 export type PresenceRecord = {
   client_id: string;
   room_code: string | null;
+  nickname?: string | null;
   last_seen_at: number;
   revoked_at?: number | null;
 };
@@ -307,17 +308,34 @@ export async function getGalleryImageResponse(imageKey: string) {
   });
 }
 
-export async function touchPresence(clientId: string, roomCode: string | null, lastSeenAt: number) {
-  const response = await dataRequest("site_presence", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Prefer: "resolution=merge-duplicates,return=representation",
-    },
-    body: JSON.stringify({ client_id: clientId, room_code: roomCode, last_seen_at: lastSeenAt }),
-  });
-  const rows = await response.json() as Array<{ revoked_at?: number | null }>;
-  return rows[0]?.revoked_at == null;
+export async function touchPresence(clientId: string, roomCode: string | null, lastSeenAt: number, nickname = "Misafir") {
+  const body = { client_id: clientId, room_code: roomCode, nickname, last_seen_at: lastSeenAt };
+  try {
+    const response = await dataRequest("site_presence", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify(body),
+    });
+    const rows = await response.json() as Array<{ revoked_at?: number | null }>;
+    return rows[0]?.revoked_at == null;
+  } catch (error) {
+    // Keep old deployments alive until the nickname migration is applied.
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes("nickname")) throw error;
+    const response = await dataRequest("site_presence", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify({ client_id: clientId, room_code: roomCode, last_seen_at: lastSeenAt }),
+    });
+    const rows = await response.json() as Array<{ revoked_at?: number | null }>;
+    return rows[0]?.revoked_at == null;
+  }
 }
 
 export async function removePresence(clientId: string) {
@@ -347,13 +365,25 @@ export async function revokePresence(clientId: string, revokedAt: number) {
 }
 
 export async function getActivePresences(cutoff: number) {
-  const query = `site_presence?last_seen_at=gt.${Math.floor(cutoff)}&select=client_id,room_code,last_seen_at&order=last_seen_at.desc`;
+  const query = `site_presence?last_seen_at=gt.${Math.floor(cutoff)}&select=client_id,room_code,nickname,last_seen_at&order=last_seen_at.desc`;
   try {
     const response = await dataRequest(`${query}&revoked_at=is.null`);
     return await response.json() as PresenceRecord[];
   } catch (error) {
     // Keep the admin panel usable until the additive session migration is run.
     const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("nickname")) {
+      const legacyQuery = `site_presence?last_seen_at=gt.${Math.floor(cutoff)}&select=client_id,room_code,last_seen_at&order=last_seen_at.desc`;
+      try {
+        const response = await dataRequest(`${legacyQuery}&revoked_at=is.null`);
+        return (await response.json() as PresenceRecord[]).map((row) => ({ ...row, nickname: "Misafir" }));
+      } catch (legacyError) {
+        const legacyMessage = legacyError instanceof Error ? legacyError.message : String(legacyError);
+        if (!legacyMessage.includes("revoked_at")) throw legacyError;
+        const response = await dataRequest(legacyQuery);
+        return (await response.json() as PresenceRecord[]).map((row) => ({ ...row, nickname: "Misafir" }));
+      }
+    }
     if (!message.includes("revoked_at")) throw error;
     const response = await dataRequest(query);
     return await response.json() as PresenceRecord[];
