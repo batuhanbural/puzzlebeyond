@@ -222,6 +222,23 @@ export default function AdminPage() {
     }
   };
 
+  const deleteEmptyRoom = async (room: AdminEmptyRoom) => {
+    if (!window.confirm(`“${room.title || room.code}” odası silinsin mi? Bu işlem geri alınamaz.`)) return;
+    setBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch(`/api/admin/sessions?roomCode=${encodeURIComponent(room.code)}`, { method: "DELETE" });
+      const payload = await responsePayload<{ deleted?: number }>(response);
+      if (!response.ok) throw new Error(payload.error || "Oda silinemedi.");
+      setNotice(`${room.code} odası silindi.`);
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Oda silinemedi.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const closeAllSessions = async () => {
     if (!data?.sessions.length || !window.confirm(`${data.sessions.length} aktif oturum kapatılsın mı?`)) return;
     setBusy(true);
@@ -320,6 +337,7 @@ export default function AdminPage() {
                   <div className="admin-empty-room-main"><i className="admin-empty-room-dot" /><div><b>{room.title || "Başlıksız puzzle"}</b><small>{room.code} · {room.rows}×{room.cols} · kullanıcı yok</small></div></div>
                   <div className="admin-empty-room-activity"><span>SON AKTİVİTE</span><b>{room.lastActivityLabel}</b></div>
                   <div className="admin-empty-room-expiry"><span>SİLİNMESİNE KALAN</span><b>{room.remainingLabel}</b><small>{room.expiresLabel} civarı</small></div>
+                  <div className="admin-empty-room-actions"><button className="admin-delete-button" onClick={() => void deleteEmptyRoom(room)} disabled={busy}>SİL</button></div>
                 </article>
               ))}
             </div>

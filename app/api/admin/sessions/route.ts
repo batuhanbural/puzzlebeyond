@@ -1,4 +1,4 @@
-import { getActivePresences, getRoomSummaries, removePresence, revokePresence, type PresenceRecord, type RoomSummary } from "@/lib/storage";
+import { deleteRoom, getActivePresences, getRoom, getRoomSummaries, removePresence, revokePresence, type PresenceRecord, type RoomSummary } from "@/lib/storage";
 import { isAdminRequest } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
@@ -94,8 +94,19 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   if (!isAdminRequest(request)) return unauthorized();
+  const searchParams = new URL(request.url).searchParams;
+  const roomCode = searchParams.get("roomCode")?.trim().toUpperCase() || "";
   try {
-    const clientId = new URL(request.url).searchParams.get("clientId");
+    if (roomCode) {
+      if (!/^[A-Z0-9]{6}$/.test(roomCode)) return Response.json({ error: "Geçerli bir oda kodu gerekli." }, { status: 400 });
+      const room = await getRoom(roomCode);
+      if (!room) return Response.json({ error: "Bu oda zaten silinmiş veya bulunamadı." }, { status: 404 });
+      const activeRoomUser = (await activeSessions()).some((session) => session.room_code === roomCode);
+      if (activeRoomUser) return Response.json({ error: "Aktif kullanıcı bulunan oda silinemez." }, { status: 409 });
+      await deleteRoom(room.code, room.image_key);
+      return Response.json({ ok: true, deleted: 1, roomCode });
+    }
+    const clientId = searchParams.get("clientId");
     if (clientId === "all") {
       const sessions = await activeSessions();
       await Promise.all(sessions.map((session) => removePresence(session.client_id)));
@@ -106,7 +117,7 @@ export async function DELETE(request: Request) {
     await removePresence(validId);
     return Response.json({ ok: true, deleted: 1 });
   } catch (error) {
-    console.error("Admin oturumu silinemedi:", error);
-    return Response.json({ error: "Oturum silinemedi." }, { status: 500 });
+    console.error(roomCode ? "Admin odası silinemedi:" : "Admin oturumu silinemedi:", error);
+    return Response.json({ error: roomCode ? "Oda silinemedi." : "Oturum silinemedi." }, { status: 500 });
   }
 }
