@@ -411,6 +411,7 @@ export default function Home() {
   const [difficulty, setDifficulty] = useState("12");
   const [dialog, setDialog] = useState<"create" | "join" | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [introCompletion, setIntroCompletion] = useState<"idle" | "showing" | "gallery">("idle");
   const [notice, setNotice] = useState("Yeni bir oda kurabilir ya da arkadaşlarının kodunu girebilirsin.");
   const [busy, setBusy] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
@@ -532,11 +533,17 @@ export default function Home() {
   const solvedCount = pieces.filter((piece) => piece.locked).length;
   const remainingCount = pieceCount - solvedCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);
-  const galleryVisible = !room && (galleryOpen || progress === 100);
+  const galleryVisible = !room && (galleryOpen || introCompletion === "gallery");
   const workspaceAspect = imageAspect * BOARD.height / BOARD.width;
   const hintPiece = lastHeldPieceId === null
     ? pieces.find((piece) => !piece.locked)
     : pieces.find((piece) => piece.id === lastHeldPieceId);
+
+  useEffect(() => {
+    if (room || introCompletion !== "showing") return;
+    const timer = window.setTimeout(() => setIntroCompletion("gallery"), 1150);
+    return () => window.clearTimeout(timer);
+  }, [room, introCompletion]);
 
   const pushMove = useCallback(async (nextPieces: Piece[], movedId: number) => {
     if (!room) return;
@@ -599,6 +606,7 @@ export default function Home() {
       if (!response.ok || !data.room) throw new Error(data.error || "Oda oluşturulamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl); setUploadPreviewUrl("");
+      setIntroCompletion("idle");
       setGalleryOpen(false);
       setLastHeldPieceId(null);
       setDialog(null); setNotice(`${data.room.code} kodlu oda hazır. Kodu arkadaşlarına gönder!`);
@@ -616,6 +624,7 @@ export default function Home() {
       if (!response.ok || !data.room) throw new Error(data.error || "Oda bulunamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl);
+      setIntroCompletion("idle");
       setGalleryOpen(false);
       setLastHeldPieceId(null);
       setDialog(null); setNotice(`${data.room.code} odasına katıldın. İyi eğlenceler!`);
@@ -632,6 +641,7 @@ export default function Home() {
 
   const resetPreviewPuzzle = () => {
     setRoom(null);
+    setIntroCompletion("idle");
     setGalleryOpen(false);
     setFile(null);
     setUploadPreviewUrl("");
@@ -696,20 +706,21 @@ export default function Home() {
     const movingId = drag.id;
     drag.element.classList.remove("dragging");
     dragRef.current = null;
-    setPieces((current) => {
-      const correctCol = movingId % cols;
-      const correctRow = Math.floor(movingId / cols);
-      const targetX = BOARD.left + correctCol * (BOARD.width / cols);
-      const targetY = BOARD.top + correctRow * (BOARD.height / rows);
-      const snaps = Math.abs(drag.currentX - targetX) < (BOARD.width / cols) * 0.72
-        && Math.abs(drag.currentY - targetY) < (BOARD.height / rows) * 0.72;
-      const next = current.map((piece) => piece.id === movingId
-        ? { ...piece, x: snaps ? targetX : drag.currentX, y: snaps ? targetY : drag.currentY, locked: snaps }
-        : piece);
-      void pushMove(next, movingId);
-      if (snaps) setNotice("Tak! Parça doğru yerine oturdu.");
-      return next;
-    });
+    const correctCol = movingId % cols;
+    const correctRow = Math.floor(movingId / cols);
+    const targetX = BOARD.left + correctCol * (BOARD.width / cols);
+    const targetY = BOARD.top + correctRow * (BOARD.height / rows);
+    const snaps = Math.abs(drag.currentX - targetX) < (BOARD.width / cols) * 0.72
+      && Math.abs(drag.currentY - targetY) < (BOARD.height / rows) * 0.72;
+    const next = pieces.map((piece) => piece.id === movingId
+      ? { ...piece, x: snaps ? targetX : drag.currentX, y: snaps ? targetY : drag.currentY, locked: snaps }
+      : piece);
+    setPieces(next);
+    void pushMove(next, movingId);
+    if (snaps) setNotice("Tak! Parça doğru yerine oturdu.");
+    if (snaps && !room && introCompletion === "idle" && next.every((piece) => piece.locked)) {
+      setIntroCompletion("showing");
+    }
   };
 
   const copyCode = async () => {
@@ -882,7 +893,7 @@ export default function Home() {
                     <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
                   </div>
                 ))}
-                {room && progress === 100 && <div className="complete-badge"><span>✓</span> TAMAMLANDI!</div>}
+                {((room && progress === 100) || (!room && introCompletion === "showing")) && <div className={`complete-badge ${room ? "" : "intro-complete"}`}><span>✓</span> TAMAMLANDI!</div>}
               </div>
               <div className="mobile-room-actions">
                 {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
