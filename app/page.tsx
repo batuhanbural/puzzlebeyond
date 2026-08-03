@@ -1160,6 +1160,12 @@ export default function Home() {
                     <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
                   </div>
                 ))}
+                {room && progress === 100 && (
+                  <div className="board-completion-card">
+                    <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
+                    <button className="download-image-button" type="button" onClick={() => void downloadCompletedImage()} disabled={downloadBusy}>{downloadBusy ? "HAZIRLANIYOR…" : "GÖRSELİ İNDİR ↓"}</button>
+                  </div>
+                )}
                 {!room && introCompletion === "showing" && (
                   <div className={`complete-badge ${room ? "" : "intro-complete"}`}>
                     <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
@@ -1169,12 +1175,6 @@ export default function Home() {
               <div className="mobile-room-actions">
                 {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
                 {room && <button className="primary-button" onClick={() => setDialog("create")}>YENİ PUZZLE KUR</button>}
-                {room && progress === 100 && (
-                  <div className="mobile-completion-card">
-                    <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
-                    <button className="download-image-button" type="button" onClick={() => void downloadCompletedImage()} disabled={downloadBusy}>{downloadBusy ? "HAZIRLANIYOR…" : "GÖRSELİ İNDİR ↓"}</button>
-                  </div>
-                )}
               </div>
             </>
           )}
@@ -1189,19 +1189,13 @@ export default function Home() {
             <div className="progress-dial" style={{ background: `conic-gradient(var(--coral) 0 ${progress}%, #ded8cb ${progress}% 100%)` }}>
               <div><strong>{progress}</strong><span>%</span></div>
             </div>
-            <p>{progress === 100 ? (room ? "Puzzle tamamlandı." : "Hazır puzzleları keşfet.") : progress > 0 ? "Görüntü ortaya çıkıyor." : "İlk parçayı sen yerleştir."}</p>
+            <p>{progress === 100 ? (room ? "Görselin tamamı ortaya çıktı." : "Hazır puzzleları keşfet.") : progress > 0 ? "Görüntü ortaya çıkıyor." : "İlk parçayı sen yerleştir."}</p>
           </div>
           <div className="progress-counts">
             <div><span>YERİNDE</span><strong>{solvedCount}</strong><i>PARÇA</i></div>
             <div><span>BEKLİYOR</span><strong>{remainingCount}</strong><i>PARÇA</i></div>
           </div>
           <div className="progress-rail"><i style={{ width: `${progress}%` }} /></div>
-          {room && progress === 100 && (
-            <div className="side-completion-card">
-              <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
-              <button className="download-image-button" type="button" onClick={() => void downloadCompletedImage()} disabled={downloadBusy}>{downloadBusy ? "HAZIRLANIYOR…" : "GÖRSELİ İNDİR ↓"}</button>
-            </div>
-          )}
           <div className="panel-help">
             <span>✦ KÜÇÜK İPUCU</span>
             <p>Parçayı doğru yere yaklaştırıp bırak; yerine kendiliğinden oturur.</p>
