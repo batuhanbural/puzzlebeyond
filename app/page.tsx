@@ -13,6 +13,8 @@ type Room = {
   updatedAt: number;
 };
 
+type ApiPayload<T> = T & { error?: string };
+
 const DEFAULT_ROWS = 3;
 const DEFAULT_COLS = 4;
 const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 };
@@ -270,6 +272,38 @@ function formatCode(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
 }
 
+async function readApiPayload<T>(response: Response): Promise<ApiPayload<T>> {
+  const body = await response.text();
+  if (!body.trim()) {
+    if (response.status === 413) {
+      throw new Error("Fotoğraf sunucunun yükleme sınırını aşıyor. Daha küçük bir görsel dene.");
+    }
+    throw new Error(response.ok
+      ? "Sunucudan boş yanıt geldi. Lütfen tekrar dene."
+      : `İstek tamamlanamadı (${response.status || "bağlantı hatası"}).`);
+  }
+  try {
+    return JSON.parse(body) as ApiPayload<T>;
+  } catch {
+    throw new Error(response.ok
+      ? "Sunucudan geçersiz bir yanıt geldi. Lütfen tekrar dene."
+      : `İstek tamamlanamadı (${response.status}).`);
+  }
+}
+
+async function validateImage(file: File) {
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type)) {
+    throw new Error("Yalnızca JPG, PNG veya WebP fotoğrafları kullanılabilir.");
+  }
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    await loadPuzzleImage(objectUrl);
+  } finally {
+    puzzleImageCache.delete(objectUrl);
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 function avatarColor(index: number) {
   return ["#d8ff63", "#ff6f61", "#4864ff", "#ffd84d"][index % 4];
 }
@@ -330,7 +364,7 @@ export default function Home() {
         body: JSON.stringify({ code: room.code, piece: nextPieces.find((piece) => piece.id === movedId) }),
       });
       if (response.ok) {
-        const data = await response.json() as { updatedAt?: number };
+        const data = await readApiPayload<{ updatedAt?: number }>(response);
         remoteUpdatedAt.current = data.updatedAt ?? remoteUpdatedAt.current;
       }
     } catch {
@@ -346,7 +380,7 @@ export default function Home() {
         const response = await fetch(`/api/room?code=${room.code}&since=${remoteUpdatedAt.current}`, { cache: "no-store" });
         if (response.status === 204) return;
         if (!response.ok) return;
-        const data = await response.json() as { room: Room };
+        const data = await readApiPayload<{ room: Room }>(response);
         if (data.room.updatedAt <= remoteUpdatedAt.current) return;
         remoteUpdatedAt.current = data.room.updatedAt;
         setRoom(data.room);
@@ -370,7 +404,7 @@ export default function Home() {
       if (file) form.append("image", file);
       else form.append("defaultImage", imageUrl);
       const response = await fetch("/api/room", { method: "POST", body: form });
-      const data = await response.json() as { room?: Room; error?: string };
+      const data = await readApiPayload<{ room?: Room }>(response);
       if (!response.ok || !data.room) throw new Error(data.error || "Oda oluşturulamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl);
@@ -386,7 +420,7 @@ export default function Home() {
     setBusy(true);
     try {
       const response = await fetch(`/api/room?code=${codeInput}`, { cache: "no-store" });
-      const data = await response.json() as { room?: Room; error?: string };
+      const data = await readApiPayload<{ room?: Room }>(response);
       if (!response.ok || !data.room) throw new Error(data.error || "Oda bulunamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
       setRoom(data.room); setPieces(normalizePieces(data.room)); setImageUrl(data.room.imageUrl);
@@ -397,12 +431,24 @@ export default function Home() {
     } finally { setBusy(false); }
   };
 
-  const onFile = (event: ChangeEvent<HTMLInputElement>) => {
+  const onFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
     if (!selected) return;
-    if (selected.size > 4 * 1024 * 1024) { setNotice("Fotoğraf en fazla 4 MB olabilir."); return; }
-    setFile(selected);
-    setImageUrl(URL.createObjectURL(selected));
+    if (selected.size > 4 * 1024 * 1024) {
+      setNotice("Fotoğraf en fazla 4 MB olabilir.");
+      event.target.value = "";
+      return;
+    }
+    try {
+      await validateImage(selected);
+      setFile(selected);
+      setImageUrl(URL.createObjectURL(selected));
+      setNotice(`${selected.name} kullanıma hazır.`);
+    } catch (error) {
+      event.target.value = "";
+      setFile(null);
+      setNotice(error instanceof Error ? error.message : "Fotoğraf okunamadı.");
+    }
   };
 
   const movePiece = (event: PointerEvent<HTMLDivElement>) => {

@@ -42,38 +42,46 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  await ensureSchema();
-  const form = await request.formData();
-  const title = String(form.get("title") || "Bizim puzzle").slice(0, 48);
-  const rows = Math.max(2, Math.min(32, Number(form.get("rows")) || 3));
-  const cols = Math.max(2, Math.min(32, Number(form.get("cols")) || 4));
-  const pieces = JSON.parse(String(form.get("pieces") || "[]")) as Piece[];
-  if (pieces.length !== rows * cols) return Response.json({ error: "Parça sayısı eşleşmiyor." }, { status: 400 });
-  const file = form.get("image");
-  const defaultImage = String(form.get("defaultImage") || "");
-  let imageBody: ArrayBuffer;
-  let contentType = "image/jpeg";
-  if (file instanceof File && file.size > 0) {
-    if (file.size > 4 * 1024 * 1024) return Response.json({ error: "Fotoğraf en fazla 4 MB olabilir." }, { status: 413 });
-    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return Response.json({ error: "Desteklenmeyen fotoğraf türü." }, { status: 415 });
-    imageBody = await file.arrayBuffer();
-    contentType = file.type;
-  } else if (defaultImage.startsWith("data:image/")) {
-    const [meta, payload] = defaultImage.split(",");
-    contentType = meta.match(/data:(.*?);/)?.[1] || "image/jpeg";
-    imageBody = Uint8Array.from(atob(payload), (char) => char.charCodeAt(0)).buffer;
-  } else {
-    return Response.json({ error: "Bir fotoğraf seçmelisin." }, { status: 400 });
-  }
+  try {
+    await ensureSchema();
+    const form = await request.formData();
+    const title = String(form.get("title") || "Bizim puzzle").slice(0, 48);
+    const rows = Math.max(2, Math.min(32, Number(form.get("rows")) || 3));
+    const cols = Math.max(2, Math.min(32, Number(form.get("cols")) || 4));
+    const pieces = JSON.parse(String(form.get("pieces") || "[]")) as Piece[];
+    if (pieces.length !== rows * cols) return Response.json({ error: "Parça sayısı eşleşmiyor." }, { status: 400 });
+    const file = form.get("image");
+    const defaultImage = String(form.get("defaultImage") || "");
+    let imageBody: ArrayBuffer;
+    let contentType = "image/jpeg";
+    if (file instanceof File && file.size > 0) {
+      if (file.size > 4 * 1024 * 1024) return Response.json({ error: "Fotoğraf en fazla 4 MB olabilir." }, { status: 413 });
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return Response.json({ error: "Yalnızca JPG, PNG veya WebP fotoğrafları kullanılabilir." }, { status: 415 });
+      imageBody = await file.arrayBuffer();
+      contentType = file.type;
+    } else if (defaultImage.startsWith("data:image/")) {
+      const [meta, payload] = defaultImage.split(",");
+      contentType = meta.match(/data:(.*?);/)?.[1] || "image/jpeg";
+      imageBody = Uint8Array.from(atob(payload), (char) => char.charCodeAt(0)).buffer;
+    } else {
+      return Response.json({ error: "Bir fotoğraf seçmelisin." }, { status: 400 });
+    }
 
-  let code = makeCode();
-  for (let attempt = 0; attempt < 5; attempt++) {
-    if (!(await roomExists(code))) break;
-    code = makeCode();
+    let code = makeCode();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (!(await roomExists(code))) break;
+      code = makeCode();
+    }
+    const imageKey = await putPuzzleImage(code, imageBody, contentType);
+    const room = await storeRoom({ code, title, rows, cols, pieces, image_key: imageKey, updated_at: Date.now() });
+    return Response.json({ room: roomJson(room) }, { status: 201 });
+  } catch (error) {
+    console.error("Puzzle odası oluşturulamadı:", error);
+    return Response.json(
+      { error: "Fotoğraf yüklenemedi. Dosyayı kontrol edip tekrar deneyebilirsin." },
+      { status: 500 },
+    );
   }
-  const imageKey = await putPuzzleImage(code, imageBody, contentType);
-  const room = await storeRoom({ code, title, rows, cols, pieces, image_key: imageKey, updated_at: Date.now() });
-  return Response.json({ room: roomJson(room) }, { status: 201 });
 }
 
 export async function PATCH(request: Request) {
