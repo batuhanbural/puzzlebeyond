@@ -2,7 +2,7 @@
 
 import { ChangeEvent, CSSProperties, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_GALLERY, type GalleryKind } from "@/lib/gallery";
-import { subscribeToRoomRealtime, type RealtimePieceUpdate } from "@/lib/realtime-client";
+import { subscribeToRoomRealtime, type RealtimePieceUpdate, type RealtimeSubscription } from "@/lib/realtime-client";
 
 type Piece = { id: number; x: number; y: number; locked?: boolean };
 type Room = {
@@ -475,6 +475,8 @@ export default function Home() {
   const lastLocalMove = useRef(0);
   const remoteUpdatedAt = useRef(0);
   const realtimeConnected = useRef(false);
+  const realtimeLastEventAt = useRef(0);
+  const realtimeSend = useRef<RealtimeSubscription["send"] | null>(null);
   const presenceRevoked = useRef(false);
   const hintTimer = useRef<number | null>(null);
   const dragRef = useRef<{
@@ -483,6 +485,7 @@ export default function Home() {
     offsetY: number;
     currentX: number;
     currentY: number;
+    lastBroadcastAt: number;
     element: HTMLDivElement;
   } | null>(null);
 
@@ -600,11 +603,12 @@ export default function Home() {
     realtimeConnected.current = false;
     if (!roomCode) return;
     let cancelled = false;
-    let unsubscribe = () => {};
+    let subscription: RealtimeSubscription | null = null;
 
     const applyRealtimeUpdate = (update: RealtimePieceUpdate) => {
-      if (cancelled || dragRef.current || update.updatedAt <= remoteUpdatedAt.current) return;
-      remoteUpdatedAt.current = update.updatedAt;
+      if (cancelled || dragRef.current || (!update.optimistic && update.updatedAt <= remoteUpdatedAt.current) || (update.optimistic && update.updatedAt <= remoteUpdatedAt.current)) return;
+      realtimeLastEventAt.current = Date.now();
+      if (!update.optimistic) remoteUpdatedAt.current = update.updatedAt;
       if (update.pieces) {
         const nextPieces = update.pieces as Piece[];
         setPieces(nextPieces);
@@ -629,12 +633,13 @@ export default function Home() {
       return await response.json() as { enabled?: boolean; url?: string; key?: string };
     }).then((config) => {
       if (cancelled || !config?.enabled || !config.url || !config.key) return;
-      unsubscribe = subscribeToRoomRealtime(
+      subscription = subscribeToRoomRealtime(
         { url: config.url, key: config.key },
         roomCode,
         applyRealtimeUpdate,
         (status) => { realtimeConnected.current = status === "connected"; },
       );
+      realtimeSend.current = subscription.send;
     }).catch(() => {
       // The since-polling fallback keeps rooms usable before Realtime is configured.
     });
@@ -642,7 +647,8 @@ export default function Home() {
     return () => {
       cancelled = true;
       realtimeConnected.current = false;
-      unsubscribe();
+      realtimeSend.current = null;
+      subscription?.unsubscribe();
     };
   }, [room?.code]);
 
@@ -669,6 +675,10 @@ export default function Home() {
   const pushMove = useCallback(async (nextPieces: Piece[], movedId: number) => {
     if (!room) return;
     lastLocalMove.current = Date.now();
+    const movedPiece = nextPieces.find((piece) => piece.id === movedId);
+    if (movedPiece) {
+      realtimeSend.current?.({ piece: movedPiece, updatedAt: Date.now(), optimistic: true });
+    }
     try {
       const response = await fetch("/api/room", {
         method: "PATCH",
@@ -688,7 +698,8 @@ export default function Home() {
     const roomCode = room?.code;
     if (!roomCode) return;
     const timer = window.setInterval(async () => {
-      if (realtimeConnected.current || dragRef.current || Date.now() - lastLocalMove.current < 1200) return;
+      const realtimeRecentlyDelivered = realtimeConnected.current && Date.now() - realtimeLastEventAt.current < 2500;
+      if (realtimeRecentlyDelivered || dragRef.current || Date.now() - lastLocalMove.current < 1200) return;
       try {
         const response = await fetch(`/api/room?code=${roomCode}&since=${remoteUpdatedAt.current}`, { cache: "no-store" });
         if (response.status === 204) return;
@@ -699,7 +710,7 @@ export default function Home() {
         setRoom(data.room);
         setPieces(normalizePieces(data.room));
       } catch { /* Keep the board usable during brief connection drops. */ }
-    }, 1100);
+    }, 400);
     return () => window.clearInterval(timer);
   }, [room?.code]);
 
@@ -837,6 +848,15 @@ export default function Home() {
     drag.currentY = y;
     drag.element.style.left = `${x * 100}%`;
     drag.element.style.top = `${y * 100}%`;
+    const now = Date.now();
+    if (room && now - drag.lastBroadcastAt >= 80) {
+      realtimeSend.current?.({
+        piece: { id: drag.id, x, y, locked: false },
+        updatedAt: now,
+        optimistic: true,
+      });
+      drag.lastBroadcastAt = now;
+    }
   };
 
   const endMove = () => {
@@ -1048,6 +1068,7 @@ export default function Home() {
                         offsetY: (event.clientY - rect.top) / rect.height - piece.y,
                         currentX: piece.x,
                         currentY: piece.y,
+                        lastBroadcastAt: 0,
                         element: event.currentTarget,
                       };
                     }}

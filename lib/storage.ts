@@ -35,7 +35,7 @@ let wipeChecked = false;
 let nextCleanupAt = 0;
 
 function config() {
-  const url = process.env.SUPABASE_URL?.replace(/\/$/, "");
+  const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)?.replace(/\/$/, "");
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   const bucket = process.env.SUPABASE_STORAGE_BUCKET || "puzzle-images";
   if (!url || !key) {
@@ -142,7 +142,11 @@ export async function broadcastRoomChange(
 ) {
   // A public key is also the opt-in switch for the browser WebSocket. Keep
   // the legacy polling path untouched when a project has not configured it.
-  if (!process.env.SUPABASE_PUBLISHABLE_KEY && !process.env.SUPABASE_ANON_KEY) return;
+  const publicKey = process.env.SUPABASE_PUBLISHABLE_KEY
+    || process.env.SUPABASE_ANON_KEY
+    || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!publicKey) return;
   const { url } = config();
   const topic = `puzzlebeyond-room-${code}`;
   const response = await fetch(`${url}/realtime/v1/api/broadcast/${encodeURIComponent(topic)}/events/piece-change`, {

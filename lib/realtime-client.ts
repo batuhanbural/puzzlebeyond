@@ -9,9 +9,15 @@ export type RealtimePieceUpdate = {
   piece?: RealtimePiece;
   pieces?: RealtimePiece[];
   updatedAt: number;
+  optimistic?: boolean;
 };
 
 export type RealtimeStatus = "connecting" | "connected" | "disconnected";
+
+export type RealtimeSubscription = {
+  send: (update: RealtimePieceUpdate) => boolean;
+  unsubscribe: () => void;
+};
 
 type RealtimeConfig = {
   url: string;
@@ -24,6 +30,18 @@ type RealtimeMessage = {
   topic?: string;
   ref?: string | null;
 };
+
+function normalizeMessage(value: unknown): RealtimeMessage | null {
+  if (Array.isArray(value) && value.length >= 5) {
+    return {
+      ref: typeof value[1] === "string" ? value[1] : null,
+      topic: typeof value[2] === "string" ? value[2] : undefined,
+      event: typeof value[3] === "string" ? value[3] : undefined,
+      payload: value[4],
+    };
+  }
+  return isRecord(value) ? value as RealtimeMessage : null;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -45,10 +63,10 @@ function parseUpdate(value: unknown): RealtimePieceUpdate | null {
   if (Array.isArray(value.pieces)) {
     const pieces = value.pieces.map(parsePiece);
     if (pieces.some((piece) => piece === null)) return null;
-    return { pieces: pieces as RealtimePiece[], updatedAt };
+    return { pieces: pieces as RealtimePiece[], updatedAt, optimistic: value.optimistic === true };
   }
   const piece = parsePiece(value.piece);
-  return piece ? { piece, updatedAt } : null;
+  return piece ? { piece, updatedAt, optimistic: value.optimistic === true } : null;
 }
 
 function realtimeWebSocketUrl(config: RealtimeConfig) {
@@ -68,8 +86,10 @@ export function subscribeToRoomRealtime(
   roomCode: string,
   onUpdate: (update: RealtimePieceUpdate) => void,
   onStatus?: (status: RealtimeStatus) => void,
-) {
-  if (typeof window === "undefined" || typeof WebSocket === "undefined") return () => {};
+): RealtimeSubscription {
+  if (typeof window === "undefined" || typeof WebSocket === "undefined") {
+    return { send: () => false, unsubscribe: () => {} };
+  }
 
   const topic = `realtime:puzzlebeyond-room-${roomCode}`;
   let socket: WebSocket | null = null;
@@ -79,6 +99,7 @@ export function subscribeToRoomRealtime(
   let retryDelay = 1000;
   let nextRef = 0;
   let joinRef = "";
+  let joined = false;
 
   const clearHeartbeat = () => {
     if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
@@ -94,6 +115,12 @@ export function subscribeToRoomRealtime(
       ref: ref ?? String(++nextRef),
       join_ref: joinReference ?? (joinRef || null),
     }));
+  };
+
+  const sendUpdate = (update: RealtimePieceUpdate) => {
+    if (!joined || !socket || socket.readyState !== WebSocket.OPEN) return false;
+    send("broadcast", { event: "piece-change", type: "broadcast", payload: update });
+    return true;
   };
 
   const scheduleReconnect = () => {
@@ -135,15 +162,19 @@ export function subscribeToRoomRealtime(
 
     socket.onmessage = (event) => {
       if (typeof event.data !== "string") return;
-      let message: RealtimeMessage;
+      let message: RealtimeMessage | null;
       try {
-        message = JSON.parse(event.data) as RealtimeMessage;
+        message = normalizeMessage(JSON.parse(event.data));
       } catch {
         return;
       }
+      if (!message) return;
       if (message.event === "phx_reply") {
         const payload = isRecord(message.payload) ? message.payload : null;
-        if (message.ref === joinRef && payload?.status === "ok") onStatus?.("connected");
+        if (message.ref === joinRef && payload?.status === "ok") {
+          joined = true;
+          onStatus?.("connected");
+        }
         return;
       }
       if (message.event !== "broadcast" || !isRecord(message.payload)) return;
@@ -161,6 +192,7 @@ export function subscribeToRoomRealtime(
     socket.onclose = () => {
       clearHeartbeat();
       socket = null;
+      joined = false;
       if (stopped) return;
       onStatus?.("disconnected");
       scheduleReconnect();
@@ -169,12 +201,16 @@ export function subscribeToRoomRealtime(
 
   openSocket();
 
-  return () => {
+  return {
+    send: sendUpdate,
+    unsubscribe: () => {
     stopped = true;
+    joined = false;
     clearHeartbeat();
     if (retryTimer !== null) window.clearTimeout(retryTimer);
     retryTimer = null;
     try { socket?.close(1000, "room left"); } catch { /* The socket may already be closed. */ }
     socket = null;
+    },
   };
 }
