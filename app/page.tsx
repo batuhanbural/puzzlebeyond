@@ -1324,7 +1324,7 @@ export default function Home() {
                       <b>{option.label}</b><span>≈{option.count} parça</span>
                     </button>
                   ))}
-                </div><p className="difficulty-result" aria-live="polite"><span className="difficulty-sep" /><strong>{selectedPuzzleSize.count} PARÇA</strong></p></fieldset>
+                </div><p className="difficulty-result" aria-live="polite"><strong>{selectedPuzzleSize.rows}×{selectedPuzzleSize.cols}</strong><span className="difficulty-sep" /><strong>{selectedPuzzleSize.count} PARÇA</strong></p></fieldset>
                 <button className="primary-button full dialog-submit" onClick={() => createRoom()} disabled={busy}>{busy ? "ODA HAZIRLANIYOR…" : "ODAYI OLUŞTUR →"}</button>
               </>
             ) : dialog === "join" ? (
