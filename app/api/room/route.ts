@@ -80,8 +80,8 @@ export async function POST(request: Request) {
     await maybeCleanupExpiredRooms(Date.now() - ROOM_TTL_MS);
     const form = await request.formData();
     const title = String(form.get("title") || "Bizim puzzle").slice(0, 48);
-    const rows = Math.max(2, Math.min(32, Number(form.get("rows")) || 3));
-    const cols = Math.max(2, Math.min(32, Number(form.get("cols")) || 4));
+    const rows = Math.max(2, Math.min(48, Number(form.get("rows")) || 3));
+    const cols = Math.max(2, Math.min(48, Number(form.get("cols")) || 4));
     const pieces = JSON.parse(String(form.get("pieces") || "[]")) as Piece[];
     if (pieces.length !== rows * cols) return Response.json({ error: "Parça sayısı eşleşmiyor." }, { status: 400 });
     const file = form.get("image");
