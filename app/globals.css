@@ -196,8 +196,9 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
 .difficulty-options button.selected { background:var(--lime); box-shadow:3px 3px 0 var(--ink); }
 .difficulty-options b { font-size:13px; font-weight:950; letter-spacing:.4px; line-height:1.1; }
 .difficulty-options span { font-size:8px; font-weight:700; color:#68645d; }
-.difficulty-result { margin:10px 0 0; padding:9px 11px; display:flex; align-items:center; justify-content:center; gap:0; border:1.5px solid var(--ink); background:#d3d3ff; }
-.difficulty-sep { width:1.5px; height:28px; margin:0 12px; background:var(--ink); }
+.difficulty-result { margin:10px 0 0; padding:0; min-height:46px; display:flex; align-items:stretch; justify-content:flex-start; gap:0; border:1.5px solid var(--ink); background:#d3d3ff; }
+.difficulty-result strong { display:flex; align-items:center; padding:9px 11px; }
+.difficulty-sep { width:1.5px; align-self:stretch; margin:0; background:var(--ink); }
 .difficulty-result strong { font-size:11px; letter-spacing:.4px; white-space:nowrap; }
 .difficulty-result strong:first-child { font-size:15px; letter-spacing:0; }
 .dialog-submit { margin-top:24px; }
