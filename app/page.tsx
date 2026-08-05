@@ -1016,6 +1016,14 @@ export default function Home() {
     const targetY = BOARD.top + correctRow * (BOARD.height / rows);
     const snaps = Math.abs(drag.currentX - targetX) < (BOARD.width / cols) * 0.72
       && Math.abs(drag.currentY - targetY) < (BOARD.height / rows) * 0.72;
+    if (snaps) {
+      drag.element.style.transition = "none";
+      drag.element.style.left = `${targetX * 100}%`;
+      drag.element.style.top = `${targetY * 100}%`;
+      requestAnimationFrame(() => {
+        drag.element.style.transition = "";
+      });
+    }
     const next = pieces.map((piece) => piece.id === movingId
       ? { ...piece, x: snaps ? targetX : drag.currentX, y: snaps ? targetY : drag.currentY, locked: snaps }
       : piece);
