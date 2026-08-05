@@ -1143,7 +1143,20 @@ export default function Home() {
                 onPointerCancel={endMove}
               >
                 <div className="puzzle-board-guide">
-                  <div className={`hint-preview ${hintVisible ? "visible" : ""}`} style={{ backgroundImage: `url(${imageUrl})` }} />
+                  {hintVisible && hintPiece && (
+                    <div
+                      className="hint-preview visible"
+                      style={{
+                        backgroundImage: `url(${imageUrl})`,
+                        backgroundSize: `${cols * 100}% ${rows * 100}%`,
+                        backgroundPosition: `${(hintPiece.id % cols) / (cols - 1) * 100}% ${Math.floor(hintPiece.id / cols) / (rows - 1) * 100}%`,
+                        left: `${(hintPiece.id % cols) / cols * 100}%`,
+                        top: `${Math.floor(hintPiece.id / cols) / rows * 100}%`,
+                        width: `${100 / cols}%`,
+                        height: `${100 / rows}%`,
+                      }}
+                    />
+                  )}
                   <div className="board-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}>
                     {Array.from({ length: pieceCount }).map((_, i) => <span key={i} />)}
                   </div>
