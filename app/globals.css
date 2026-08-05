@@ -85,6 +85,8 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .sync-button:disabled { opacity:.6; cursor:wait; transform:none; }
 .hint-button { height:28px; padding:0 10px; border:1.5px solid var(--ink); background:var(--lime); font-size:9px; font-weight:950; letter-spacing:.8px; cursor:pointer; box-shadow:2px 2px 0 var(--ink); }
 .hint-button:hover,.hint-button.active { background:var(--coral); transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--ink); }
+.push-sides-button { height:28px; padding:0 9px; border:1.5px solid var(--ink); background:var(--white); font-size:8px; font-weight:950; letter-spacing:.7px; cursor:pointer; box-shadow:2px 2px 0 var(--ink); }
+.push-sides-button:hover { background:var(--blue); color:var(--white); transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--ink); }
 .skip-preview-button { height:28px; padding:0 8px; border:1.5px dashed var(--ink); background:var(--white); font-size:8px; font-weight:950; letter-spacing:.7px; cursor:pointer; }
 .skip-preview-button:hover { background:var(--coral); box-shadow:2px 2px 0 var(--ink); transform:translate(-1px,-1px); }
 .skip-short { display:none; }
@@ -100,7 +102,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .board-grid { position:absolute; z-index:1; inset:0; display:grid; }
 .board-grid span { border:1px dashed rgba(21,21,21,.2); }
 .hint-target { position:absolute; z-index:12; display:grid; place-items:center; border:3px solid var(--coral); background:rgba(211,211,255,.34); box-shadow:0 0 0 5px rgba(255,111,97,.22); pointer-events:none; animation:hintPulse .8s ease-in-out infinite alternate; }
-.hint-target span { width:26px; height:26px; display:grid; place-items:center; border:2px solid var(--ink); border-radius:50%; background:var(--lime); font-size:10px; font-weight:950; }
+
 @keyframes hintPulse { from { transform:scale(.94); opacity:.72; } to { transform:scale(1.04); opacity:1; } }
 .puzzle-piece { position:absolute; z-index:5; cursor:grab; transition:left .16s ease-out, top .16s ease-out, filter .2s, transform .2s; touch-action:none; will-change:left,top; }
 .piece-canvas { position:absolute; left:-34%; top:-34%; width:168%; height:auto; display:block; overflow:visible; filter:drop-shadow(3px 4px 1px rgba(21,21,21,.4)); pointer-events:none; }

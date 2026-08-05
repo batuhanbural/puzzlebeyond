@@ -1008,6 +1008,31 @@ export default function Home() {
     hintTimer.current = window.setTimeout(() => setHintVisible(false), 3200);
   };
 
+  const pushToSides = () => {
+    const unlocked = pieces.filter((p) => !p.locked);
+    if (unlocked.length === 0) {
+      setNotice("Tüm parçalar yerleştirilmiş!");
+      return;
+    }
+    const sideCount = Math.ceil(unlocked.length / 2);
+    const stepY = 0.85 / sideCount;
+    setHintVisible(false);
+    const next = pieces.map((piece) => {
+      if (piece.locked) return piece;
+      const index = unlocked.indexOf(piece);
+      const side = index % 2;
+      const slot = Math.floor(index / 2);
+      const y = Math.min(0.97, 0.04 + slot * stepY);
+      const x = side === 0 ? 0.01 : 0.97;
+      return { ...piece, x, y, locked: false };
+    });
+    setPieces(next);
+    if (room) {
+      for (const piece of unlocked) void pushMove(next, piece.id);
+    }
+    setNotice("Kalan parçalar kenarlara itildi.");
+  };
+
   const downloadCompletedImage = async () => {
     if (!room || progress !== 100 || downloadBusy) return;
     setDownloadBusy(true);
@@ -1104,6 +1129,7 @@ export default function Home() {
             <div className="toolbar-right">
               {!room && !galleryVisible && <button className="skip-preview-button" onClick={skipPreviewPuzzle}><span className="skip-long">İLK PUZZLEI ATLA</span><span className="skip-short">ATLA</span> →</button>}
               {room && <button className="sync-button" onClick={() => void forceSyncRoom()} disabled={syncBusy} title="Puzzle durumunu sunucudan yeniden al">{syncBusy ? "EŞİTLENİYOR…" : "↻ EŞİTLE"}</button>}
+              {(room || !galleryVisible) && <button className="push-sides-button" onClick={pushToSides} title="Kilitlenmemiş parçaları kenarlara topla">↹ KENARA İT</button>}
               {(room || !galleryVisible) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
               <div className="difficulty-pill" title={`${rows}×${cols}`}>{progress}% · {pieceCount} PARÇA</div>
             </div>
@@ -1171,7 +1197,7 @@ export default function Home() {
                       width: `${BOARD.width * 100 / cols}%`,
                       height: `${BOARD.height * 100 / rows}%`,
                     }}
-                  ><span>{hintPiece.id + 1}</span></div>
+                  />
                 )}
                 {pieces.map((piece) => (
                   <div
