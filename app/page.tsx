@@ -513,6 +513,8 @@ export default function Home() {
   const realtimeSend = useRef<RealtimeSubscription["send"] | null>(null);
   const presenceRevoked = useRef(false);
   const hintTimer = useRef<number | null>(null);
+  const roomSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const pendingRoomSaves = useRef(0);
   const dragRef = useRef<{
     id: number;
     offsetX: number;
@@ -746,45 +748,54 @@ export default function Home() {
 
   const pushMove = useCallback(async (nextPieces: Piece[], movedId: number) => {
     if (!room) return;
-    lastLocalMove.current = Date.now();
     const movedPiece = nextPieces.find((piece) => piece.id === movedId);
-    if (movedPiece) {
-      realtimeSend.current?.({ piece: movedPiece, updatedAt: Date.now(), optimistic: true });
-    }
-    try {
-      const response = await fetch("/api/room", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: room.code, piece: movedPiece }),
-      });
-      if (response.ok) {
+    if (!movedPiece) return;
+    lastLocalMove.current = Date.now();
+    realtimeSend.current?.({ piece: movedPiece, updatedAt: Date.now(), optimistic: true });
+    pendingRoomSaves.current += 1;
+    const save = async () => {
+      try {
+        const response = await fetch("/api/room", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: room.code, piece: movedPiece }),
+        });
+        if (!response.ok) throw new Error("Parça kaydedilemedi.");
         const data = await readApiPayload<{ updatedAt?: number }>(response);
-        remoteUpdatedAt.current = data.updatedAt ?? remoteUpdatedAt.current;
+        remoteUpdatedAt.current = Math.max(remoteUpdatedAt.current, data.updatedAt ?? 0);
+      } catch {
+        setNotice("Hamlen cihazında kaydedildi; bağlantı gelince tekrar eşitlenecek.");
+      } finally {
+        pendingRoomSaves.current = Math.max(0, pendingRoomSaves.current - 1);
       }
-    } catch {
-      setNotice("Hamlen cihazında kaydedildi; bağlantı gelince tekrar eşitlenecek.");
-    }
+    };
+    roomSaveQueue.current = roomSaveQueue.current.then(save, save);
+    await roomSaveQueue.current;
   }, [room]);
 
   const pushPieces = useCallback(async (nextPieces: Piece[]) => {
     if (!room) return;
     lastLocalMove.current = Date.now();
     realtimeSend.current?.({ pieces: nextPieces, updatedAt: Date.now(), optimistic: true });
-    try {
-      const response = await fetch("/api/room", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: room.code, pieces: nextPieces }),
-      });
-      if (response.ok) {
+    pendingRoomSaves.current += 1;
+    const save = async () => {
+      try {
+        const response = await fetch("/api/room", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: room.code, pieces: nextPieces }),
+        });
+        if (!response.ok) throw new Error("Toplu parça güncellemesi başarısız.");
         const data = await readApiPayload<{ updatedAt?: number }>(response);
-        remoteUpdatedAt.current = data.updatedAt ?? remoteUpdatedAt.current;
-      } else {
-        throw new Error("Toplu parça güncellemesi başarısız.");
+        remoteUpdatedAt.current = Math.max(remoteUpdatedAt.current, data.updatedAt ?? 0);
+      } catch {
+        setNotice("Hamlen cihazında kaydedildi; bağlantı gelince tekrar eşitlenecek.");
+      } finally {
+        pendingRoomSaves.current = Math.max(0, pendingRoomSaves.current - 1);
       }
-    } catch {
-      setNotice("Hamlen cihazında kaydedildi; bağlantı gelince tekrar eşitlenecek.");
-    }
+    };
+    roomSaveQueue.current = roomSaveQueue.current.then(save, save);
+    await roomSaveQueue.current;
   }, [room]);
 
   const forceSyncRoom = async () => {
@@ -817,7 +828,7 @@ export default function Home() {
     if (!roomCode) return;
     const timer = window.setInterval(async () => {
       const realtimeRecentlyDelivered = realtimeConnected.current && Date.now() - realtimeLastEventAt.current < 2500;
-      if (realtimeRecentlyDelivered || dragRef.current || Date.now() - lastLocalMove.current < 1200) return;
+      if (realtimeRecentlyDelivered || dragRef.current || pendingRoomSaves.current > 0 || Date.now() - lastLocalMove.current < 1200) return;
       try {
         const response = await fetch(`/api/room?code=${roomCode}&since=${remoteUpdatedAt.current}`, { cache: "no-store" });
         if (response.status === 204) return;
@@ -1277,6 +1288,10 @@ export default function Home() {
                     }}
                     onPointerDown={(event) => {
                       if (piece.locked || !boardRef.current) return;
+                      if (rafRef.current !== null) {
+                        cancelAnimationFrame(rafRef.current);
+                        rafRef.current = null;
+                      }
                       setLastHeldPieceId(piece.id);
                       setHintVisible(false);
                       event.currentTarget.setPointerCapture(event.pointerId);
