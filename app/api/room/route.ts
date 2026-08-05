@@ -45,7 +45,8 @@ function uploadErrorMessage(error: unknown) {
   if (message.includes("SUPABASE_URL")) return "Vercel Supabase ortam değişkenleri eksik. SUPABASE_URL ve SUPABASE_SECRET_KEY ayarlarını kontrol et.";
   if (/görsel yüklemesi başarısız \((401|403)\)/i.test(message)) return "Supabase anahtarı yükleme yetkisine sahip değil. SUPABASE_SECRET_KEY olarak service/secret key kullan.";
   if (/görsel yüklemesi başarısız \(404\)/i.test(message)) return "Supabase Storage bucket bulunamadı. puzzle-images bucket'ını oluştur veya SUPABASE_STORAGE_BUCKET değerini kontrol et.";
-  if (message.includes("puzzle_rooms")) return "Supabase puzzle_rooms tablosu bulunamadı. supabase/schema.sql dosyasını SQL Editor'da çalıştır.";
+  if (/puzzle_rooms.*does not exist|relation.*puzzle_rooms.*not exist/i.test(message)) return "Supabase puzzle_rooms tablosu bulunamadı. supabase/schema.sql dosyasını SQL Editor'da çalıştır.";
+  if (/puzzle_rooms/i.test(message)) return "Supabase puzzle_rooms tablosunda hata oluştu. supabase/schema.sql dosyasını SQL Editor'da tekrar çalıştırıp CHECK kısıtlamalarını güncelle.";
   if (/fetch failed|network|timeout/i.test(message)) return "Supabase'e bağlanılamadı. Vercel ortam değişkenleri ve Supabase URL'sini kontrol et.";
   return "Fotoğraf yüklenemedi. Dosya biçimini ve Supabase ayarlarını kontrol edip tekrar dene.";
 }

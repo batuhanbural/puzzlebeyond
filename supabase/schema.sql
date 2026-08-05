@@ -1,8 +1,8 @@
 create table if not exists public.puzzle_rooms (
   code text primary key,
   title text not null,
-  rows integer not null check (rows between 2 and 32),
-  cols integer not null check (cols between 2 and 32),
+  rows integer not null check (rows between 2 and 48),
+  cols integer not null check (cols between 2 and 48),
   pieces jsonb not null,
   image_key text not null,
   updated_at bigint not null
@@ -11,6 +11,16 @@ create table if not exists public.puzzle_rooms (
 alter table public.puzzle_rooms enable row level security;
 revoke all on table public.puzzle_rooms from anon, authenticated;
 grant select, insert, update, delete on table public.puzzle_rooms to service_role;
+
+do $$
+begin
+  alter table public.puzzle_rooms drop constraint if exists puzzle_rooms_rows_check;
+  alter table public.puzzle_rooms drop constraint if exists puzzle_rooms_cols_check;
+  alter table public.puzzle_rooms add constraint puzzle_rooms_rows_check check (rows between 2 and 48);
+  alter table public.puzzle_rooms add constraint puzzle_rooms_cols_check check (cols between 2 and 48);
+exception when undefined_table then
+  null;
+end $$;
 
 insert into storage.buckets (id, name, public)
 values ('puzzle-images', 'puzzle-images', true)
@@ -22,8 +32,8 @@ create table if not exists public.gallery_puzzles (
   description text not null default '',
   image_key text not null,
   image_kind text not null check (image_kind in ('custom', 'sunset', 'garden', 'city')),
-  rows integer not null check (rows between 2 and 32),
-  cols integer not null check (cols between 2 and 32),
+  rows integer not null check (rows between 2 and 48),
+  cols integer not null check (cols between 2 and 48),
   accent text not null default '#d8ff63',
   created_at bigint not null
 );
@@ -31,6 +41,16 @@ create table if not exists public.gallery_puzzles (
 alter table public.gallery_puzzles enable row level security;
 revoke all on table public.gallery_puzzles from anon, authenticated;
 grant select, insert, update, delete on table public.gallery_puzzles to service_role;
+
+do $$
+begin
+  alter table public.gallery_puzzles drop constraint if exists gallery_puzzles_rows_check;
+  alter table public.gallery_puzzles drop constraint if exists gallery_puzzles_cols_check;
+  alter table public.gallery_puzzles add constraint gallery_puzzles_rows_check check (rows between 2 and 48);
+  alter table public.gallery_puzzles add constraint gallery_puzzles_cols_check check (cols between 2 and 48);
+exception when undefined_table then
+  null;
+end $$;
 
 create table if not exists public.site_presence (
   client_id text primary key,
