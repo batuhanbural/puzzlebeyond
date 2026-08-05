@@ -755,11 +755,32 @@ export default function Home() {
       const response = await fetch("/api/room", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: room.code, piece: nextPieces.find((piece) => piece.id === movedId) }),
+        body: JSON.stringify({ code: room.code, piece: movedPiece }),
       });
       if (response.ok) {
         const data = await readApiPayload<{ updatedAt?: number }>(response);
         remoteUpdatedAt.current = data.updatedAt ?? remoteUpdatedAt.current;
+      }
+    } catch {
+      setNotice("Hamlen cihazında kaydedildi; bağlantı gelince tekrar eşitlenecek.");
+    }
+  }, [room]);
+
+  const pushPieces = useCallback(async (nextPieces: Piece[]) => {
+    if (!room) return;
+    lastLocalMove.current = Date.now();
+    realtimeSend.current?.({ pieces: nextPieces, updatedAt: Date.now(), optimistic: true });
+    try {
+      const response = await fetch("/api/room", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: room.code, pieces: nextPieces }),
+      });
+      if (response.ok) {
+        const data = await readApiPayload<{ updatedAt?: number }>(response);
+        remoteUpdatedAt.current = data.updatedAt ?? remoteUpdatedAt.current;
+      } else {
+        throw new Error("Toplu parça güncellemesi başarısız.");
       }
     } catch {
       setNotice("Hamlen cihazında kaydedildi; bağlantı gelince tekrar eşitlenecek.");
@@ -1025,7 +1046,7 @@ export default function Home() {
     hintTimer.current = window.setTimeout(() => setHintVisible(false), 3200);
   }, [hintPiece, lastHeldPieceId]);
 
-  const pushToSides = () => {
+  const pushToSides = useCallback(() => {
     const cellWidth = BOARD.width / cols;
     const cellHeight = BOARD.height / rows;
     const boardPadX = cellWidth * 0.3;
@@ -1080,11 +1101,9 @@ export default function Home() {
       };
     });
     setPieces(next);
-    if (room) {
-      for (const piece of onBoard) void pushMove(next, piece.id);
-    }
+    if (room) void pushPieces(next);
     setNotice("Tahtadaki parçalar kenarlara dağıtıldı.");
-  };
+  }, [pieces, cols, rows, room, pushPieces]);
 
   const downloadCompletedImage = async () => {
     if (!room || progress !== 100 || downloadBusy) return;

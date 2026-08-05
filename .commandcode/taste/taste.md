@@ -23,3 +23,4 @@
 - Prefers reducing canvas resolution scale (e.g., from 2× to 1× retina) for high piece-count puzzles (120+) to balance visual quality with rendering performance. Confidence: 0.7
 - Prefers Vercel `regions` pinned to a single deployment region (e.g., `fra1`) and `crons` for scheduled background cleanup tasks. Confidence: 0.7
 - Values comprehensive, breadth-first performance work: when asked to reduce latency, expects React memoization, DOM batching, API caching, DB indexing/query limits, and deployment config to be tackled together rather than one at a time. Confidence: 0.7
+- Prefers self-directed comprehensive validation when asked to verify code quality: expects the agent to run lint, typecheck, tests, and all build targets (e.g., both Vercel and Cloudflare), fix every discovered issue, then re-validate to confirm resolution before reporting back. Confidence: 0.7
