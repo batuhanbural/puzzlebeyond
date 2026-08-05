@@ -9,4 +9,4 @@
 - Prefers custom confirmation dialogs over native browser `window.confirm`/`alert` popups — custom overlay with styled dialog, backdrop blur, and explicit cancel/confirm buttons. Confidence: 0.85
 - Requires typed text confirmation for bulk destructive actions (e.g., user must type a specific phrase like "TÜMÜNÜ SİL" before the confirm button becomes enabled). Confidence: 0.85
 - Prefers qualitative category labels as the primary UI text with quantitative estimates shown as secondary/subtitle information beneath (e.g., "KOLAY" as heading with "≈48 parça" as subtitle, rather than showing "48" as the heading). Confidence: 0.7
-- Prefers always-visible UI controls in disabled state over conditionally hiding them (e.g., "TÜMÜNÜ SİL" button stays visible but disabled when there's nothing to delete, rather than disappearing entirely). Confidence: 0.65
+- Prefers always-visible UI controls in disabled state over conditionally hiding them (e.g., "TÜMÜNÜ SİL" button stays visible but disabled when there's nothing to delete, rather than disappearing entirely). Confidence: 0.85

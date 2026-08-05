@@ -83,23 +83,27 @@ type PuzzleSize = { count: number; rows: number; cols: number; label: string };
 
 function fitPuzzleSize(size: PuzzleSize, aspect: number) {
   const safeAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : DEFAULT_IMAGE_ASPECT;
-  // Keep the requested count, then choose its factor pair with the least-stretched cells.
+  // Scan all rows×cols pairs (2–32) and pick the one that balances
+  // square cells (aspect priority) against the requested piece count.
   let bestRows = size.rows;
   let bestCols = size.cols;
   let bestScore = Number.POSITIVE_INFINITY;
+  const idealRatio = 1 / safeAspect; // rows/cols that yields square cells
   for (let rows = 2; rows <= 32; rows++) {
     for (let cols = 2; cols <= 32; cols++) {
-      if (rows * cols !== size.count) continue;
+      const count = rows * cols;
       const cellAspect = safeAspect * rows / cols;
-      const score = Math.abs(Math.log(cellAspect));
-      if (score < bestScore) {
+      const aspectScore = Math.abs(Math.log(cellAspect));
+      const countPenalty = Math.abs(count - size.count) / (size.count * 0.7);
+      const score = aspectScore + countPenalty;
+      if (score < bestScore || (score === bestScore && count === size.count)) {
         bestScore = score;
         bestRows = rows;
         bestCols = cols;
       }
     }
   }
-  return { ...size, rows: bestRows, cols: bestCols };
+  return { ...size, rows: bestRows, cols: bestCols, count: bestRows * bestCols };
 }
 
 function createDefaultImage() {

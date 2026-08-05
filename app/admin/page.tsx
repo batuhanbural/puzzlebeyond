@@ -246,6 +246,24 @@ export default function AdminPage() {
     }
   };
 
+  const deleteAllEmptyRooms = async () => {
+    setBusy(true);
+    setNotice("");
+    setConfirmDialog(null);
+    try {
+      if (!data?.emptyRooms.length) return;
+      for (const room of data.emptyRooms) {
+        await fetch(`/api/admin/sessions?roomCode=${encodeURIComponent(room.code)}`, { method: "DELETE" });
+      }
+      setNotice("Tüm boş odalar silindi.");
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Odalar silinemedi.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const closeAllSessions = async () => {
     if (!data?.sessions.length) return;
     setBusy(true);
@@ -354,7 +372,7 @@ export default function AdminPage() {
         <section className="admin-section admin-empty-rooms-section">
           <div className="admin-section-heading">
             <div><p className="eyebrow">BEKLEYEN ODALAR</p><h2>Boş, silinmeyi bekleyenler</h2></div>
-            <span className="admin-count">{data?.emptyRooms.length ?? 0} ODA</span>
+            <div className="admin-session-heading-actions"><span className="admin-count">{data?.emptyRooms.length ?? 0} ODA</span><button className="admin-session-close-all" onClick={() => confirmAction("Tüm boş odalar silinsin mi?", deleteAllEmptyRooms, "TÜMÜNÜ SİL")} disabled={busy || !data?.emptyRooms.length}>TÜMÜNÜ SİL</button></div>
           </div>
           {data?.emptyRooms.length ? (
             <div className="admin-empty-room-list">
