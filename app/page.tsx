@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, CSSProperties, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, CSSProperties, PointerEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_GALLERY, type GalleryKind } from "@/lib/gallery";
 import { subscribeToRoomRealtime, type RealtimePieceUpdate, type RealtimeSubscription } from "@/lib/realtime-client";
 
@@ -256,12 +256,23 @@ function edgeProfile(seed: string, row: number, col: number, axis: "h" | "v") {
   };
 }
 
-function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: number; cols: number; seed: string; imageUrl: string }) {
+const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: number; cols: number; seed: string; imageUrl: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const visibleRef = useRef(true);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !imageUrl) return;
+    if (!canvas) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      visibleRef.current = entry.isIntersecting;
+    }, { rootMargin: "300px" });
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !imageUrl || !visibleRef.current) return;
     let cancelled = false;
     let drawTimer: number | undefined;
     void loadPuzzleImage(imageUrl).then((image) => {
@@ -274,15 +285,12 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
       const boardHeight = boardWidth / imageRatio;
       const cellWidth = boardWidth / cols;
       const cellHeight = boardHeight / rows;
-      // Keep the canvas padding proportional to each cell axis. The canvas is
-      // rendered at 168% width/height and offset by 34%; using the same pad
-      // on both axes distorts the path whenever cells are not square.
       const padX = cellWidth * 0.34;
       const padY = cellHeight * 0.34;
       const tab = Math.min(cellWidth, cellHeight) * 0.28;
       const width = cellWidth + padX * 2;
       const height = cellHeight + padY * 2;
-      const scale = 2;
+      const scale = rows * cols > 120 ? 1 : 2;
       canvas.width = Math.ceil(width * scale);
       canvas.height = Math.ceil(height * scale);
       const context = canvas.getContext("2d");
@@ -315,29 +323,28 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
           x: startX + deltaX * along + normalX * normal,
           y: startY + deltaY * along + normalY * normal,
         });
-        const center = edge.center;
-        const spread = edge.spread;
-        const neck = edge.neck;
-        const crown = edge.crown;
         const depth = tab * edge.depth * edge.sign;
-        const baseStart = point(center - spread, 0);
-        const neckLeft = point(center - neck, depth * 0.18);
-        const crownTop = point(center, depth);
-        const neckRight = point(center + neck, depth * 0.18);
-        const baseEnd = point(center + spread, 0);
-        context.lineTo(baseStart.x, baseStart.y);
-        let control1 = point(center - spread + 0.035, 0);
-        let control2 = point(center - neck + 0.025, depth * 0.04);
-        context.bezierCurveTo(control1.x, control1.y, control2.x, control2.y, neckLeft.x, neckLeft.y);
-        control1 = point(center - neck - 0.1, depth * 0.42);
-        control2 = point(center - crown * 0.6, depth * 0.96);
-        context.bezierCurveTo(control1.x, control1.y, control2.x, control2.y, crownTop.x, crownTop.y);
-        control1 = point(center + crown * 0.6, depth * 0.96);
-        control2 = point(center + neck + 0.1, depth * 0.42);
-        context.bezierCurveTo(control1.x, control1.y, control2.x, control2.y, neckRight.x, neckRight.y);
-        control1 = point(center + neck - 0.025, depth * 0.04);
-        control2 = point(center + spread - 0.035, 0);
-        context.bezierCurveTo(control1.x, control1.y, control2.x, control2.y, baseEnd.x, baseEnd.y);
+        context.lineTo(point(edge.center - edge.spread, 0).x, point(edge.center - edge.spread, 0).y);
+        context.bezierCurveTo(
+          point(edge.center - edge.spread + 0.035, 0).x, point(edge.center - edge.spread + 0.035, 0).y,
+          point(edge.center - edge.neck + 0.025, depth * 0.04).x, point(edge.center - edge.neck + 0.025, depth * 0.04).y,
+          point(edge.center - edge.neck, depth * 0.18).x, point(edge.center - edge.neck, depth * 0.18).y,
+        );
+        context.bezierCurveTo(
+          point(edge.center - edge.neck - 0.1, depth * 0.42).x, point(edge.center - edge.neck - 0.1, depth * 0.42).y,
+          point(edge.center - edge.crown * 0.6, depth * 0.96).x, point(edge.center - edge.crown * 0.6, depth * 0.96).y,
+          point(edge.center, depth).x, point(edge.center, depth).y,
+        );
+        context.bezierCurveTo(
+          point(edge.center + edge.crown * 0.6, depth * 0.96).x, point(edge.center + edge.crown * 0.6, depth * 0.96).y,
+          point(edge.center + edge.neck + 0.1, depth * 0.42).x, point(edge.center + edge.neck + 0.1, depth * 0.42).y,
+          point(edge.center + edge.neck, depth * 0.18).x, point(edge.center + edge.neck, depth * 0.18).y,
+        );
+        context.bezierCurveTo(
+          point(edge.center + edge.neck - 0.025, depth * 0.04).x, point(edge.center + edge.neck - 0.025, depth * 0.04).y,
+          point(edge.center + edge.spread - 0.035, 0).x, point(edge.center + edge.spread - 0.035, 0).y,
+          point(edge.center + edge.spread, 0).x, point(edge.center + edge.spread, 0).y,
+        );
         context.lineTo(endX, endY);
       };
 
@@ -370,7 +377,7 @@ function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: num
   }, [id, rows, cols, seed, imageUrl]);
 
   return <canvas ref={canvasRef} className="piece-canvas" aria-hidden="true" />;
-}
+});
 
 function formatCode(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
@@ -700,19 +707,19 @@ export default function Home() {
     };
   }, [room?.code]);
 
-  const localSize = PUZZLE_SIZES.find((option) => String(option.count) === difficulty) ?? PUZZLE_SIZES[0];
-  const selectedPuzzleSize = fitPuzzleSize(localSize, pendingImageAspect ?? imageAspect);
+  const localSize = useMemo(() => PUZZLE_SIZES.find((option) => String(option.count) === difficulty) ?? PUZZLE_SIZES[0], [difficulty]);
+  const selectedPuzzleSize = useMemo(() => fitPuzzleSize(localSize, pendingImageAspect ?? imageAspect), [localSize, pendingImageAspect, imageAspect]);
   const rows = room?.rows ?? DEFAULT_ROWS;
   const cols = room?.cols ?? DEFAULT_COLS;
   const pieceCount = rows * cols;
-  const solvedCount = pieces.filter((piece) => piece.locked).length;
+  const solvedCount = useMemo(() => pieces.filter((piece) => piece.locked).length, [pieces]);
   const remainingCount = pieceCount - solvedCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);
   const galleryVisible = !room && (galleryOpen || introCompletion === "gallery");
   const workspaceAspect = imageAspect * BOARD.height / BOARD.width;
-  const hintPiece = lastHeldPieceId === null
+  const hintPiece = useMemo(() => lastHeldPieceId === null
     ? pieces.find((piece) => !piece.locked)
-    : pieces.find((piece) => piece.id === lastHeldPieceId);
+    : pieces.find((piece) => piece.id === lastHeldPieceId), [lastHeldPieceId, pieces]);
   const commitNickname = () => {
     const name = normalizeNickname(nicknameInput);
     if (!name) {
@@ -947,7 +954,8 @@ export default function Home() {
     }
   };
 
-  const movePiece = (event: PointerEvent<HTMLDivElement>) => {
+  const rafRef = useRef<number | null>(null);
+  const movePiece = useCallback((event: PointerEvent<HTMLDivElement>) => {
     if (!dragRef.current || !boardRef.current) return;
     const drag = dragRef.current;
     const rect = boardRef.current.getBoundingClientRect();
@@ -955,8 +963,15 @@ export default function Home() {
     const y = Math.max(0.005, Math.min(0.89, (event.clientY - rect.top) / rect.height - drag.offsetY));
     drag.currentX = x;
     drag.currentY = y;
-    drag.element.style.left = `${x * 100}%`;
-    drag.element.style.top = `${y * 100}%`;
+    if (!rafRef.current) {
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        if (dragRef.current) {
+          dragRef.current.element.style.left = `${dragRef.current.currentX * 100}%`;
+          dragRef.current.element.style.top = `${dragRef.current.currentY * 100}%`;
+        }
+      });
+    }
     const now = Date.now();
     if (room && now - drag.lastBroadcastAt >= 80) {
       realtimeSend.current?.({
@@ -966,9 +981,9 @@ export default function Home() {
       });
       drag.lastBroadcastAt = now;
     }
-  };
+  }, [room]);
 
-  const endMove = () => {
+  const endMove = useCallback(() => {
     if (!dragRef.current) return;
     const drag = dragRef.current;
     const movingId = drag.id;
@@ -989,15 +1004,15 @@ export default function Home() {
     if (snaps && !room && introCompletion === "idle" && next.every((piece) => piece.locked)) {
       setIntroCompletion("showing");
     }
-  };
+  }, [pieces, cols, rows, pushMove, room, introCompletion]);
 
-  const copyCode = async () => {
+  const copyCode = useCallback(async () => {
     if (!room) return;
     await navigator.clipboard?.writeText(room.code);
     setNotice("Oda kodu panoya kopyalandı.");
-  };
+  }, [room]);
 
-  const showHint = () => {
+  const showHint = useCallback(() => {
     if (!hintPiece) {
       setNotice("Puzzle zaten tamamlandı — ipucuna ihtiyacın kalmadı!");
       return;
@@ -1008,7 +1023,7 @@ export default function Home() {
       ? "İpucu 3 saniye boyunca açık: parlayan hücreye dikkat et."
       : "Son tuttuğun parçanın doğru yeri 3 saniye boyunca gösteriliyor.");
     hintTimer.current = window.setTimeout(() => setHintVisible(false), 3200);
-  };
+  }, [hintPiece, lastHeldPieceId]);
 
   const pushToSides = () => {
     const cellWidth = BOARD.width / cols;

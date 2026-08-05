@@ -20,7 +20,9 @@ function publicPuzzle(row: GalleryRecord) {
 export async function GET() {
   try {
     const puzzles = await getGalleryPuzzles();
-    return Response.json({ puzzles: puzzles.map(publicPuzzle) }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ puzzles: puzzles.map(publicPuzzle) }, {
+      headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=300" },
+    });
   } catch (error) {
     console.error("Galeri okunamadı:", error);
     return Response.json({

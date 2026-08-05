@@ -364,8 +364,13 @@ export async function revokePresence(clientId: string, revokedAt: number) {
   });
 }
 
+export async function getRoomPresences(roomCode: string, cutoff: number) {
+  const query = `site_presence?last_seen_at=gt.${Math.floor(cutoff)}&room_code=eq.${encodeURIComponent(roomCode)}&select=client_id,room_code,nickname,last_seen_at&order=last_seen_at.desc&limit=100`;
+  return await dataRequest(`${query}&revoked_at=is.null`).then(res => res.json()) as PresenceRecord[];
+}
+
 export async function getActivePresences(cutoff: number) {
-  const query = `site_presence?last_seen_at=gt.${Math.floor(cutoff)}&select=client_id,room_code,nickname,last_seen_at&order=last_seen_at.desc`;
+  const query = `site_presence?last_seen_at=gt.${Math.floor(cutoff)}&select=client_id,room_code,nickname,last_seen_at&order=last_seen_at.desc&limit=500`;
   try {
     const response = await dataRequest(`${query}&revoked_at=is.null`);
     return await response.json() as PresenceRecord[];

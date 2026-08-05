@@ -1,4 +1,4 @@
-import { getActivePresences, removePresence, touchPresence } from "@/lib/storage";
+import { getRoomPresences, removePresence, touchPresence } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -14,9 +14,8 @@ export async function GET(request: Request) {
   try {
     const roomCode = new URL(request.url).searchParams.get("roomCode")?.trim().toUpperCase() || "";
     if (!/^[A-Z0-9]{6}$/.test(roomCode)) return Response.json({ error: "Geçerli bir oda kodu gerekli." }, { status: 400 });
-    const rows = await getActivePresences(Date.now() - ACTIVE_WINDOW_MS);
+    const rows = await getRoomPresences(roomCode, Date.now() - ACTIVE_WINDOW_MS);
     const players = rows
-      .filter((row) => row.room_code === roomCode)
       .map((row) => ({ clientId: row.client_id, nickname: row.nickname?.trim() || "Misafir", lastSeenAt: row.last_seen_at }));
     return Response.json({ players }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
