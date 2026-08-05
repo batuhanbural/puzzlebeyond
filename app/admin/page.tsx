@@ -418,7 +418,7 @@ export default function AdminPage() {
               <p>{confirmDialog.message}</p>
               {confirmDialog.textInput && (
                 <label>
-                  <span>Onaylamak için "<strong>{confirmDialog.textInput}</strong>" yaz</span>
+                  <span>Onaylamak için &quot;<strong>{confirmDialog.textInput}</strong>&quot; yaz</span>
                   <input
                     type="text"
                     value={confirmText}

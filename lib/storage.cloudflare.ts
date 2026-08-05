@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import type { Piece, RoomRecord } from "./storage";
+import type { GalleryRecord, Piece, PresenceRecord, RoomRecord, RoomSummary } from "./storage";
 
 type RoomRow = Omit<RoomRecord, "pieces"> & { pieces: string };
 
@@ -86,4 +86,73 @@ export async function getPuzzleImageResponse(imageKey: string) {
   responseHeaders.set("etag", object.httpEtag);
   responseHeaders.set("Cache-Control", "public, max-age=31536000, immutable");
   return new Response(object.body, { headers: responseHeaders });
+}
+
+export async function getGalleryPuzzles(): Promise<GalleryRecord[]> {
+  return [];
+}
+
+export async function getGalleryPuzzle(_id: string): Promise<GalleryRecord | null> {
+  return null;
+}
+
+export async function createGalleryPuzzle(puzzle: GalleryRecord): Promise<GalleryRecord> {
+  return puzzle;
+}
+
+export async function putGalleryImage(id: string, body: ArrayBuffer, contentType: string) {
+  const imageKey = `gallery/${id}/original`;
+  await env.BUCKET.put(imageKey, body, { httpMetadata: { contentType } });
+  return imageKey;
+}
+
+export async function deleteGalleryImage(imageKey: string) {
+  await env.BUCKET.delete(imageKey);
+}
+
+export async function deleteGalleryPuzzle(_id: string) {
+  return false;
+}
+
+export async function getGalleryImageResponse(_imageKey: string) {
+  return new Response(null, { status: 404 });
+}
+
+export async function getPuzzleImageDownloadResponse(imageKey: string, filename: string) {
+  const response = await getPuzzleImageResponse(imageKey);
+  if (!response) return new Response(null, { status: 404 });
+  const headers = new Headers(response.headers);
+  headers.set("Content-Disposition", `attachment; filename="${filename}"`);
+  return new Response(response.body, { status: 200, headers });
+}
+
+export async function getRoomPresences(_roomCode: string, _cutoff: number): Promise<PresenceRecord[]> {
+  return [];
+}
+
+export async function getActivePresences(_cutoff: number): Promise<PresenceRecord[]> {
+  return [];
+}
+
+export async function getActiveUserCount(_cutoff: number) {
+  return 0;
+}
+
+export async function touchPresence(_clientId: string, _roomCode: string | null, _lastSeenAt: number, _nickname?: string) {
+  return true;
+}
+
+export async function removePresence(_clientId: string) {}
+
+export async function revokePresence(_clientId: string, _revokedAt: number) {}
+
+export async function broadcastRoomChange(_code: string, _change: { piece?: Piece; pieces?: Piece[]; updatedAt: number }) {}
+
+export async function deletePuzzleImage(imageKey: string) {
+  await env.BUCKET.delete(imageKey);
+}
+
+export async function getRoomSummaries(): Promise<RoomSummary[]> {
+  const result = await env.DB.prepare("SELECT code, title, rows, cols, updated_at FROM puzzle_rooms ORDER BY updated_at DESC LIMIT 500").all<RoomSummary>();
+  return result.results;
 }

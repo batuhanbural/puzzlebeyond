@@ -15,3 +15,11 @@
 - Expects `supabase/schema.sql` to be the canonical, self-contained database migration file kept in sync with application-level constraint changes — updating both `CREATE TABLE` definitions and `ALTER` statements for existing tables when limits (e.g., max rows/cols) change. Confidence: 0.8
 - Prefers concise, minimal button labels with a single clear action verb — avoids multi-part text like "X · Y" in favor of just "Y" (e.g., "GALERİYE GEÇ" instead of "İLK PUZZLEI ATLA · GALERİYE GEÇ"). Confidence: 0.7
 - When a difficulty/configuration is selected, expects the resulting numeric dimensions (rows×cols grid size) to be displayed prominently alongside the corresponding piece count, visually separated by a divider line. Confidence: 0.7
+- Prefers server-side/DB-level data filtering via query parameters over fetching all records and filtering on the client (e.g., `room_code=eq.X` in the Supabase query instead of `.filter()` on the full result set). Confidence: 0.7
+- Uses `stale-while-revalidate` caching headers for API routes that serve semi-static, infrequently-changing data (e.g., gallery listings). Confidence: 0.7
+- Prefers `requestAnimationFrame` batching for DOM write operations during pointer-move/drag handlers to reduce layout thrashing — writes are deferred to a single rAF callback rather than happening on every pointer event. Confidence: 0.7
+- Prefers `React.memo` on expensive canvas-rendering components (e.g., puzzle pieces) paired with `useCallback`/`useMemo` to stabilize their dependencies and avoid unnecessary re-renders. Confidence: 0.7
+- Prefers `IntersectionObserver` with a generous `rootMargin` to skip canvas drawing for puzzle pieces that are off-screen, reducing rendering cost in large grids. Confidence: 0.7
+- Prefers reducing canvas resolution scale (e.g., from 2× to 1× retina) for high piece-count puzzles (120+) to balance visual quality with rendering performance. Confidence: 0.7
+- Prefers Vercel `regions` pinned to a single deployment region (e.g., `fra1`) and `crons` for scheduled background cleanup tasks. Confidence: 0.7
+- Values comprehensive, breadth-first performance work: when asked to reduce latency, expects React memoization, DOM batching, API caching, DB indexing/query limits, and deployment config to be tackled together rather than one at a time. Confidence: 0.7
