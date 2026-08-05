@@ -1014,27 +1014,51 @@ export default function Home() {
       setNotice("Tüm parçalar yerleştirilmiş!");
       return;
     }
-    const sideCount = Math.ceil(unlocked.length / 2);
+    setHintVisible(false);
     const cellWidth = BOARD.width / cols;
     const cellHeight = BOARD.height / rows;
-    const stepY = 0.85 / sideCount;
-    setHintVisible(false);
+    const stepX = cellWidth * 0.82;
+    const stepY = cellHeight * 0.82;
+    const slots: Array<{ x: number; y: number }> = [];
+    for (let y = 0.012; y <= 0.988 - cellHeight; y += stepY) {
+      for (let x = 0.012; x <= 0.988 - cellWidth; x += stepX) {
+        const fitsLeftTray = x + cellWidth * 0.9 < BOARD.left - 0.006;
+        const fitsRightTray = x > BOARD.left + BOARD.width + 0.006;
+        if (!fitsLeftTray && !fitsRightTray) continue;
+        slots.push({
+          x: Math.max(0.005, Math.min(0.99 - cellWidth, x + (Math.random() - 0.5) * cellWidth * 0.12)),
+          y: Math.max(0.005, Math.min(0.99 - cellHeight, y + (Math.random() - 0.5) * cellHeight * 0.12)),
+        });
+      }
+    }
+    for (let i = slots.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [slots[i], slots[j]] = [slots[j], slots[i]];
+    }
+    const ids = unlocked.map((p) => p.id);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    const fallbackX = (index: number) => index % 2 === 0
+      ? 0.006 + Math.random() * Math.max(0.006, BOARD.left - cellWidth - 0.018)
+      : BOARD.left + BOARD.width + 0.008 + Math.random() * Math.max(0.006, 0.982 - BOARD.left - BOARD.width - cellWidth);
     const next = pieces.map((piece) => {
       if (piece.locked) return piece;
-      const index = unlocked.indexOf(piece);
-      const side = index % 2;
-      const slot = Math.floor(index / 2);
-      const y = Math.min(0.99 - cellHeight, 0.04 + slot * stepY);
-      const x = side === 0
-        ? 0.012
-        : Math.min(0.99 - cellWidth, BOARD.left + BOARD.width + 0.014);
-      return { ...piece, x, y, locked: false };
+      const slotIndex = ids.indexOf(piece.id);
+      const slot = slots[slotIndex];
+      return {
+        ...piece,
+        x: slot?.x ?? fallbackX(slotIndex),
+        y: slot?.y ?? 0.01 + Math.random() * Math.max(0.01, 0.98 - cellHeight),
+        locked: false,
+      };
     });
     setPieces(next);
     if (room) {
       for (const piece of unlocked) void pushMove(next, piece.id);
     }
-    setNotice("Kalan parçalar kenarlara itildi.");
+    setNotice("Kalan parçalar kenarlara dağıtıldı.");
   };
 
   const downloadCompletedImage = async () => {
