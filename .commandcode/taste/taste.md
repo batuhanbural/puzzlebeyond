@@ -3,8 +3,8 @@
 - Uses `.artifacts/` directory for generated and manipulated assets (images, archives, build outputs). Confidence: 0.85
 - Prefers PIL/Pillow (Python) for deterministic image manipulation (resizing, text overlays, cropping) rather than relying solely on AI-generated images. Confidence: 0.8
 - Prefers using `apply_patch` for code modifications rather than rewriting entire files. Confidence: 0.75
-- Works iteratively on visual/UI tasks: provides short, direct feedback after each iteration and expects the agent to refine in-place. Confidence: 0.85
-- Dislikes decorative glow/bloom effects (e.g., drop-shadow filters); prefers clean/flat visual styling without soft halos around UI elements. Confidence: 0.7
+- Works iteratively on visual/UI tasks: provides short, direct feedback after each iteration and expects the agent to refine in-place. Confidence: 0.9
+- Dislikes decorative glow/bloom effects (e.g., drop-shadow filters); prefers clean/flat visual styling without soft halos around UI elements. Confidence: 0.8
 - Stores project-specific generated assets in subdirectories under `.artifacts/` (e.g., `.artifacts/instagram/`). Confidence: 0.7
 - Prefers custom confirmation dialogs over native browser `window.confirm`/`alert` popups — custom overlay with styled dialog, backdrop blur, and explicit cancel/confirm buttons. Confidence: 0.85
 - Requires typed text confirmation for bulk destructive actions (e.g., user must type a specific phrase like "TÜMÜNÜ SİL" before the confirm button becomes enabled). Confidence: 0.85
@@ -13,3 +13,5 @@
 - Prefers modal/dialog interactions to be isolated from background UI state; changing settings in a create/upload dialog should not visually alter the preview board or workspace rendered behind it. Confidence: 0.75
 - Prefers hints/previews to use the actual rendered component (e.g., JigsawPiece with its full shape) rather than simplified placeholder representations (e.g., CSS background-image squares). Confidence: 0.7
 - Expects `supabase/schema.sql` to be the canonical, self-contained database migration file kept in sync with application-level constraint changes — updating both `CREATE TABLE` definitions and `ALTER` statements for existing tables when limits (e.g., max rows/cols) change. Confidence: 0.8
+- Prefers concise, minimal button labels with a single clear action verb — avoids multi-part text like "X · Y" in favor of just "Y" (e.g., "GALERİYE GEÇ" instead of "İLK PUZZLEI ATLA · GALERİYE GEÇ"). Confidence: 0.7
+- When a difficulty/configuration is selected, expects the resulting numeric dimensions (rows×cols grid size) to be displayed prominently alongside the corresponding piece count, visually separated by a divider line. Confidence: 0.7

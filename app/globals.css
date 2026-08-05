@@ -280,6 +280,8 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
 .admin-top-actions .outline-button { min-height:38px; padding:0 12px; font-size:9px; display:inline-flex; align-items:center; justify-content:center; }
 .admin-content { width:min(1180px,100%); margin:0 auto; padding:clamp(20px,4vw,52px) clamp(18px,4vw,50px) 70px; }
 .admin-overview { display:grid; grid-template-columns:minmax(230px,320px) minmax(0,1fr); gap:16px; }
+.admin-monitor-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+.admin-monitor-grid .admin-section { margin-top:30px; }
 .admin-stat-card,.admin-note-card,.admin-section { border:2px solid var(--ink); background:var(--paper); box-shadow:5px 5px 0 var(--ink); }
 .admin-stat-card { padding:18px; display:grid; justify-items:start; gap:4px; background:var(--lime); }
 .admin-stat-card>span,.admin-note-card>span,.admin-count { font-size:8px; font-weight:950; letter-spacing:1px; }
@@ -355,6 +357,7 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
   .admin-top-actions .text-button { font-size:9px; }
   .admin-content { padding:18px 12px 40px; }
   .admin-overview { grid-template-columns:1fr; }
+  .admin-monitor-grid { grid-template-columns:1fr; }
   .admin-note-card p { font-size:13px; }
   .admin-section { padding:14px; margin-top:22px; }
   .admin-section-heading h2 { font-size:27px; }

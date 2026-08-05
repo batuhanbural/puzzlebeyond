@@ -351,6 +351,7 @@ export default function AdminPage() {
           <div className="admin-stat-card"><span>ŞU ANDA</span><strong>{data?.activeUsers ?? "—"}</strong><b>AKTİF KULLANICI</b><button className="outline-button" onClick={() => void load()} disabled={busy}>YENİLE ↻</button></div>
           <div className="admin-note-card"><span>GÜVENLİK</span><p>Parola sunucuda tutulur; bu panelin oturumu HttpOnly çerez ile korunur.</p></div>
         </div>
+        <div className="admin-monitor-grid">
         <section className="admin-section admin-sessions-section">
           <div className="admin-section-heading">
             <div><p className="eyebrow">CANLI İZLEME</p><h2>Aktif oturumlar</h2></div>
@@ -388,6 +389,7 @@ export default function AdminPage() {
           ) : <p className="admin-session-empty">Şu anda boş ve silinmeyi bekleyen oda yok.</p>}
           <p className="admin-session-note">Kullanıcısı olmayan odalar son aktiviteden 24 saat sonra temizlenir. Liste yenilendikçe kalan süre güncellenir.</p>
         </section>
+        </div>
         <section className="admin-section">
           <div className="admin-section-heading"><div><p className="eyebrow">YENİ İÇERİK</p><h2>Galeriye puzzle ekle</h2></div><span className="admin-count">{data?.puzzles.length ?? 0} PUZZLE</span></div>
           <form className="admin-add-form" onSubmit={addPuzzle}>
