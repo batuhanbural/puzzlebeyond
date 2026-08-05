@@ -1009,14 +1009,22 @@ export default function Home() {
   };
 
   const pushToSides = () => {
-    const unlocked = pieces.filter((p) => !p.locked);
-    if (unlocked.length === 0) {
-      setNotice("Tüm parçalar yerleştirilmiş!");
+    const cellWidth = BOARD.width / cols;
+    const cellHeight = BOARD.height / rows;
+    const boardPadX = cellWidth * 0.3;
+    const boardPadY = cellHeight * 0.3;
+    const onBoard = pieces.filter((p) => {
+      if (p.locked) return false;
+      const cx = p.x + cellWidth / 2;
+      const cy = p.y + cellHeight / 2;
+      return cx >= BOARD.left - boardPadX && cx <= BOARD.left + BOARD.width + boardPadX
+        && cy >= BOARD.top - boardPadY && cy <= BOARD.top + BOARD.height + boardPadY;
+    });
+    if (onBoard.length === 0) {
+      setNotice("Tahta üzerinde kalan parça yok!");
       return;
     }
     setHintVisible(false);
-    const cellWidth = BOARD.width / cols;
-    const cellHeight = BOARD.height / rows;
     const stepX = cellWidth * 0.82;
     const stepY = cellHeight * 0.82;
     const slots: Array<{ x: number; y: number }> = [];
@@ -1035,7 +1043,7 @@ export default function Home() {
       const j = Math.floor(Math.random() * (i + 1));
       [slots[i], slots[j]] = [slots[j], slots[i]];
     }
-    const ids = unlocked.map((p) => p.id);
+    const ids = onBoard.map((p) => p.id);
     for (let i = ids.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [ids[i], ids[j]] = [ids[j], ids[i]];
@@ -1044,7 +1052,7 @@ export default function Home() {
       ? 0.006 + Math.random() * Math.max(0.006, BOARD.left - cellWidth - 0.018)
       : BOARD.left + BOARD.width + 0.008 + Math.random() * Math.max(0.006, 0.982 - BOARD.left - BOARD.width - cellWidth);
     const next = pieces.map((piece) => {
-      if (piece.locked) return piece;
+      if (piece.locked || !onBoard.some((p) => p.id === piece.id)) return piece;
       const slotIndex = ids.indexOf(piece.id);
       const slot = slots[slotIndex];
       return {
@@ -1056,9 +1064,9 @@ export default function Home() {
     });
     setPieces(next);
     if (room) {
-      for (const piece of unlocked) void pushMove(next, piece.id);
+      for (const piece of onBoard) void pushMove(next, piece.id);
     }
-    setNotice("Kalan parçalar kenarlara dağıtıldı.");
+    setNotice("Tahtadaki parçalar kenarlara dağıtıldı.");
   };
 
   const downloadCompletedImage = async () => {
@@ -1323,7 +1331,7 @@ export default function Home() {
                 <fieldset><legend>Zorluk · hedef parça sayısı</legend><div className="difficulty-options">
                   {PUZZLE_SIZES.map((option) => (
                     <button key={option.count} className={difficulty === String(option.count) ? "selected" : ""} onClick={() => setDifficulty(String(option.count))}>
-                      <b>{option.count}</b><span>{option.label}</span>
+                      <b>{option.label}</b><span>≈{option.count} parça</span>
                     </button>
                   ))}
                 </div><p className="difficulty-result" aria-live="polite"><span><b>{selectedPuzzleSize.rows}×{selectedPuzzleSize.cols}</b> düzen</span><strong>{selectedPuzzleSize.count} PARÇA</strong><small>Görsel oranına göre dengelendi</small></p></fieldset>

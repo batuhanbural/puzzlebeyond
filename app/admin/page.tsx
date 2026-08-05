@@ -63,6 +63,8 @@ export default function AdminPage() {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<{ message: string; action: () => Promise<void>; textInput?: string } | null>(null);
+  const [confirmText, setConfirmText] = useState("");
 
   const load = useCallback(async () => {
     const [galleryResponse, sessionsResponse] = await Promise.all([
@@ -167,10 +169,15 @@ export default function AdminPage() {
     }
   };
 
+  const confirmAction = (message: string, action: () => Promise<void>, textInput?: string) => {
+    setConfirmText("");
+    setConfirmDialog({ message, action, textInput });
+  };
+
   const removePuzzle = async (puzzle: AdminPuzzle) => {
-    if (!window.confirm("“" + puzzle.title + "” galeriden silinsin mi?")) return;
     setBusy(true);
     setNotice("");
+    setConfirmDialog(null);
     try {
       const response = await fetch("/api/admin/gallery?id=" + encodeURIComponent(puzzle.id), { method: "DELETE" });
       const payload = await responsePayload<{ ok?: boolean }>(response);
@@ -185,9 +192,9 @@ export default function AdminPage() {
   };
 
   const closeSession = async (session: AdminSession) => {
-    if (!window.confirm(`${session.clientId.slice(0, 8)}… oturumu kapatılsın mı?`)) return;
     setBusy(true);
     setNotice("");
+    setConfirmDialog(null);
     try {
       const response = await fetch("/api/admin/sessions", {
         method: "PATCH",
@@ -206,9 +213,9 @@ export default function AdminPage() {
   };
 
   const deleteSession = async (session: AdminSession) => {
-    if (!window.confirm(`${session.clientId.slice(0, 8)}… oturum kaydı silinsin mi?`)) return;
     setBusy(true);
     setNotice("");
+    setConfirmDialog(null);
     try {
       const response = await fetch(`/api/admin/sessions?clientId=${encodeURIComponent(session.clientId)}`, { method: "DELETE" });
       const payload = await responsePayload<{ deleted?: number }>(response);
@@ -223,9 +230,9 @@ export default function AdminPage() {
   };
 
   const deleteEmptyRoom = async (room: AdminEmptyRoom) => {
-    if (!window.confirm(`“${room.title || room.code}” odası silinsin mi? Bu işlem geri alınamaz.`)) return;
     setBusy(true);
     setNotice("");
+    setConfirmDialog(null);
     try {
       const response = await fetch(`/api/admin/sessions?roomCode=${encodeURIComponent(room.code)}`, { method: "DELETE" });
       const payload = await responsePayload<{ deleted?: number }>(response);
@@ -240,9 +247,10 @@ export default function AdminPage() {
   };
 
   const closeAllSessions = async () => {
-    if (!data?.sessions.length || !window.confirm(`${data.sessions.length} aktif oturum kapatılsın mı?`)) return;
+    if (!data?.sessions.length) return;
     setBusy(true);
     setNotice("");
+    setConfirmDialog(null);
     try {
       const response = await fetch("/api/admin/sessions", {
         method: "PATCH",
@@ -255,6 +263,24 @@ export default function AdminPage() {
       await load();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Oturumlar kapatılamadı.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeAllPuzzles = async () => {
+    setBusy(true);
+    setNotice("");
+    setConfirmDialog(null);
+    try {
+      if (!data?.puzzles.length) return;
+      for (const puzzle of data.puzzles) {
+        await fetch(`/api/admin/gallery?id=${encodeURIComponent(puzzle.id)}`, { method: "DELETE" });
+      }
+      setNotice("Tüm puzzlelar galeriden çıkarıldı.");
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Puzzlelar silinemedi.");
     } finally {
       setBusy(false);
     }
@@ -310,7 +336,7 @@ export default function AdminPage() {
         <section className="admin-section admin-sessions-section">
           <div className="admin-section-heading">
             <div><p className="eyebrow">CANLI İZLEME</p><h2>Aktif oturumlar</h2></div>
-            <div className="admin-session-heading-actions"><span className="admin-count">{data?.sessions.length ?? 0} OTURUM</span><button className="outline-button" onClick={() => void load()} disabled={busy}>YENİLE</button><button className="admin-session-close-all" onClick={() => void closeAllSessions()} disabled={busy || !data?.sessions.length}>HEPSİNİ KAPAT</button></div>
+            <div className="admin-session-heading-actions"><span className="admin-count">{data?.sessions.length ?? 0} OTURUM</span><button className="outline-button" onClick={() => void load()} disabled={busy}>YENİLE</button><button className="admin-session-close-all" onClick={() => data?.sessions.length && confirmAction(`${data.sessions.length} aktif oturum kapatılsın mı?`, closeAllSessions)} disabled={busy || !data?.sessions.length}>HEPSİNİ KAPAT</button></div>
           </div>
           {data?.sessions.length ? (
             <div className="admin-session-list">
@@ -318,7 +344,7 @@ export default function AdminPage() {
                 <article className="admin-session-row" key={session.clientId}>
                   <div className="admin-session-main"><i className="admin-session-dot" /><div><b>{session.roomCode ? `${session.roomCode} odası` : "Ana menü"}</b><small>{session.clientId.slice(0, 12)}…</small></div></div>
                   <div className="admin-session-seen"><span>SON GÖRÜLME</span><b>{session.lastSeenLabel}</b></div>
-                  <div className="admin-session-actions"><button className="outline-button" onClick={() => void closeSession(session)} disabled={busy}>KAPAT</button><button className="admin-delete-button" onClick={() => void deleteSession(session)} disabled={busy}>SİL</button></div>
+                  <div className="admin-session-actions"><button className="outline-button" onClick={() => confirmAction(`${session.clientId.slice(0, 8)}… oturumu kapatılsın mı?`, () => closeSession(session))} disabled={busy}>KAPAT</button><button className="admin-delete-button" onClick={() => confirmAction(`${session.clientId.slice(0, 8)}… oturum kaydı silinsin mi?`, () => deleteSession(session))} disabled={busy}>SİL</button></div>
                 </article>
               ))}
             </div>
@@ -337,7 +363,7 @@ export default function AdminPage() {
                   <div className="admin-empty-room-main"><i className="admin-empty-room-dot" /><div><b>{room.title || "Başlıksız puzzle"}</b><small>{room.code} · {room.rows}×{room.cols} · kullanıcı yok</small></div></div>
                   <div className="admin-empty-room-activity"><span>SON AKTİVİTE</span><b>{room.lastActivityLabel}</b></div>
                   <div className="admin-empty-room-expiry"><span>SİLİNMESİNE KALAN</span><b>{room.remainingLabel}</b><small>{room.expiresLabel} civarı</small></div>
-                  <div className="admin-empty-room-actions"><button className="admin-delete-button" onClick={() => void deleteEmptyRoom(room)} disabled={busy}>SİL</button></div>
+                  <div className="admin-empty-room-actions"><button className="admin-delete-button" onClick={() => confirmAction(`"${room.title || room.code}" odası silinsin mi? Bu işlem geri alınamaz.`, () => deleteEmptyRoom(room))} disabled={busy}>SİL</button></div>
                 </article>
               ))}
             </div>
@@ -356,16 +382,44 @@ export default function AdminPage() {
         </section>
         {notice && <p className="admin-notice">{notice}</p>}
         <section className="admin-section">
-          <div className="admin-section-heading"><div><p className="eyebrow">YAYINDAKİLER</p><h2>Galeri puzzleları</h2></div></div>
+          <div className="admin-section-heading"><div><p className="eyebrow">YAYINDAKİLER</p><h2>Galeri puzzleları</h2></div>{data?.puzzles.length ? <button className="admin-session-close-all" onClick={() => confirmAction("Tüm puzzlelar galeriden silinsin mi?", removeAllPuzzles, "TÜMÜNÜ SİL")} disabled={busy}>TÜMÜNÜ SİL</button> : null}</div>
           <div className="admin-puzzle-grid">
             {data?.puzzles.map((puzzle) => (
               <article className="admin-puzzle-card" key={puzzle.id}>
                 {puzzle.imageUrl ? <img src={puzzle.imageUrl} alt="" /> : <div className="admin-puzzle-placeholder" style={{ background: puzzle.accent }} />}
-                <div className="admin-puzzle-copy"><b>{puzzle.title}</b><small>{puzzle.description || "Açıklama yok."}</small><span>{puzzle.count} PARÇA · {puzzle.rows}×{puzzle.cols}</span><button className="admin-delete-button" onClick={() => void removePuzzle(puzzle)} disabled={busy}>ÇIKAR</button></div>
+                <div className="admin-puzzle-copy"><b>{puzzle.title}</b><small>{puzzle.description || "Açıklama yok."}</small><span>{puzzle.count} PARÇA · {puzzle.rows}×{puzzle.cols}</span><button className="admin-delete-button" onClick={() => confirmAction(`"${puzzle.title}" galeriden silinsin mi?`, () => removePuzzle(puzzle))} disabled={busy}>ÇIKAR</button></div>
               </article>
             ))}
           </div>
         </section>
+        {confirmDialog && (
+          <div className="admin-confirm-overlay" onClick={() => { setConfirmDialog(null); setConfirmText(""); }}>
+            <div className="admin-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+              <p>{confirmDialog.message}</p>
+              {confirmDialog.textInput && (
+                <label>
+                  <span>Onaylamak için "<strong>{confirmDialog.textInput}</strong>" yaz</span>
+                  <input
+                    type="text"
+                    value={confirmText}
+                    onChange={(e) => setConfirmText(e.target.value)}
+                    autoFocus
+                  />
+                </label>
+              )}
+              <div className="admin-confirm-actions">
+                <button className="outline-button" onClick={() => { setConfirmDialog(null); setConfirmText(""); }}>VAZGEÇ</button>
+                <button
+                  className="admin-session-close-all"
+                  onClick={() => void confirmDialog.action()}
+                  disabled={confirmDialog.textInput ? confirmText !== confirmDialog.textInput : false}
+                >
+                  ONAYLA
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
     </main>
   );
