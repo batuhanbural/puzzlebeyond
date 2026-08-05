@@ -101,7 +101,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .hint-preview.visible { opacity:.48; }
 .board-grid { position:absolute; z-index:1; inset:0; display:grid; }
 .board-grid span { border:1px dashed rgba(21,21,21,.2); }
-.hint-target { position:absolute; z-index:12; display:grid; place-items:center; border:3px solid var(--coral); background:rgba(211,211,255,.34); box-shadow:0 0 0 5px rgba(255,111,97,.22); pointer-events:none; animation:hintPulse .8s ease-in-out infinite alternate; }
+.hint-target { position:absolute; z-index:12; display:grid; place-items:center; overflow:visible; border:3px solid var(--coral); background:rgba(211,211,255,.34); box-shadow:0 0 0 5px rgba(255,111,97,.22); pointer-events:none; animation:hintPulse .8s ease-in-out infinite alternate; }
 
 @keyframes hintPulse { from { transform:scale(.94); opacity:.72; } to { transform:scale(1.04); opacity:1; } }
 .puzzle-piece { position:absolute; z-index:5; cursor:grab; transition:left .16s ease-out, top .16s ease-out, filter .2s, transform .2s; touch-action:none; will-change:left,top; }

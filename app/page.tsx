@@ -702,8 +702,8 @@ export default function Home() {
 
   const localSize = PUZZLE_SIZES.find((option) => String(option.count) === difficulty) ?? PUZZLE_SIZES[0];
   const selectedPuzzleSize = fitPuzzleSize(localSize, pendingImageAspect ?? imageAspect);
-  const rows = room?.rows ?? localSize.rows;
-  const cols = room?.cols ?? localSize.cols;
+  const rows = room?.rows ?? DEFAULT_ROWS;
+  const cols = room?.cols ?? DEFAULT_COLS;
   const pieceCount = rows * cols;
   const solvedCount = pieces.filter((piece) => piece.locked).length;
   const remainingCount = pieceCount - solvedCount;
@@ -1156,7 +1156,7 @@ export default function Home() {
               <p>Sana gönderilen oda kodu herkesi aynı canlı tahtada buluşturur.</p>
               <button className="primary-button full" onClick={() => setDialog("join")}>KODLA KATIL →</button>
               <button className="panel-text-button" onClick={() => setDialog("create")}>YENİ ODA KUR</button>
-              <button className="panel-text-button" onClick={skipPreviewPuzzle}>İLK PUZZLEI ATLA · GALERİYE GEÇ</button>
+              <button className="panel-text-button" onClick={skipPreviewPuzzle}>GALERİYE GEÇ</button>
             </div>
           )}
         </aside>
@@ -1165,7 +1165,7 @@ export default function Home() {
           <div className="board-toolbar">
             <div><span className="live-dot" /> {room ? "CANLI OYUN" : galleryVisible ? "PUZZLE GALERİSİ" : ""}</div>
             <div className="toolbar-right">
-              {!room && !galleryVisible && <button className="skip-preview-button" onClick={skipPreviewPuzzle}><span className="skip-long">İLK PUZZLEI ATLA</span><span className="skip-short">ATLA</span> →</button>}
+              {!room && !galleryVisible && <button className="skip-preview-button" onClick={skipPreviewPuzzle}>GALERİYE GEÇ →</button>}
               {room && <button className="sync-button" onClick={() => void forceSyncRoom()} disabled={syncBusy} title="Puzzle durumunu sunucudan yeniden al">{syncBusy ? "EŞİTLENİYOR…" : "↻ EŞİTLE"}</button>}
               {(room || !galleryVisible) && <button className="push-sides-button" onClick={pushToSides} title="Kilitlenmemiş parçaları kenarlara topla">↹ KENARA İT</button>}
               {(room || !galleryVisible) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
@@ -1207,20 +1207,6 @@ export default function Home() {
                 onPointerCancel={endMove}
               >
                 <div className="puzzle-board-guide">
-                  {hintVisible && hintPiece && (
-                    <div
-                      className="hint-preview visible"
-                      style={{
-                        backgroundImage: `url(${imageUrl})`,
-                        backgroundSize: `${cols * 100}% ${rows * 100}%`,
-                        backgroundPosition: `${(hintPiece.id % cols) / (cols - 1) * 100}% ${Math.floor(hintPiece.id / cols) / (rows - 1) * 100}%`,
-                        left: `${(hintPiece.id % cols) / cols * 100}%`,
-                        top: `${Math.floor(hintPiece.id / cols) / rows * 100}%`,
-                        width: `${100 / cols}%`,
-                        height: `${100 / rows}%`,
-                      }}
-                    />
-                  )}
                   <div className="board-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}>
                     {Array.from({ length: pieceCount }).map((_, i) => <span key={i} />)}
                   </div>
@@ -1235,7 +1221,9 @@ export default function Home() {
                       width: `${BOARD.width * 100 / cols}%`,
                       height: `${BOARD.height * 100 / rows}%`,
                     }}
-                  />
+                  >
+                    <JigsawPiece id={hintPiece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
+                  </div>
                 )}
                 {pieces.map((piece) => (
                   <div
