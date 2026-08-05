@@ -1015,6 +1015,8 @@ export default function Home() {
       return;
     }
     const sideCount = Math.ceil(unlocked.length / 2);
+    const cellWidth = BOARD.width / cols;
+    const cellHeight = BOARD.height / rows;
     const stepY = 0.85 / sideCount;
     setHintVisible(false);
     const next = pieces.map((piece) => {
@@ -1022,8 +1024,10 @@ export default function Home() {
       const index = unlocked.indexOf(piece);
       const side = index % 2;
       const slot = Math.floor(index / 2);
-      const y = Math.min(0.97, 0.04 + slot * stepY);
-      const x = side === 0 ? 0.01 : 0.97;
+      const y = Math.min(0.99 - cellHeight, 0.04 + slot * stepY);
+      const x = side === 0
+        ? 0.012
+        : Math.min(0.99 - cellWidth, BOARD.left + BOARD.width + 0.014);
       return { ...piece, x, y, locked: false };
     });
     setPieces(next);

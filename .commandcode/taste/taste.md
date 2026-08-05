@@ -3,5 +3,6 @@
 - Uses `.artifacts/` directory for generated and manipulated assets (images, archives, build outputs). Confidence: 0.85
 - Prefers PIL/Pillow (Python) for deterministic image manipulation (resizing, text overlays, cropping) rather than relying solely on AI-generated images. Confidence: 0.8
 - Prefers using `apply_patch` for code modifications rather than rewriting entire files. Confidence: 0.75
-- Works iteratively on visual/UI tasks: provides short, direct feedback after each iteration and expects the agent to refine in-place. Confidence: 0.8
+- Works iteratively on visual/UI tasks: provides short, direct feedback after each iteration and expects the agent to refine in-place. Confidence: 0.85
+- Dislikes decorative glow/bloom effects (e.g., drop-shadow filters); prefers clean/flat visual styling without soft halos around UI elements. Confidence: 0.7
 - Stores project-specific generated assets in subdirectories under `.artifacts/` (e.g., `.artifacts/instagram/`). Confidence: 0.7

@@ -109,8 +109,8 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .puzzle-piece:hover { z-index:30; filter:brightness(1.08); transform:scale(1.04) rotate(1deg); }
 .puzzle-piece:active { z-index:40; cursor:grabbing; transform:scale(1.07) rotate(-1deg); transition:none; }
 .puzzle-piece.dragging { z-index:50; cursor:grabbing; transform:scale(1.07) rotate(-1deg); transition:none!important; filter:brightness(1.08); }
-.puzzle-piece.locked { z-index:4; cursor:default; filter:drop-shadow(0 0 4px rgba(211,211,255,.8)); }
-.puzzle-piece.locked:hover { transform:none; filter:drop-shadow(0 0 4px rgba(211,211,255,.8)); }
+.puzzle-piece.locked { z-index:4; cursor:default; }
+.puzzle-piece.locked:hover { transform:none; }
 .puzzle-piece.compact-piece .piece-canvas { filter:drop-shadow(1.3px 1.7px .4px rgba(21,21,21,.34)); }
 .puzzle-piece.dense-piece .piece-canvas { filter:drop-shadow(.5px .7px 0 rgba(21,21,21,.28)); }
 .puzzle-piece.dense-piece.locked,.puzzle-piece.dense-piece.locked:hover { filter:none; }
