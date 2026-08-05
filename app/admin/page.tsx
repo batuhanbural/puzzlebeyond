@@ -382,7 +382,7 @@ export default function AdminPage() {
         </section>
         {notice && <p className="admin-notice">{notice}</p>}
         <section className="admin-section">
-          <div className="admin-section-heading"><div><p className="eyebrow">YAYINDAKİLER</p><h2>Galeri puzzleları</h2></div>{data?.puzzles.length ? <button className="admin-session-close-all" onClick={() => confirmAction("Tüm puzzlelar galeriden silinsin mi?", removeAllPuzzles, "TÜMÜNÜ SİL")} disabled={busy}>TÜMÜNÜ SİL</button> : null}</div>
+          <div className="admin-section-heading"><div><p className="eyebrow">YAYINDAKİLER</p><h2>Galeri puzzleları</h2></div><button className="admin-session-close-all" onClick={() => confirmAction("Tüm puzzlelar galeriden silinsin mi?", removeAllPuzzles, "TÜMÜNÜ SİL")} disabled={busy || !data?.puzzles.length}>TÜMÜNÜ SİL</button></div>
           <div className="admin-puzzle-grid">
             {data?.puzzles.map((puzzle) => (
               <article className="admin-puzzle-card" key={puzzle.id}>
