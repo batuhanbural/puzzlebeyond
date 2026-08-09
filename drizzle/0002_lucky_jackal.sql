@@ -1,0 +1,1 @@
+CREATE INDEX `puzzle_rooms_last_active_at_idx` ON `puzzle_rooms` (`last_active_at`);

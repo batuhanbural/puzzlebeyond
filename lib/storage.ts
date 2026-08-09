@@ -1,4 +1,16 @@
-export type Piece = { id: number; x: number; y: number; locked?: boolean };
+import { validateImageBytes, type SupportedImageType } from "./puzzle-validation";
+import { imageRequestNotModified, type ImageRequestConditions } from "./image-cache";
+
+export type { ImageRequestConditions } from "./image-cache";
+
+export type Piece = {
+  id: number;
+  x: number;
+  y: number;
+  locked?: boolean;
+  layoutVersion?: number;
+  zone?: "board" | "mat";
+};
 export type RoomRecord = {
   code: string;
   title: string;
@@ -7,8 +19,10 @@ export type RoomRecord = {
   pieces: Piece[];
   image_key: string;
   updated_at: number;
+  last_active_at?: number;
 };
 
+export type RoomMetadata = Omit<RoomRecord, "pieces">;
 export type RoomSummary = Pick<RoomRecord, "code" | "title" | "rows" | "cols" | "updated_at">;
 
 export type GalleryRecord = {
@@ -31,9 +45,19 @@ export type PresenceRecord = {
   revoked_at?: number | null;
 };
 
-const WIPE_MARKER = "system/rooms-wiped-2026-08-03";
-let wipeChecked = false;
+export type SafeImageContentType = SupportedImageType;
+
 let nextCleanupAt = 0;
+let lastActiveColumnAvailable: boolean | null = null;
+let pieceRpcAvailable: boolean | null = null;
+
+export function validateImageUpload(body: ArrayBuffer, claimedContentType: string): SafeImageContentType {
+  const validated = validateImageBytes(new Uint8Array(body), claimedContentType);
+  if (!validated) {
+    throw new Error("Görsel içeriği yalnızca doğrulanmış JPG, PNG veya WebP olabilir.");
+  }
+  return validated.type;
+}
 
 function config() {
   const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)?.replace(/\/$/, "");
@@ -56,6 +80,81 @@ function headers(extra?: HeadersInit) {
   return result;
 }
 
+function encodedStoragePath(imageKey: string) {
+  return imageKey.split("/").map((part) => encodeURIComponent(part)).join("/");
+}
+
+function safeStoredImageType(value: string | null): SafeImageContentType | null {
+  const normalized = value?.split(";", 1)[0].trim().toLowerCase();
+  if (normalized === "image/jpg" || normalized === "image/jpeg") return "image/jpeg";
+  if (normalized === "image/png" || normalized === "image/webp") return normalized;
+  return null;
+}
+
+async function fetchPrivateStorageObject(imageKey: string, conditions?: ImageRequestConditions) {
+  const { url, bucket } = config();
+  const requestHeaders = headers();
+  const ifNoneMatch = conditions?.ifNoneMatch?.trim();
+  if (ifNoneMatch && ifNoneMatch.length <= 1_024) requestHeaders.set("If-None-Match", ifNoneMatch);
+  const ifModifiedSince = conditions?.ifModifiedSince?.trim();
+  if (ifModifiedSince && ifModifiedSince.length <= 128 && Number.isFinite(Date.parse(ifModifiedSince))) {
+    requestHeaders.set("If-Modified-Since", ifModifiedSince);
+  }
+  return fetch(`${url}/storage/v1/object/authenticated/${encodeURIComponent(bucket)}/${encodedStoragePath(imageKey)}`, {
+    headers: requestHeaders,
+    cache: "no-store",
+  });
+}
+
+function imageResponseHeaders(
+  upstream: Response,
+  options: { cacheControl: string; disposition: "inline" | "attachment"; filename?: string },
+) {
+  const responseHeaders = new Headers({
+    "Cache-Control": options.cacheControl,
+    "Content-Disposition": options.filename
+      ? `${options.disposition}; filename="${options.filename}"`
+      : options.disposition,
+    "Content-Security-Policy": "default-src 'none'; sandbox",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "X-Content-Type-Options": "nosniff",
+  });
+  const etag = upstream.headers.get("etag");
+  if (etag) responseHeaders.set("ETag", etag);
+  const lastModified = upstream.headers.get("last-modified");
+  if (lastModified) responseHeaders.set("Last-Modified", lastModified);
+  return responseHeaders;
+}
+
+function imageProxyResponse(
+  upstream: Response,
+  options: {
+    cacheControl: string;
+    disposition: "inline" | "attachment";
+    filename?: string;
+    conditions?: ImageRequestConditions;
+  },
+) {
+  const responseHeaders = imageResponseHeaders(upstream, options);
+  if (upstream.status === 304) return new Response(null, { status: 304, headers: responseHeaders });
+  const contentType = safeStoredImageType(upstream.headers.get("content-type"));
+  if (!contentType) {
+    void upstream.body?.cancel();
+    return new Response(null, {
+      status: 415,
+      headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
+    });
+  }
+  responseHeaders.set("Content-Type", contentType);
+  const etag = upstream.headers.get("etag");
+  const lastModified = upstream.headers.get("last-modified");
+  if (imageRequestNotModified(options.conditions, etag, lastModified)) {
+    void upstream.body?.cancel();
+    return new Response(null, { status: 304, headers: responseHeaders });
+  }
+  return new Response(upstream.body, { status: 200, headers: responseHeaders });
+}
+
 async function dataRequest(path: string, init?: RequestInit) {
   const { url } = config();
   const response = await fetch(`${url}/rest/v1/${path}`, {
@@ -70,39 +169,24 @@ async function dataRequest(path: string, init?: RequestInit) {
   return response;
 }
 
+function missingLastActiveColumn(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /last_active_at.*(does not exist|not found|schema cache)|column.*last_active_at/i.test(message);
+}
+
 function normalizeRoom(row: Omit<RoomRecord, "pieces"> & { pieces: Piece[] | string }): RoomRecord {
+  lastActiveColumnAvailable = Object.prototype.hasOwnProperty.call(row, "last_active_at");
   return { ...row, pieces: typeof row.pieces === "string" ? JSON.parse(row.pieces) as Piece[] : row.pieces };
 }
 
-export async function ensureSchema() {
-  config();
-  if (wipeChecked) return;
-  const { url, bucket } = config();
-  const marker = await fetch(`${url}/storage/v1/object/${bucket}/${WIPE_MARKER}`, { headers: headers(), cache: "no-store" });
-  if (marker.ok) {
-    wipeChecked = true;
-    return;
-  }
-  const markerDetail = await marker.text();
-  const markerMissing = marker.status === 404 || (
-    marker.status === 400 && /not[\s-]?found|resource was not found|does not exist/i.test(markerDetail)
-  );
-  if (!markerMissing) {
-    throw new Error(`Oda temizleme durumu okunamadı (${marker.status}): ${markerDetail}`);
-  }
+export function roomActivityAt(room: Pick<RoomRecord, "updated_at" | "last_active_at">) {
+  return Number.isSafeInteger(room.last_active_at) ? room.last_active_at! : room.updated_at;
+}
 
-  const response = await dataRequest("puzzle_rooms?select=code,image_key");
-  const rooms = await response.json() as Array<{ code: string; image_key: string }>;
-  for (const room of rooms) {
-    await deleteRoom(room.code, room.image_key);
-  }
-  const saved = await fetch(`${url}/storage/v1/object/${bucket}/${WIPE_MARKER}`, {
-    method: "POST",
-    headers: headers({ "Content-Type": "text/plain", "x-upsert": "true" }),
-    body: new TextEncoder().encode(String(Date.now())),
-  });
-  if (!saved.ok) throw new Error(`Oda temizleme durumu kaydedilemedi (${saved.status}): ${await saved.text()}`);
-  wipeChecked = true;
+export async function ensureSchema() {
+  // Schema migrations are deployment-time operations. Request handlers must
+  // never mutate or wipe application data while checking configuration.
+  config();
 }
 
 export async function getRoom(code: string) {
@@ -111,12 +195,41 @@ export async function getRoom(code: string) {
   return rows[0] ? normalizeRoom(rows[0]) : null;
 }
 
+export async function getRoomMetadata(code: string) {
+  const base = `puzzle_rooms?code=eq.${encodeURIComponent(code)}&limit=1`;
+  if (lastActiveColumnAvailable !== false) {
+    try {
+      const response = await dataRequest(`${base}&select=code,title,rows,cols,image_key,updated_at,last_active_at`);
+      const rows = await response.json() as RoomMetadata[];
+      lastActiveColumnAvailable = true;
+      return rows[0] ?? null;
+    } catch (error) {
+      if (!missingLastActiveColumn(error)) throw error;
+      lastActiveColumnAvailable = false;
+    }
+  }
+  const response = await dataRequest(`${base}&select=code,title,rows,cols,image_key,updated_at`);
+  const rows = await response.json() as RoomMetadata[];
+  return rows[0] ?? null;
+}
+
 export async function roomExists(code: string) {
   const response = await dataRequest(`puzzle_rooms?code=eq.${encodeURIComponent(code)}&select=code&limit=1`);
   return ((await response.json()) as Array<{ code: string }>).length > 0;
 }
 
 export async function getRoomSummaries() {
+  if (lastActiveColumnAvailable !== false) {
+    try {
+      const response = await dataRequest("puzzle_rooms?select=code,title,rows,cols,updated_at,last_active_at&order=last_active_at.desc&limit=500");
+      const rows = await response.json() as Array<RoomSummary & { last_active_at: number }>;
+      lastActiveColumnAvailable = true;
+      return rows.map(({ last_active_at, ...row }) => ({ ...row, updated_at: last_active_at }));
+    } catch (error) {
+      if (!missingLastActiveColumn(error)) throw error;
+      lastActiveColumnAvailable = false;
+    }
+  }
   const response = await dataRequest("puzzle_rooms?select=code,title,rows,cols,updated_at&order=updated_at.desc&limit=500");
   return await response.json() as RoomSummary[];
 }
@@ -131,17 +244,49 @@ export async function createRoom(room: RoomRecord) {
   return normalizeRoom(rows[0]);
 }
 
-export async function updateRoomPieces(code: string, pieces: Piece[], updatedAt: number) {
-  await dataRequest(`puzzle_rooms?code=eq.${encodeURIComponent(code)}`, {
+export async function updateRoomPieces(code: string, pieces: Piece[], updatedAt: number, expectedUpdatedAt?: number) {
+  const expected = expectedUpdatedAt === undefined ? "" : `&updated_at=eq.${Math.floor(expectedUpdatedAt)}`;
+  const response = await dataRequest(`puzzle_rooms?code=eq.${encodeURIComponent(code)}${expected}&select=code`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
-    body: JSON.stringify({ pieces, updated_at: updatedAt }),
+    headers: { "Content-Type": "application/json", Prefer: "return=representation" },
+    body: JSON.stringify({
+      pieces,
+      updated_at: updatedAt,
+      ...(lastActiveColumnAvailable === true ? { last_active_at: updatedAt } : {}),
+    }),
   });
+  const rows = await response.json() as Array<{ code: string }>;
+  return rows.length > 0;
+}
+
+export async function updateRoomPiece(code: string, piece: Piece, updatedAt: number, expectedUpdatedAt: number) {
+  if (pieceRpcAvailable === false) return null;
+  try {
+    const response = await dataRequest("rpc/update_room_piece", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        target_code: code,
+        next_piece: piece,
+        next_updated_at: updatedAt,
+        expected_updated_at: expectedUpdatedAt,
+      }),
+    });
+    pieceRpcAvailable = true;
+    return await response.json() === true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/PGRST202|update_room_piece.*(schema cache|not find|does not exist)/i.test(message)) {
+      pieceRpcAvailable = false;
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function broadcastRoomChange(
   code: string,
-  change: { piece?: Piece; pieces?: Piece[]; updatedAt: number },
+  change: { updatedAt: number },
 ) {
   // A public key is also the opt-in switch for the browser WebSocket. Keep
   // the legacy polling path untouched when a project has not configured it.
@@ -164,8 +309,23 @@ export async function broadcastRoomChange(
   }
 }
 
-export async function touchRoomActivity(code: string, activeAt: number) {
-  await dataRequest(`puzzle_rooms?code=eq.${encodeURIComponent(code)}`, {
+export async function touchRoomActivity(code: string, activeAt: number, staleBefore = activeAt) {
+  const encodedCode = encodeURIComponent(code);
+  if (lastActiveColumnAvailable !== false) {
+    try {
+      await dataRequest(`puzzle_rooms?code=eq.${encodedCode}&last_active_at=lt.${Math.floor(staleBefore)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify({ last_active_at: activeAt }),
+      });
+      lastActiveColumnAvailable = true;
+      return;
+    } catch (error) {
+      if (!missingLastActiveColumn(error)) throw error;
+      lastActiveColumnAvailable = false;
+    }
+  }
+  await dataRequest(`puzzle_rooms?code=eq.${encodedCode}&updated_at=lt.${Math.floor(staleBefore)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
     body: JSON.stringify({ updated_at: activeAt }),
@@ -174,7 +334,7 @@ export async function touchRoomActivity(code: string, activeAt: number) {
 
 export async function deleteRoom(code: string, imageKey: string) {
   const { url, bucket } = config();
-  const imageResponse = await fetch(`${url}/storage/v1/object/${bucket}/${imageKey}`, {
+  const imageResponse = await fetch(`${url}/storage/v1/object/${encodeURIComponent(bucket)}/${encodedStoragePath(imageKey)}`, {
     method: "DELETE",
     headers: headers(),
   });
@@ -188,20 +348,36 @@ export async function deleteRoom(code: string, imageKey: string) {
 }
 
 export async function maybeCleanupExpiredRooms(cutoff: number) {
+  await ensureSchema();
   const now = Date.now();
   if (now < nextCleanupAt) return;
   nextCleanupAt = now + 60_000;
-  const response = await dataRequest(`puzzle_rooms?updated_at=lt.${cutoff}&select=code,image_key&limit=100`);
+  let response: Response;
+  if (lastActiveColumnAvailable !== false) {
+    try {
+      response = await dataRequest(`puzzle_rooms?last_active_at=lt.${Math.floor(cutoff)}&select=code,image_key&limit=25`);
+      lastActiveColumnAvailable = true;
+    } catch (error) {
+      if (!missingLastActiveColumn(error)) throw error;
+      lastActiveColumnAvailable = false;
+      response = await dataRequest(`puzzle_rooms?updated_at=lt.${Math.floor(cutoff)}&select=code,image_key&limit=25`);
+    }
+  } else {
+    response = await dataRequest(`puzzle_rooms?updated_at=lt.${Math.floor(cutoff)}&select=code,image_key&limit=25`);
+  }
   const rooms = await response.json() as Array<{ code: string; image_key: string }>;
-  for (const room of rooms) await deleteRoom(room.code, room.image_key);
+  for (let index = 0; index < rooms.length; index += 5) {
+    await Promise.all(rooms.slice(index, index + 5).map((room) => deleteRoom(room.code, room.image_key)));
+  }
 }
 
 export async function putPuzzleImage(code: string, body: ArrayBuffer, contentType: string) {
   const { url, bucket } = config();
-  const imageKey = `puzzles/${code}/original`;
-  const response = await fetch(`${url}/storage/v1/object/${bucket}/${imageKey}`, {
+  const verifiedContentType = validateImageUpload(body, contentType);
+  const imageKey = `puzzles/${code}/${crypto.randomUUID()}`;
+  const response = await fetch(`${url}/storage/v1/object/${encodeURIComponent(bucket)}/${encodedStoragePath(imageKey)}`, {
     method: "POST",
-    headers: headers({ "Content-Type": contentType, "x-upsert": "true", "cache-control": "31536000" }),
+    headers: headers({ "Content-Type": verifiedContentType, "cache-control": "0" }),
     body,
   });
   if (!response.ok) throw new Error(`Supabase görsel yüklemesi başarısız (${response.status}): ${await response.text()}`);
@@ -212,26 +388,36 @@ export async function deletePuzzleImage(imageKey: string) {
   await deleteStorageObject(imageKey);
 }
 
-export async function getPuzzleImageResponse(imageKey: string) {
-  const { url, bucket } = config();
-  return Response.redirect(`${url}/storage/v1/object/public/${bucket}/${imageKey}`, 307);
+export async function getPuzzleImageResponse(imageKey: string, conditions?: ImageRequestConditions) {
+  const response = await fetchPrivateStorageObject(imageKey, conditions);
+  if (!response.ok && response.status !== 304) {
+    void response.body?.cancel();
+    return response.status === 404
+      ? null
+      : new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
+  }
+  return imageProxyResponse(response, {
+    cacheControl: "private, max-age=300, must-revalidate",
+    disposition: "inline",
+    conditions,
+  });
 }
 
 export async function getPuzzleImageDownloadResponse(imageKey: string, filename: string) {
-  const { url, bucket } = config();
-  const response = await fetch(`${url}/storage/v1/object/public/${bucket}/${imageKey}`, { cache: "no-store" });
+  const response = await fetchPrivateStorageObject(imageKey);
   if (!response.ok) return new Response(null, { status: response.status === 404 ? 404 : 502 });
-  const contentType = response.headers.get("content-type") || "image/jpeg";
+  const contentType = safeStoredImageType(response.headers.get("content-type"));
+  if (!contentType) {
+    void response.body?.cancel();
+    return new Response(null, { status: 415, headers: { "Cache-Control": "no-store" } });
+  }
   const extension = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
   const safeBase = filename.replace(/\.[^.]+$/, "").replace(/[^a-z0-9._-]/gi, "-");
   const safeFilename = `${safeBase}.${extension}`;
-  return new Response(response.body, {
-    status: 200,
-    headers: {
-      "Content-Type": contentType,
-      "Content-Disposition": `attachment; filename="${safeFilename}"`,
-      "Cache-Control": "no-store",
-    },
+  return imageProxyResponse(response, {
+    cacheControl: "private, no-store",
+    disposition: "attachment",
+    filename: safeFilename,
   });
 }
 
@@ -259,10 +445,11 @@ export async function createGalleryPuzzle(puzzle: Omit<GalleryRecord, "created_a
 
 export async function putGalleryImage(id: string, body: ArrayBuffer, contentType: string) {
   const { url, bucket } = config();
+  const verifiedContentType = validateImageUpload(body, contentType);
   const imageKey = `gallery/${id}/original`;
-  const response = await fetch(`${url}/storage/v1/object/${bucket}/${imageKey}`, {
+  const response = await fetch(`${url}/storage/v1/object/${encodeURIComponent(bucket)}/${encodedStoragePath(imageKey)}`, {
     method: "POST",
-    headers: headers({ "Content-Type": contentType, "x-upsert": "true", "cache-control": "31536000" }),
+    headers: headers({ "Content-Type": verifiedContentType, "x-upsert": "true", "cache-control": "3600" }),
     body,
   });
   if (!response.ok) throw new Error(`Supabase galeri görseli yüklenemedi (${response.status}): ${await response.text()}`);
@@ -271,7 +458,7 @@ export async function putGalleryImage(id: string, body: ArrayBuffer, contentType
 
 async function deleteStorageObject(imageKey: string) {
   const { url, bucket } = config();
-  const response = await fetch(`${url}/storage/v1/object/${bucket}/${imageKey}`, {
+  const response = await fetch(`${url}/storage/v1/object/${encodeURIComponent(bucket)}/${encodedStoragePath(imageKey)}`, {
     method: "DELETE",
     headers: headers(),
   });
@@ -296,15 +483,11 @@ export async function deleteGalleryPuzzle(id: string) {
 }
 
 export async function getGalleryImageResponse(imageKey: string) {
-  const { url, bucket } = config();
-  const response = await fetch(`${url}/storage/v1/object/public/${bucket}/${imageKey}`, { cache: "no-store" });
+  const response = await fetchPrivateStorageObject(imageKey);
   if (!response.ok) return new Response(null, { status: response.status === 404 ? 404 : 502 });
-  return new Response(response.body, {
-    status: 200,
-    headers: {
-      "Content-Type": response.headers.get("content-type") || "image/jpeg",
-      "Cache-Control": "public, max-age=31536000, immutable",
-    },
+  return imageProxyResponse(response, {
+    cacheControl: "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+    disposition: "inline",
   });
 }
 
@@ -356,6 +539,18 @@ export async function removePresence(clientId: string) {
   }
 }
 
+export async function deleteStalePresences(cutoff: number) {
+  try {
+    await dataRequest(`site_presence?last_seen_at=lt.${Math.floor(cutoff)}`, {
+      method: "DELETE",
+      headers: { Prefer: "return=minimal" },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/site_presence.*(does not exist|not found)|relation.*site_presence/i.test(message)) throw error;
+  }
+}
+
 export async function revokePresence(clientId: string, revokedAt: number) {
   await dataRequest(`site_presence?client_id=eq.${encodeURIComponent(clientId)}`, {
     method: "PATCH",
@@ -393,9 +588,4 @@ export async function getActivePresences(cutoff: number) {
     const response = await dataRequest(query);
     return await response.json() as PresenceRecord[];
   }
-}
-
-export async function getActiveUserCount(cutoff: number) {
-  const rows = await getActivePresences(cutoff);
-  return new Set(rows.map((row) => row.client_id)).size;
 }

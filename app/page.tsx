@@ -1,10 +1,11 @@
 "use client";
 
 import { ChangeEvent, CSSProperties, PointerEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DEFAULT_GALLERY, type GalleryKind } from "@/lib/gallery";
-import { subscribeToRoomRealtime, type RealtimePieceUpdate, type RealtimeSubscription } from "@/lib/realtime-client";
+import type { GalleryKind } from "@/lib/gallery";
+import type { RealtimeSubscription } from "@/lib/realtime-client";
 
-type Piece = { id: number; x: number; y: number; locked?: boolean };
+type PieceZone = "board" | "mat";
+type Piece = { id: number; x: number; y: number; locked?: boolean; layoutVersion?: number; zone?: PieceZone };
 type Room = {
   code: string;
   title: string;
@@ -39,7 +40,7 @@ const DEFAULT_COLS = 4;
 const DEFAULT_IMAGE_ASPECT = 4 / 3;
 const ROOM_STORAGE_KEY = "puzzlebeyond-active-room";
 const NICKNAME_STORAGE_KEY = "puzzle-name";
-const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 };
+const PUZZLE_LAYOUT_VERSION = 3;
 const PUZZLE_SIZES = [
   { count: 12, rows: 3, cols: 4, label: "RAHAT" },
   { count: 20, rows: 4, cols: 5, label: "KOLAY" },
@@ -51,6 +52,11 @@ const PUZZLE_SIZES = [
 ] as const;
 
 const puzzleImageCache = new Map<string, Promise<HTMLImageElement>>();
+const MAX_CACHED_PUZZLE_IMAGES = 12;
+const puzzlePieceVisibility = new Map<Element, (visible: boolean) => void>();
+let puzzlePieceObserver: IntersectionObserver | null = null;
+let generatedDefaultImage: string | null = null;
+let generatedDefaultImagePromise: Promise<string> | null = null;
 
 function normalizeNickname(value: string) {
   return value.trim().replace(/\s+/g, " ").slice(0, 24);
@@ -71,12 +77,48 @@ function loadPuzzleImage(src: string) {
   const pending = new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     image.crossOrigin = "anonymous";
-    image.onload = () => resolve(image);
+    image.decoding = "async";
+    image.onload = () => {
+      if (typeof image.decode !== "function") {
+        resolve(image);
+        return;
+      }
+      void image.decode().catch(() => {}).then(() => resolve(image));
+    };
     image.onerror = () => reject(new Error("Puzzle görseli yüklenemedi."));
     image.src = src;
   });
+  if (puzzleImageCache.size >= MAX_CACHED_PUZZLE_IMAGES) {
+    const oldest = puzzleImageCache.keys().next().value as string | undefined;
+    if (oldest) puzzleImageCache.delete(oldest);
+  }
   puzzleImageCache.set(src, pending);
+  void pending.catch(() => {
+    if (puzzleImageCache.get(src) === pending) puzzleImageCache.delete(src);
+  });
   return pending;
+}
+
+function observePuzzlePiece(element: Element, callback: (visible: boolean) => void) {
+  if (typeof IntersectionObserver === "undefined") {
+    callback(true);
+    return () => {};
+  }
+  if (!puzzlePieceObserver) {
+    puzzlePieceObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) puzzlePieceVisibility.get(entry.target)?.(entry.isIntersecting);
+    }, { rootMargin: "300px" });
+  }
+  puzzlePieceVisibility.set(element, callback);
+  puzzlePieceObserver.observe(element);
+  return () => {
+    puzzlePieceObserver?.unobserve(element);
+    puzzlePieceVisibility.delete(element);
+    if (puzzlePieceVisibility.size === 0) {
+      puzzlePieceObserver?.disconnect();
+      puzzlePieceObserver = null;
+    }
+  };
 }
 
 type PuzzleSize = { count: number; rows: number; cols: number; label: string };
@@ -105,7 +147,9 @@ function fitPuzzleSize(size: PuzzleSize, aspect: number) {
 }
 
 function createDefaultImage() {
-  if (typeof document === "undefined") return "";
+  if (typeof document === "undefined") return Promise.resolve("");
+  if (generatedDefaultImage) return Promise.resolve(generatedDefaultImage);
+  if (generatedDefaultImagePromise) return generatedDefaultImagePromise;
   const canvas = document.createElement("canvas");
   canvas.width = 1200;
   canvas.height = 900;
@@ -129,113 +173,88 @@ function createDefaultImage() {
   ctx.beginPath(); ctx.arc(870, 610, 88, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "#d3d3ff";
   ctx.beginPath(); ctx.arc(870, 610, 42, 0, Math.PI * 2); ctx.fill();
-  return canvas.toDataURL("image/jpeg", 0.9);
+  generatedDefaultImagePromise = new Promise<string>((resolve) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        canvas.width = canvas.height = 1;
+        generatedDefaultImage = url;
+        resolve(url);
+        return;
+      }
+      const url = canvas.toDataURL("image/jpeg", 0.9);
+      canvas.width = canvas.height = 1;
+      generatedDefaultImage = url;
+      resolve(url);
+    }, "image/jpeg", 0.9);
+  }).finally(() => { generatedDefaultImagePromise = null; });
+  return generatedDefaultImagePromise;
 }
 
-function createGalleryImage(kind: "sunset" | "garden" | "city") {
-  if (typeof document === "undefined") return "";
-  const canvas = document.createElement("canvas");
-  canvas.width = 1200;
-  canvas.height = 800;
-  const ctx = canvas.getContext("2d")!;
-  if (kind === "sunset") {
-    const sky = ctx.createLinearGradient(0, 0, 0, 800);
-    sky.addColorStop(0, "#ff9f7f"); sky.addColorStop(.52, "#ff6f61"); sky.addColorStop(1, "#4864ff");
-    ctx.fillStyle = sky; ctx.fillRect(0, 0, 1200, 800);
-    ctx.fillStyle = "#ffd84d"; ctx.beginPath(); ctx.arc(830, 300, 118, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#151515"; ctx.beginPath(); ctx.moveTo(0, 590); ctx.lineTo(230, 370); ctx.lineTo(430, 565); ctx.lineTo(650, 315); ctx.lineTo(910, 590); ctx.lineTo(1080, 430); ctx.lineTo(1200, 555); ctx.lineTo(1200, 800); ctx.lineTo(0, 800); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = "#d3d3ff"; ctx.fillRect(0, 650, 1200, 150);
-    ctx.fillStyle = "#151515"; ctx.font = "900 62px Arial"; ctx.fillText("GÜN BATIMI", 58, 735);
-  } else if (kind === "garden") {
-    ctx.fillStyle = "#f4f0e6"; ctx.fillRect(0, 0, 1200, 800);
-    ctx.fillStyle = "#d3d3ff"; ctx.fillRect(0, 0, 1200, 170);
-    ctx.fillStyle = "#4864ff"; ctx.fillRect(0, 570, 1200, 230);
-    ctx.fillStyle = "#ff6f61"; ctx.beginPath(); ctx.arc(210, 300, 135, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#ffd84d"; ctx.beginPath(); ctx.arc(510, 245, 92, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#151515"; ctx.fillRect(870, 250, 38, 390);
-    ctx.fillStyle = "#40b866"; ctx.beginPath(); ctx.arc(890, 190, 110, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#ff6f61"; ctx.beginPath(); ctx.arc(760, 400, 68, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#fffdf7"; ctx.beginPath(); ctx.arc(760, 400, 24, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#151515"; ctx.font = "900 62px Arial"; ctx.fillText("ÇİÇEK BAHÇESİ", 58, 112);
-  } else {
-    const night = ctx.createLinearGradient(0, 0, 0, 800);
-    night.addColorStop(0, "#151515"); night.addColorStop(1, "#4864ff");
-    ctx.fillStyle = night; ctx.fillRect(0, 0, 1200, 800);
-    ctx.fillStyle = "#ffd84d"; ctx.beginPath(); ctx.arc(950, 150, 72, 0, Math.PI * 2); ctx.fill();
-    const buildings = [[70, 300, 190, 500], [290, 230, 220, 570], [545, 350, 155, 450], [730, 180, 210, 620], [980, 290, 150, 510]];
-    buildings.forEach(([x, y, width, height], index) => {
-      ctx.fillStyle = index % 2 ? "#d3d3ff" : "#ff6f61"; ctx.fillRect(x, y, width, height);
-      ctx.fillStyle = "#151515";
-      for (let row = y + 32; row < y + height - 20; row += 52) for (let col = x + 24; col < x + width - 18; col += 48) ctx.fillRect(col, row, 18, 24);
-    });
-    ctx.fillStyle = "#fffdf7"; ctx.font = "900 62px Arial"; ctx.fillText("GECE ŞEHRİ", 58, 112);
-  }
-  return canvas.toDataURL("image/jpeg", 0.88);
-}
-
-function createGalleryItems(): GalleryItem[] {
-  return DEFAULT_GALLERY.map((item) => ({ ...item, imageUrl: item.kind === "custom" ? "" : createGalleryImage(item.kind) }));
-}
-
-function scatteredPieces(rows: number, cols: number, seed?: string) {
-  let state = seed ? Array.from(seed).reduce((total, char) => Math.imul(total ^ char.charCodeAt(0), 2654435761), 2166136261) >>> 0 : 0;
-  const random = seed ? () => {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-    return state / 4294967296;
-  } : Math.random;
-  if (rows * cols <= 20) {
-    const ids = Array.from({ length: rows * cols }, (_, id) => id).sort(() => random() - 0.5);
-    const perSide = Math.ceil(ids.length / 2);
-    const cellWidth = BOARD.width / cols;
-    const cellHeight = BOARD.height / rows;
-    return ids.map((id, index) => {
-      const side = index % 2;
-      const slot = Math.floor(index / 2);
-      const y = Math.min(0.99 - cellHeight, ((slot + 0.18 + random() * 0.64) / perSide) * (0.99 - cellHeight));
-      const x = side === 0
-        ? 0.012 + random() * 0.018
-        : Math.min(0.99 - cellWidth, BOARD.left + BOARD.width + 0.014 + random() * 0.018);
-      return { id, x, y, locked: false };
-    });
-  }
-  const shuffle = <T,>(values: T[]) => {
-    for (let index = values.length - 1; index > 0; index--) {
-      const swapIndex = Math.floor(random() * (index + 1));
-      [values[index], values[swapIndex]] = [values[swapIndex], values[index]];
-    }
-    return values;
+function pieceBoardTarget(id: number, rows: number, cols: number) {
+  return {
+    x: (id % cols) / cols,
+    y: Math.floor(id / cols) / rows,
   };
-  const cellWidth = BOARD.width / cols;
-  const cellHeight = BOARD.height / rows;
-  const slots: Array<{ x: number; y: number }> = [];
-  const stepX = cellWidth * 0.82;
-  const stepY = cellHeight * 0.82;
-  for (let y = 0.012; y <= 0.988 - cellHeight; y += stepY) {
-    for (let x = 0.012; x <= 0.988 - cellWidth; x += stepX) {
-      const fitsLeftTray = x + cellWidth * 0.9 < BOARD.left - 0.006;
-      const fitsRightTray = x > BOARD.left + BOARD.width + 0.006;
-      if (!fitsLeftTray && !fitsRightTray) continue;
-      slots.push({
-        x: Math.max(0.005, Math.min(0.99 - cellWidth, x + (random() - 0.5) * cellWidth * 0.12)),
-        y: Math.max(0.005, Math.min(0.99 - cellHeight, y + (random() - 0.5) * cellHeight * 0.12)),
-      });
-    }
+}
+
+function stablePieceOrder(seed: string, id: number) {
+  let hash = 2166136261;
+  const value = `${seed}:mat:${id}`;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
   }
-  shuffle(slots);
-  const ids = shuffle(Array.from({ length: rows * cols }, (_, id) => id));
-  return ids.map((id, index) => ({
+  return hash >>> 0;
+}
+
+function scatteredPieces(rows: number, cols: number, _seed?: string) {
+  void _seed;
+  return Array.from({ length: rows * cols }, (_, id) => ({
     id,
-    x: slots[index]?.x ?? (index % 2 === 0
-      ? 0.006 + random() * Math.max(0.006, BOARD.left - cellWidth - 0.018)
-      : BOARD.left + BOARD.width + 0.008 + random() * Math.max(0.006, 0.982 - BOARD.left - BOARD.width - cellWidth)),
-    y: slots[index]?.y ?? 0.01 + random() * Math.max(0.01, 0.98 - cellHeight),
+    x: 0,
+    y: 0,
+    zone: "mat" as const,
     locked: false,
+    layoutVersion: PUZZLE_LAYOUT_VERSION,
   }));
 }
 
+function normalizePieceLayout(pieces: Piece[], rows: number, cols: number, seed: string) {
+  void seed;
+  const count = rows * cols;
+  const maxX = Math.max(0, 1 - 1 / cols);
+  const maxY = Math.max(0, 1 - 1 / rows);
+  return pieces.map((piece) => {
+    const id = Math.max(0, Math.min(count - 1, Math.floor(Number(piece.id) || 0)));
+    if (piece.locked) {
+      return { id, ...pieceBoardTarget(id, rows, cols), zone: "board" as const, locked: true, layoutVersion: PUZZLE_LAYOUT_VERSION };
+    }
+    const usesCurrentLayout = piece.layoutVersion === PUZZLE_LAYOUT_VERSION
+      && piece.zone === "board"
+      && Number.isFinite(piece.x) && Number.isFinite(piece.y)
+      && piece.x >= 0 && piece.x <= maxX && piece.y >= 0 && piece.y <= maxY;
+    return usesCurrentLayout
+      ? { ...piece, id, zone: "board" as const, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION }
+      : { id, x: 0, y: 0, zone: "mat" as const, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION };
+  });
+}
+
 function normalizePieces(room: Room) {
-  const legacyGrid = room.pieces.some((piece) => piece.x > 1 || piece.y > 1);
-  return legacyGrid ? scatteredPieces(room.rows, room.cols, room.code) : room.pieces;
+  const count = room.rows * room.cols;
+  const byId = new Map<number, Piece>();
+  for (const piece of Array.isArray(room.pieces) ? room.pieces : []) {
+    if (Number.isSafeInteger(piece?.id) && piece.id >= 0 && piece.id < count && !byId.has(piece.id)) byId.set(piece.id, piece);
+  }
+  const completeSet = Array.from({ length: count }, (_, id) => byId.get(id) ?? {
+    id,
+    x: 0,
+    y: 0,
+    zone: "mat" as const,
+    locked: false,
+    layoutVersion: PUZZLE_LAYOUT_VERSION,
+  });
+  return normalizePieceLayout(completeSet, room.rows, room.cols, room.code);
 }
 
 function edgeProfile(seed: string, row: number, col: number, axis: "h" | "v") {
@@ -256,23 +275,98 @@ function edgeProfile(seed: string, row: number, col: number, axis: "h" | "v") {
   };
 }
 
+type JigsawPathWriter = Pick<Path2D, "moveTo" | "lineTo" | "bezierCurveTo" | "closePath">;
+
+function traceJigsawPiecePath(
+  path: JigsawPathWriter,
+  id: number,
+  rows: number,
+  cols: number,
+  seed: string,
+  x0: number,
+  y0: number,
+  cellWidth: number,
+  cellHeight: number,
+) {
+  const row = Math.floor(id / cols);
+  const col = id % cols;
+  const tab = Math.min(cellWidth, cellHeight) * 0.28;
+  const flat = { sign: 0, center: 0.5, spread: 0.18, neck: 0.1, crown: 0.26, depth: 1 };
+  const topBoundary = row === 0 ? flat : edgeProfile(seed, row - 1, col, "h");
+  const rightBoundary = col === cols - 1 ? flat : edgeProfile(seed, row, col, "v");
+  const bottomBoundary = row === rows - 1 ? flat : edgeProfile(seed, row, col, "h");
+  const leftBoundary = col === 0 ? flat : edgeProfile(seed, row, col - 1, "v");
+  const top = { ...topBoundary, sign: -topBoundary.sign };
+  const left = { ...leftBoundary, sign: -leftBoundary.sign };
+  const x1 = x0 + cellWidth;
+  const y1 = y0 + cellHeight;
+
+  const addEdge = (
+    startX: number, startY: number, endX: number, endY: number,
+    normalX: number, normalY: number,
+    edge: { sign: number; center: number; spread: number; neck: number; crown: number; depth: number },
+  ) => {
+    if (!edge.sign) {
+      path.lineTo(endX, endY);
+      return;
+    }
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
+    const point = (along: number, normal: number) => ({
+      x: startX + deltaX * along + normalX * normal,
+      y: startY + deltaY * along + normalY * normal,
+    });
+    const depth = tab * edge.depth * edge.sign;
+    path.lineTo(point(edge.center - edge.spread, 0).x, point(edge.center - edge.spread, 0).y);
+    path.bezierCurveTo(
+      point(edge.center - edge.spread + 0.035, 0).x, point(edge.center - edge.spread + 0.035, 0).y,
+      point(edge.center - edge.neck + 0.025, depth * 0.04).x, point(edge.center - edge.neck + 0.025, depth * 0.04).y,
+      point(edge.center - edge.neck, depth * 0.18).x, point(edge.center - edge.neck, depth * 0.18).y,
+    );
+    path.bezierCurveTo(
+      point(edge.center - edge.neck - 0.1, depth * 0.42).x, point(edge.center - edge.neck - 0.1, depth * 0.42).y,
+      point(edge.center - edge.crown * 0.6, depth * 0.96).x, point(edge.center - edge.crown * 0.6, depth * 0.96).y,
+      point(edge.center, depth).x, point(edge.center, depth).y,
+    );
+    path.bezierCurveTo(
+      point(edge.center + edge.crown * 0.6, depth * 0.96).x, point(edge.center + edge.crown * 0.6, depth * 0.96).y,
+      point(edge.center + edge.neck + 0.1, depth * 0.42).x, point(edge.center + edge.neck + 0.1, depth * 0.42).y,
+      point(edge.center + edge.neck, depth * 0.18).x, point(edge.center + edge.neck, depth * 0.18).y,
+    );
+    path.bezierCurveTo(
+      point(edge.center + edge.neck - 0.025, depth * 0.04).x, point(edge.center + edge.neck - 0.025, depth * 0.04).y,
+      point(edge.center + edge.spread - 0.035, 0).x, point(edge.center + edge.spread - 0.035, 0).y,
+      point(edge.center + edge.spread, 0).x, point(edge.center + edge.spread, 0).y,
+    );
+    path.lineTo(endX, endY);
+  };
+
+  path.moveTo(x0, y0);
+  addEdge(x0, y0, x1, y0, 0, -1, top);
+  addEdge(x1, y0, x1, y1, 1, 0, rightBoundary);
+  addEdge(x1, y1, x0, y1, 0, 1, { ...bottomBoundary, center: 1 - bottomBoundary.center });
+  addEdge(x0, y1, x0, y0, -1, 0, { ...left, center: 1 - left.center });
+  path.closePath();
+}
+
 const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: number; cols: number; seed: string; imageUrl: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const visibleRef = useRef(true);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      visibleRef.current = entry.isIntersecting;
-    }, { rootMargin: "300px" });
-    observer.observe(canvas);
-    return () => observer.disconnect();
+    return observePuzzlePiece(canvas, setVisible);
   }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !imageUrl || !visibleRef.current) return;
+    if (!canvas || !imageUrl) return;
+    if (!visible) {
+      canvas.width = 1;
+      canvas.height = 1;
+      return;
+    }
     let cancelled = false;
     let drawTimer: number | undefined;
     void loadPuzzleImage(imageUrl).then((image) => {
@@ -281,13 +375,12 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl }
       const row = Math.floor(id / cols);
       const col = id % cols;
       const imageRatio = image.naturalWidth / image.naturalHeight || DEFAULT_IMAGE_ASPECT;
-      const boardWidth = 800;
+      const boardWidth = imageRatio >= 1 ? 800 : 800 * imageRatio;
       const boardHeight = boardWidth / imageRatio;
       const cellWidth = boardWidth / cols;
       const cellHeight = boardHeight / rows;
       const padX = cellWidth * 0.34;
       const padY = cellHeight * 0.34;
-      const tab = Math.min(cellWidth, cellHeight) * 0.28;
       const width = cellWidth + padX * 2;
       const height = cellHeight + padY * 2;
       const scale = rows * cols > 120 ? 1 : 2;
@@ -297,64 +390,8 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl }
       if (!context) return;
       context.scale(scale, scale);
 
-      const flat = { sign: 0, center: 0.5, spread: 0.18, neck: 0.1, crown: 0.26, depth: 1 };
-      const topBoundary = row === 0 ? flat : edgeProfile(seed, row - 1, col, "h");
-      const rightBoundary = col === cols - 1 ? flat : edgeProfile(seed, row, col, "v");
-      const bottomBoundary = row === rows - 1 ? flat : edgeProfile(seed, row, col, "h");
-      const leftBoundary = col === 0 ? flat : edgeProfile(seed, row, col - 1, "v");
-      const top = { ...topBoundary, sign: -topBoundary.sign };
-      const right = rightBoundary;
-      const bottom = bottomBoundary;
-      const left = { ...leftBoundary, sign: -leftBoundary.sign };
-      const x0 = padX, y0 = padY, x1 = padX + cellWidth, y1 = padY + cellHeight;
-
-      const addEdge = (
-        startX: number, startY: number, endX: number, endY: number,
-        normalX: number, normalY: number,
-        edge: { sign: number; center: number; spread: number; neck: number; crown: number; depth: number },
-      ) => {
-        if (!edge.sign) {
-          context.lineTo(endX, endY);
-          return;
-        }
-        const deltaX = endX - startX;
-        const deltaY = endY - startY;
-        const point = (along: number, normal: number) => ({
-          x: startX + deltaX * along + normalX * normal,
-          y: startY + deltaY * along + normalY * normal,
-        });
-        const depth = tab * edge.depth * edge.sign;
-        context.lineTo(point(edge.center - edge.spread, 0).x, point(edge.center - edge.spread, 0).y);
-        context.bezierCurveTo(
-          point(edge.center - edge.spread + 0.035, 0).x, point(edge.center - edge.spread + 0.035, 0).y,
-          point(edge.center - edge.neck + 0.025, depth * 0.04).x, point(edge.center - edge.neck + 0.025, depth * 0.04).y,
-          point(edge.center - edge.neck, depth * 0.18).x, point(edge.center - edge.neck, depth * 0.18).y,
-        );
-        context.bezierCurveTo(
-          point(edge.center - edge.neck - 0.1, depth * 0.42).x, point(edge.center - edge.neck - 0.1, depth * 0.42).y,
-          point(edge.center - edge.crown * 0.6, depth * 0.96).x, point(edge.center - edge.crown * 0.6, depth * 0.96).y,
-          point(edge.center, depth).x, point(edge.center, depth).y,
-        );
-        context.bezierCurveTo(
-          point(edge.center + edge.crown * 0.6, depth * 0.96).x, point(edge.center + edge.crown * 0.6, depth * 0.96).y,
-          point(edge.center + edge.neck + 0.1, depth * 0.42).x, point(edge.center + edge.neck + 0.1, depth * 0.42).y,
-          point(edge.center + edge.neck, depth * 0.18).x, point(edge.center + edge.neck, depth * 0.18).y,
-        );
-        context.bezierCurveTo(
-          point(edge.center + edge.neck - 0.025, depth * 0.04).x, point(edge.center + edge.neck - 0.025, depth * 0.04).y,
-          point(edge.center + edge.spread - 0.035, 0).x, point(edge.center + edge.spread - 0.035, 0).y,
-          point(edge.center + edge.spread, 0).x, point(edge.center + edge.spread, 0).y,
-        );
-        context.lineTo(endX, endY);
-      };
-
       context.beginPath();
-      context.moveTo(x0, y0);
-      addEdge(x0, y0, x1, y0, 0, -1, top);
-      addEdge(x1, y0, x1, y1, 1, 0, right);
-      addEdge(x1, y1, x0, y1, 0, 1, { ...bottom, center: 1 - bottom.center });
-      addEdge(x0, y1, x0, y0, -1, 0, { ...left, center: 1 - left.center });
-      context.closePath();
+      traceJigsawPiecePath(context, id, rows, cols, seed, padX, padY, cellWidth, cellHeight);
       context.save();
       context.clip();
       context.drawImage(image, padX - col * cellWidth, padY - row * cellHeight, boardWidth, boardHeight);
@@ -374,13 +411,206 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl }
       cancelled = true;
       if (drawTimer !== undefined) window.clearTimeout(drawTimer);
     };
-  }, [id, rows, cols, seed, imageUrl]);
+  }, [id, rows, cols, seed, imageUrl, visible]);
 
   return <canvas ref={canvasRef} className="piece-canvas" aria-hidden="true" />;
 });
 
+const LockedPiecesCanvas = memo(function LockedPiecesCanvas({
+  lockedIds,
+  lockedIdsKey,
+  rows,
+  cols,
+  seed,
+  imageUrl,
+}: {
+  lockedIds: number[];
+  lockedIdsKey: string;
+  rows: number;
+  cols: number;
+  seed: string;
+  imageUrl: string;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawnIdsRef = useRef(new Set<number>());
+  const geometryKeyRef = useRef("");
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const board = canvas?.parentElement;
+    if (!board || typeof ResizeObserver === "undefined") return;
+    const updateSize = () => {
+      const width = board.clientWidth;
+      const height = board.clientHeight;
+      if (width <= 0 || height <= 0) return;
+      setSize((current) => Math.abs(current.width - width) < 0.5 && Math.abs(current.height - height) < 0.5
+        ? current
+        : { width, height });
+    };
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(board);
+    updateSize();
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !imageUrl || size.width <= 0 || size.height <= 0) return;
+    let cancelled = false;
+    void loadPuzzleImage(imageUrl).then((image) => {
+      if (cancelled) return;
+      const renderScale = Math.max(0.25, Math.min(window.devicePixelRatio || 1, 2048 / Math.max(size.width, size.height)));
+      const pixelWidth = Math.max(1, Math.round(size.width * renderScale));
+      const pixelHeight = Math.max(1, Math.round(size.height * renderScale));
+      const geometryKey = `${imageUrl}:${rows}:${cols}:${seed}:${pixelWidth}:${pixelHeight}`;
+      const context = canvas.getContext("2d");
+      if (!context) return;
+
+      const nextIds = new Set(lockedIds);
+      const canAppend = geometryKeyRef.current === geometryKey
+        && canvas.width === pixelWidth
+        && canvas.height === pixelHeight
+        && Array.from(drawnIdsRef.current).every((id) => nextIds.has(id));
+      if (!canAppend) {
+        canvas.width = pixelWidth;
+        canvas.height = pixelHeight;
+        context.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+        context.clearRect(0, 0, size.width, size.height);
+        drawnIdsRef.current.clear();
+        geometryKeyRef.current = geometryKey;
+      } else {
+        context.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+      }
+
+      const cellWidth = size.width / cols;
+      const cellHeight = size.height / rows;
+      const sourceRatio = image.naturalWidth / image.naturalHeight || DEFAULT_IMAGE_ASPECT;
+      const sourceBoardWidth = sourceRatio >= 1 ? 800 : 800 * sourceRatio;
+      const edgeScale = rows * cols <= 20 ? 1 : Math.max(0.18, Math.sqrt(20 / (rows * cols)));
+      const displayScale = size.width / sourceBoardWidth;
+      context.lineJoin = "round";
+      context.lineCap = "round";
+
+      for (const id of lockedIds) {
+        if (drawnIdsRef.current.has(id)) continue;
+        const row = Math.floor(id / cols);
+        const col = id % cols;
+        const path = new Path2D();
+        traceJigsawPiecePath(path, id, rows, cols, seed, col * cellWidth, row * cellHeight, cellWidth, cellHeight);
+        const destinationX = Math.max(0, (col - 0.34) * cellWidth);
+        const destinationY = Math.max(0, (row - 0.34) * cellHeight);
+        const destinationRight = Math.min(size.width, (col + 1.34) * cellWidth);
+        const destinationBottom = Math.min(size.height, (row + 1.34) * cellHeight);
+        const destinationWidth = destinationRight - destinationX;
+        const destinationHeight = destinationBottom - destinationY;
+        const sourceX = destinationX * image.naturalWidth / size.width;
+        const sourceY = destinationY * image.naturalHeight / size.height;
+        const sourceWidth = destinationWidth * image.naturalWidth / size.width;
+        const sourceHeight = destinationHeight * image.naturalHeight / size.height;
+        context.save();
+        context.clip(path);
+        context.drawImage(
+          image,
+          sourceX,
+          sourceY,
+          sourceWidth,
+          sourceHeight,
+          destinationX,
+          destinationY,
+          destinationWidth,
+          destinationHeight,
+        );
+        context.restore();
+        context.strokeStyle = "rgba(21,21,21,.92)";
+        context.lineWidth = 3 * edgeScale * displayScale;
+        context.stroke(path);
+        context.strokeStyle = "rgba(255,255,255,.46)";
+        context.lineWidth = 0.9 * edgeScale * displayScale;
+        context.stroke(path);
+        drawnIdsRef.current.add(id);
+      }
+    }).catch(() => { /* The next image URL change retries the render. */ });
+    return () => { cancelled = true; };
+  }, [lockedIds, lockedIdsKey, rows, cols, seed, imageUrl, size]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="locked-pieces-canvas"
+      role="img"
+      aria-label={`${lockedIds.length} puzzle parçası doğru yerine yerleştirildi`}
+    />
+  );
+}, (previous, next) => previous.lockedIdsKey === next.lockedIdsKey
+  && previous.rows === next.rows
+  && previous.cols === next.cols
+  && previous.seed === next.seed
+  && previous.imageUrl === next.imageUrl);
+
+const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
+  piece,
+  zone,
+  rows,
+  cols,
+  seed,
+  imageUrl,
+  pieceCount,
+  isRecent,
+  isKeyboardPiece,
+  matColumn,
+  matRow,
+  onStart,
+  onLostCapture,
+  onFocusPiece,
+  onPlacePiece,
+}: {
+  piece: Piece;
+  zone: PieceZone;
+  rows: number;
+  cols: number;
+  seed: string;
+  imageUrl: string;
+  pieceCount: number;
+  isRecent: boolean;
+  isKeyboardPiece: boolean;
+  matColumn?: number;
+  matRow?: number;
+  onStart: (event: PointerEvent<HTMLDivElement>, piece: Piece) => void;
+  onLostCapture: (pieceId: number) => void;
+  onFocusPiece: (pieceId: number) => void;
+  onPlacePiece: (pieceId: number) => void;
+}) {
+  const isBoardPiece = zone === "board";
+  const style = isBoardPiece
+    ? { width: `${100 / cols}%`, height: `${100 / rows}%`, left: `${piece.x * 100}%`, top: `${piece.y * 100}%` }
+    : { gridColumn: matColumn, gridRow: matRow };
+  const densityClass = pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : "";
+  return (
+    <div
+      className={`puzzle-piece ${isBoardPiece ? "board-piece" : "mat-piece"} ${piece.locked ? "locked" : ""} ${isRecent ? "recent" : ""} ${densityClass}`}
+      style={style}
+      onPointerDown={(event) => onStart(event, piece)}
+      onLostPointerCapture={() => onLostCapture(piece.id)}
+      onFocus={() => onFocusPiece(piece.id)}
+      onKeyDown={(event) => {
+        if (!piece.locked && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onPlacePiece(piece.id);
+        }
+      }}
+      role="button"
+      tabIndex={!piece.locked && isKeyboardPiece ? 0 : -1}
+      aria-disabled={isBoardPiece ? piece.locked : undefined}
+      aria-label={`${piece.id + 1}. puzzle parçası${piece.locked ? ", yerleştirildi" : ". Enter ile doğru yerine yerleştir"}`}
+    >
+      <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} />
+    </div>
+  );
+});
+
 function formatCode(value: string) {
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  return value.toUpperCase().replace(/[^ABCDEFGHJKLMNPQRSTUVWXYZ23456789]/g, "").slice(0, 6);
 }
 
 async function readApiPayload<T>(response: Response): Promise<ApiPayload<T>> {
@@ -406,49 +636,80 @@ function isSupportedImageType(type: string) {
   return /^image\/(jpeg|jpg|png|webp)$/i.test(type);
 }
 
-async function validateImage(file: File) {
+async function validateImageBeforeDecode(file: File) {
+  const [buffer, validation] = await Promise.all([
+    file.arrayBuffer(),
+    import("@/lib/puzzle-validation"),
+  ]);
+  const validated = validation.validateImageBytes(new Uint8Array(buffer), file.type);
+  if (!validated) {
+    throw new Error("Fotoğraf okunamadı veya sınırları aşıyor. JPG, PNG ya da WebP biçiminde, en fazla 24 megapiksel bir görsel seç.");
+  }
+  return validated;
+}
+
+async function prepareUploadImage(file: File) {
   if (!isSupportedImageType(file.type)) {
     throw new Error("Yalnızca JPG, PNG veya WebP fotoğrafları kullanılabilir.");
   }
-  const objectUrl = URL.createObjectURL(file);
+  let bitmap: ImageBitmap | null = null;
+  let image: HTMLImageElement | null = null;
+  let objectUrl = "";
   try {
-    const image = await loadPuzzleImage(objectUrl);
-    return image.naturalWidth / image.naturalHeight || DEFAULT_IMAGE_ASPECT;
-  } finally {
-    puzzleImageCache.delete(objectUrl);
-    URL.revokeObjectURL(objectUrl);
-  }
-}
-
-async function prepareUploadFile(file: File) {
-  const maxDimension = 2400;
-  const maxBytes = 2.8 * 1024 * 1024;
-  if (file.size <= maxBytes) {
-    return file;
-  }
-  const objectUrl = URL.createObjectURL(file);
-  try {
-    const image = await loadPuzzleImage(objectUrl);
-    const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+    await validateImageBeforeDecode(file);
+    if (typeof createImageBitmap === "function") {
+      try {
+        bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+      } catch { /* HTMLImageElement remains the compatibility fallback. */ }
+    }
+    if (!bitmap) {
+      objectUrl = URL.createObjectURL(file);
+      image = await loadPuzzleImage(objectUrl);
+    }
+    const width = bitmap?.width ?? image?.naturalWidth ?? 0;
+    const height = bitmap?.height ?? image?.naturalHeight ?? 0;
+    const aspect = width / height || DEFAULT_IMAGE_ASPECT;
+    if (width <= 0 || height <= 0 || width > 12_000 || height > 12_000 || width * height > 24_000_000) {
+      throw new Error("Fotoğrafın çözünürlüğü çok yüksek. En fazla 24 megapiksel bir görsel seç.");
+    }
+    if (aspect < 0.2 || aspect > 5) {
+      throw new Error("Fotoğraf aşırı dar veya geniş. Dikey 9:16 dâhil, 1:5 ile 5:1 arası bir oran kullan.");
+    }
+    const maxDimension = 2400;
+    const maxBytes = 2.8 * 1024 * 1024;
+    if (file.size <= maxBytes && Math.max(width, height) <= maxDimension) return { file, aspect };
+    const scale = Math.min(1, maxDimension / Math.max(width, height));
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
     const context = canvas.getContext("2d");
-    if (!context) return file;
+    if (!context) return { file, aspect };
     context.fillStyle = "#fffdf7";
     context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap ?? image!, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.84));
-    if (!blob || blob.size >= file.size) return file;
-    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg", lastModified: Date.now() });
+    if (!blob || blob.size >= file.size) return { file, aspect };
+    return {
+      file: new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg", lastModified: Date.now() }),
+      aspect,
+    };
   } finally {
-    puzzleImageCache.delete(objectUrl);
-    URL.revokeObjectURL(objectUrl);
+    bitmap?.close();
+    if (objectUrl) {
+      puzzleImageCache.delete(objectUrl);
+      URL.revokeObjectURL(objectUrl);
+    }
   }
 }
 
 function avatarColor(index: number) {
   return ["#d3d3ff", "#ff6f61", "#4864ff", "#ffd84d"][index % 4];
+}
+
+function hasSameRoomPlayers(current: RoomPlayer[], next: RoomPlayer[]) {
+  if (current.length !== next.length) return false;
+  const currentById = new Map(current.map((player) => [player.clientId, player.nickname]));
+  return next.every((player) => currentById.get(player.clientId) === player.nickname);
 }
 
 function getStoredRoomCode() {
@@ -476,6 +737,7 @@ export default function Home() {
   const [pendingImageAspect, setPendingImageAspect] = useState<number | null>(null);
   const [selectedGalleryId, setSelectedGalleryId] = useState<string | null>(null);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+  const [galleryLoading, setGalleryLoading] = useState(true);
   const [previewSeed, setPreviewSeed] = useState("PREVIEW");
   const [codeInput, setCodeInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -496,41 +758,51 @@ export default function Home() {
   const [playerName, setPlayerName] = useState(() => getStoredNickname() || "Sen");
   const [nicknameInput, setNicknameInput] = useState(() => getStoredNickname());
   const [roomPlayers, setRoomPlayers] = useState<RoomPlayer[]>([]);
-  const [clientId] = useState(() => {
-    if (typeof window === "undefined") return "";
-    const storageKey = "puzzlebeyond-client-id";
-    const existing = localStorage.getItem(storageKey) || localStorage.getItem("parca-client-id");
-    if (existing) return existing;
-    const value = window.crypto.randomUUID();
-    localStorage.setItem(storageKey, value);
-    return value;
-  });
+  const clientId = "self";
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const boardAreaRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
+  const matRef = useRef<HTMLDivElement>(null);
+  const matScrollRef = useRef<HTMLDivElement>(null);
+  const piecesRef = useRef(pieces);
+  const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
+  const [boardZoom, setBoardZoom] = useState(1);
+  const [matColumnWindow, setMatColumnWindow] = useState({ start: 0, end: 20 });
   const lastLocalMove = useRef(0);
   const remoteUpdatedAt = useRef(0);
   const realtimeConnected = useRef(false);
-  const realtimeLastEventAt = useRef(0);
-  const realtimeSend = useRef<RealtimeSubscription["send"] | null>(null);
   const presenceRevoked = useRef(false);
   const hintTimer = useRef<number | null>(null);
   const roomSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const pendingRoomSaves = useRef(0);
+  const rafRef = useRef<number | null>(null);
   const dragRef = useRef<{
     id: number;
-    offsetX: number;
-    offsetY: number;
-    currentX: number;
-    currentY: number;
-    lastBroadcastAt: number;
+    clientX: number;
+    clientY: number;
+    width: number;
+    height: number;
+    originalStyle: string;
     element: HTMLDivElement;
   } | null>(null);
 
   useEffect(() => {
+    piecesRef.current = pieces;
+  }, [pieces]);
+
+  useEffect(() => {
+    let cancelled = false;
     const frame = window.requestAnimationFrame(() => {
-      setImageUrl(createDefaultImage());
       setPreviewSeed(crypto.randomUUID());
+      void createDefaultImage().then((url) => {
+        if (cancelled) return;
+        setImageUrl(url);
+      });
     });
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
   }, []);
   useEffect(() => {
     if (!imageUrl) return;
@@ -543,38 +815,71 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [imageUrl]);
   useEffect(() => {
+    const area = boardAreaRef.current;
+    if (!area || typeof ResizeObserver === "undefined") return;
+    const updateSize = () => {
+      const rect = area.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const width = Math.min(rect.width, rect.height * imageAspect);
+      const height = width / imageAspect;
+      setBoardSize((current) => Math.abs(current.width - width) < 0.5 && Math.abs(current.height - height) < 0.5
+        ? current
+        : { width, height });
+    };
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(area);
+    updateSize();
+    return () => observer.disconnect();
+  }, [imageAspect, galleryOpen, introCompletion, room?.code]);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setBoardZoom(1));
+    return () => window.cancelAnimationFrame(frame);
+  }, [room?.code, imageAspect]);
+  useEffect(() => {
     return () => {
-      if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
+      if (uploadPreviewUrl) {
+        puzzleImageCache.delete(uploadPreviewUrl);
+        URL.revokeObjectURL(uploadPreviewUrl);
+      }
     };
   }, [uploadPreviewUrl]);
   useEffect(() => {
+    if (room || (!galleryOpen && introCompletion !== "gallery") || galleryItems.length > 0) return;
     let cancelled = false;
-    const fallback = () => setGalleryItems(createGalleryItems());
-    void fetch("/api/gallery", { cache: "no-store" }).then(async (response) => {
-      if (!response.ok) throw new Error("Gallery request failed");
-      return await response.json() as { puzzles?: Array<GalleryItem & { kind?: GalleryKind; imageUrl?: string }>; setupRequired?: boolean };
-    }).then((payload) => {
+    void Promise.all([
+      fetch("/api/gallery").then(async (response) => {
+        if (!response.ok) throw new Error("Gallery request failed");
+        return await response.json() as { puzzles?: Array<GalleryItem & { kind?: GalleryKind; imageUrl?: string }>; setupRequired?: boolean };
+      }),
+      import("@/lib/gallery-images-client"),
+    ]).then(async ([payload, galleryImages]) => {
       if (cancelled) return;
-      const items = (payload.puzzles || []).map((item) => {
-        const kind = item.kind || "custom";
-        return {
-          id: item.id,
-          title: item.title,
-          description: item.description,
-          imageUrl: kind === "custom" ? (item.imageUrl || "") : createGalleryImage(kind),
-          rows: item.rows,
-          cols: item.cols,
-          count: item.count || item.rows * item.cols,
-          accent: item.accent,
-          kind,
-        } satisfies GalleryItem;
-      });
-      setGalleryItems(payload.setupRequired ? createGalleryItems() : items);
-    }).catch(() => {
-      if (!cancelled) fallback();
-    });
+      if (payload.setupRequired) {
+        const fallbackItems = await galleryImages.createFallbackGalleryItems();
+        if (!cancelled) setGalleryItems(fallbackItems);
+        return;
+      }
+      const items = (payload.puzzles || []).map((item) => ({
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        imageUrl: item.imageUrl || "",
+        rows: item.rows,
+        cols: item.cols,
+        count: item.count || item.rows * item.cols,
+        accent: item.accent,
+        kind: item.kind || "custom",
+      } satisfies GalleryItem));
+      const hydratedItems = await galleryImages.hydrateGalleryImages(items);
+      if (!cancelled) setGalleryItems(hydratedItems);
+    }).catch(async () => {
+      if (cancelled) return;
+      const galleryImages = await import("@/lib/gallery-images-client");
+      const fallbackItems = await galleryImages.createFallbackGalleryItems();
+      if (!cancelled) setGalleryItems(fallbackItems);
+    }).finally(() => { if (!cancelled) setGalleryLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [room, galleryOpen, introCompletion, galleryItems.length]);
   useEffect(() => {
     const storedCode = getStoredRoomCode();
     if (!storedCode) return;
@@ -587,8 +892,9 @@ export default function Home() {
       }
       if (cancelled) return;
       remoteUpdatedAt.current = data.room.updatedAt;
-      setRoom(data.room);
-      setPieces(normalizePieces(data.room));
+      const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
+      setRoom(nextRoom);
+      setPieces(nextRoom.pieces);
       setRoomPlayers([]);
       setImageUrl(data.room.imageUrl);
       setGalleryOpen(false);
@@ -600,14 +906,13 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
   useEffect(() => {
-    if (!clientId) return;
     const sendHeartbeat = async () => {
-      if (presenceRevoked.current) return;
+      if (presenceRevoked.current || document.hidden) return;
       try {
         const response = await fetch("/api/presence", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clientId, roomCode: room?.code ?? null, nickname: playerName }),
+          body: JSON.stringify({ roomCode: room?.code ?? null, nickname: playerName }),
         });
         if (response.status === 410) {
           presenceRevoked.current = true;
@@ -615,22 +920,25 @@ export default function Home() {
         }
       } catch { /* Presence is optional until the Supabase migration is run. */ }
     };
-    sendHeartbeat();
+    void sendHeartbeat();
     const timer = window.setInterval(sendHeartbeat, 20_000);
+    const heartbeatWhenVisible = () => { if (!document.hidden) void sendHeartbeat(); };
     const leave = () => {
       if (presenceRevoked.current) return;
-      const body = JSON.stringify({ clientId, leave: true });
+      const body = JSON.stringify({ leave: true });
       const beacon = new Blob([body], { type: "application/json" });
       if (!navigator.sendBeacon("/api/presence", beacon)) {
         void fetch("/api/presence", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
       }
     };
+    document.addEventListener("visibilitychange", heartbeatWhenVisible);
     window.addEventListener("pagehide", leave);
     return () => {
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", heartbeatWhenVisible);
       window.removeEventListener("pagehide", leave);
     };
-  }, [clientId, playerName, room?.code]);
+  }, [playerName, room?.code]);
   useEffect(() => {
     const roomCode = room?.code;
     if (!roomCode) {
@@ -638,65 +946,82 @@ export default function Home() {
     }
     let cancelled = false;
     const loadPlayers = async () => {
+      if (document.hidden) return;
       try {
         const response = await fetch(`/api/presence?roomCode=${encodeURIComponent(roomCode)}`, { cache: "no-store" });
         const data = await readApiPayload<{ players?: RoomPlayer[] }>(response);
-        if (response.ok && !cancelled) setRoomPlayers(data.players || []);
+        if (response.ok && !cancelled) {
+          const nextPlayers = data.players || [];
+          setRoomPlayers((current) => hasSameRoomPlayers(current, nextPlayers) ? current : nextPlayers);
+        }
       } catch { /* The local player card remains visible during brief outages. */ }
     };
     void loadPlayers();
-    const timer = window.setInterval(loadPlayers, 5_000);
+    const timer = window.setInterval(loadPlayers, 10_000);
+    const refreshWhenVisible = () => { if (!document.hidden) void loadPlayers(); };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [room?.code]);
   useEffect(() => () => {
     if (hintTimer.current) window.clearTimeout(hintTimer.current);
+    if (rafRef.current !== null) window.cancelAnimationFrame(rafRef.current);
+    if (dragRef.current) {
+      dragRef.current.element.classList.remove("dragging");
+      dragRef.current.element.setAttribute("style", dragRef.current.originalStyle);
+      dragRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
     const roomCode = room?.code;
-    realtimeConnected.current = false;
-    if (!roomCode) return;
+    const roomRows = room?.rows;
+    const roomCols = room?.cols;
+    if (!roomCode || !roomRows || !roomCols) return;
     let cancelled = false;
+    let refreshInFlight = false;
+    let lastRefreshAt = 0;
     let subscription: RealtimeSubscription | null = null;
+    realtimeConnected.current = false;
 
-    const applyRealtimeUpdate = (update: RealtimePieceUpdate) => {
-      if (cancelled || dragRef.current || (!update.optimistic && update.updatedAt <= remoteUpdatedAt.current) || (update.optimistic && update.updatedAt <= remoteUpdatedAt.current)) return;
-      realtimeLastEventAt.current = Date.now();
-      if (!update.optimistic) remoteUpdatedAt.current = update.updatedAt;
-      if (update.pieces) {
-        const nextPieces = update.pieces as Piece[];
-        setPieces(nextPieces);
-        setRoom((current) => current ? { ...current, pieces: nextPieces, updatedAt: update.updatedAt } : current);
-        return;
-      }
-      if (!update.piece) return;
-      const nextPiece = update.piece as Piece;
-      setPieces((current) => current.map((piece) => piece.id === nextPiece.id ? nextPiece : piece));
-      setRoom((current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          pieces: current.pieces.map((piece) => piece.id === nextPiece.id ? nextPiece : piece),
-          updatedAt: update.updatedAt,
-        };
-      });
+    const refreshAuthoritativeRoom = async () => {
+      const now = Date.now();
+      if (cancelled || document.hidden || refreshInFlight || dragRef.current || pendingRoomSaves.current > 0 || now - lastRefreshAt < 750) return;
+      refreshInFlight = true;
+      lastRefreshAt = now;
+      try {
+        const response = await fetch(`/api/room?code=${encodeURIComponent(roomCode)}&since=${remoteUpdatedAt.current}`, { cache: "no-store" });
+        if (response.status === 204 || !response.ok) return;
+        const data = await readApiPayload<{ room?: Room }>(response);
+        if (!data.room || data.room.code !== roomCode || data.room.rows !== roomRows || data.room.cols !== roomCols || data.room.updatedAt <= remoteUpdatedAt.current) return;
+        const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
+        remoteUpdatedAt.current = data.room.updatedAt;
+        setRoom(nextRoom);
+        setPieces(nextRoom.pieces);
+      } catch { /* Polling retries authoritative state after transient failures. */ }
+      finally { refreshInFlight = false; }
     };
 
-    void fetch("/api/realtime", { cache: "no-store" }).then(async (response) => {
+    // Public Realtime payloads are only wake-up hints. The REST room record is
+    // authoritative, so forged broadcasts cannot move pieces or poison clocks.
+    const applyRealtimeUpdate = () => { void refreshAuthoritativeRoom(); };
+
+    void fetch("/api/realtime").then(async (response) => {
       if (!response.ok) return null;
       return await response.json() as { enabled?: boolean; url?: string; key?: string };
-    }).then((config) => {
+    }).then(async (config) => {
       if (cancelled || !config?.enabled || !config.url || !config.key) return;
+      const { subscribeToRoomRealtime } = await import("@/lib/realtime-client");
+      if (cancelled) return;
       subscription = subscribeToRoomRealtime(
         { url: config.url, key: config.key },
         roomCode,
         applyRealtimeUpdate,
         (status) => { realtimeConnected.current = status === "connected"; },
       );
-      realtimeSend.current = subscription.send;
     }).catch(() => {
       // The since-polling fallback keeps rooms usable before Realtime is configured.
     });
@@ -704,24 +1029,90 @@ export default function Home() {
     return () => {
       cancelled = true;
       realtimeConnected.current = false;
-      realtimeSend.current = null;
       subscription?.unsubscribe();
     };
-  }, [room?.code]);
+  }, [room?.code, room?.rows, room?.cols]);
 
   const localSize = useMemo(() => PUZZLE_SIZES.find((option) => String(option.count) === difficulty) ?? PUZZLE_SIZES[0], [difficulty]);
   const selectedPuzzleSize = useMemo(() => fitPuzzleSize(localSize, pendingImageAspect ?? imageAspect), [localSize, pendingImageAspect, imageAspect]);
   const rows = room?.rows ?? DEFAULT_ROWS;
   const cols = room?.cols ?? DEFAULT_COLS;
   const pieceCount = rows * cols;
+  const puzzleSeed = room?.code ?? previewSeed;
+  const matRowCount = pieceCount <= 20 ? 1 : pieceCount <= 120 ? 2 : 3;
   const solvedCount = useMemo(() => pieces.filter((piece) => piece.locked).length, [pieces]);
   const remainingCount = pieceCount - solvedCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);
   const galleryVisible = !room && (galleryOpen || introCompletion === "gallery");
-  const workspaceAspect = imageAspect * BOARD.height / BOARD.width;
-  const hintPiece = useMemo(() => lastHeldPieceId === null
-    ? pieces.find((piece) => !piece.locked)
-    : pieces.find((piece) => piece.id === lastHeldPieceId), [lastHeldPieceId, pieces]);
+  const workspaceStyle = {
+    "--piece-aspect": imageAspect * rows / cols,
+    "--mat-rows": matRowCount,
+  } as CSSProperties;
+  const boardStyle = boardSize.width > 0
+    ? { width: `${boardSize.width * boardZoom}px`, height: `${boardSize.height * boardZoom}px` }
+    : { width: "100%", aspectRatio: imageAspect, maxHeight: "100%" };
+  const hintPiece = useMemo(() => pieces.find((piece) => piece.id === lastHeldPieceId && !piece.locked)
+    ?? pieces.find((piece) => !piece.locked), [lastHeldPieceId, pieces]);
+  const keyboardPieceId = pieces.find((piece) => piece.id === lastHeldPieceId && !piece.locked)?.id
+    ?? pieces.find((piece) => !piece.locked)?.id
+    ?? -1;
+  const boardPieces = useMemo(() => pieces.filter((piece) => piece.zone === "board" || piece.locked), [pieces]);
+  const interactiveBoardPieces = useMemo(() => pieceCount > 120
+    ? boardPieces.filter((piece) => !piece.locked)
+    : boardPieces, [boardPieces, pieceCount]);
+  const lockedIds = useMemo(() => pieces.filter((piece) => piece.locked).map((piece) => piece.id), [pieces]);
+  const lockedIdsKey = useMemo(() => lockedIds.join(","), [lockedIds]);
+  const matOrderIds = useMemo(() => Array.from({ length: pieceCount }, (_, id) => ({
+    id,
+    order: stablePieceOrder(puzzleSeed, id),
+  })).sort((left, right) => left.order - right.order || left.id - right.id).map((entry) => entry.id), [pieceCount, puzzleSeed]);
+  const matPieces = useMemo(() => {
+    const byId = new Map(pieces.map((piece) => [piece.id, piece]));
+    return matOrderIds.flatMap((id) => {
+      const piece = byId.get(id);
+      return piece && !piece.locked && piece.zone !== "board" ? [piece] : [];
+    });
+  }, [pieces, matOrderIds]);
+  const totalMatColumns = Math.ceil(matPieces.length / matRowCount);
+  const visibleMatPieces = useMemo(() => {
+    const firstIndex = Math.max(0, matColumnWindow.start * matRowCount);
+    const lastIndex = Math.min(matPieces.length, matColumnWindow.end * matRowCount);
+    const visible = matPieces.slice(firstIndex, lastIndex).map((piece, offset) => ({ piece, index: firstIndex + offset }));
+    const keyboardIndex = matPieces.findIndex((piece) => piece.id === keyboardPieceId);
+    if (keyboardIndex >= 0 && (keyboardIndex < firstIndex || keyboardIndex >= lastIndex)) {
+      visible.push({ piece: matPieces[keyboardIndex], index: keyboardIndex });
+      visible.sort((left, right) => left.index - right.index);
+    }
+    return visible;
+  }, [matPieces, matColumnWindow, matRowCount, keyboardPieceId]);
+
+  useEffect(() => {
+    const scroll = matScrollRef.current;
+    if (!scroll) return;
+    let frame: number | null = null;
+    const updateWindow = () => {
+      frame = null;
+      const style = window.getComputedStyle(scroll);
+      const columnWidth = Number.parseFloat(style.gridAutoColumns) || 64;
+      const columnGap = Number.parseFloat(style.columnGap) || 0;
+      const pitch = Math.max(1, columnWidth + columnGap);
+      const start = Math.max(0, Math.floor(scroll.scrollLeft / pitch) - 2);
+      const end = Math.min(totalMatColumns, Math.ceil((scroll.scrollLeft + scroll.clientWidth) / pitch) + 2);
+      setMatColumnWindow((current) => current.start === start && current.end === end ? current : { start, end });
+    };
+    const scheduleUpdate = () => {
+      if (frame === null) frame = window.requestAnimationFrame(updateWindow);
+    };
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleUpdate);
+    observer?.observe(scroll);
+    scroll.addEventListener("scroll", scheduleUpdate, { passive: true });
+    scheduleUpdate();
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+      scroll.removeEventListener("scroll", scheduleUpdate);
+    };
+  }, [totalMatColumns, matRowCount, puzzleSeed]);
   const commitNickname = () => {
     const name = normalizeNickname(nicknameInput);
     if (!name) {
@@ -751,7 +1142,6 @@ export default function Home() {
     const movedPiece = nextPieces.find((piece) => piece.id === movedId);
     if (!movedPiece) return;
     lastLocalMove.current = Date.now();
-    realtimeSend.current?.({ piece: movedPiece, updatedAt: Date.now(), optimistic: true });
     pendingRoomSaves.current += 1;
     const save = async () => {
       try {
@@ -764,7 +1154,8 @@ export default function Home() {
         const data = await readApiPayload<{ updatedAt?: number }>(response);
         remoteUpdatedAt.current = Math.max(remoteUpdatedAt.current, data.updatedAt ?? 0);
       } catch {
-        setNotice("Hamlen cihazında kaydedildi; bağlantı gelince tekrar eşitlenecek.");
+        remoteUpdatedAt.current = 0;
+        setNotice("Hamle sunucuya kaydedilemedi; oda durumu yeniden eşitlenecek.");
       } finally {
         pendingRoomSaves.current = Math.max(0, pendingRoomSaves.current - 1);
       }
@@ -776,7 +1167,6 @@ export default function Home() {
   const pushPieces = useCallback(async (nextPieces: Piece[]) => {
     if (!room) return;
     lastLocalMove.current = Date.now();
-    realtimeSend.current?.({ pieces: nextPieces, updatedAt: Date.now(), optimistic: true });
     pendingRoomSaves.current += 1;
     const save = async () => {
       try {
@@ -789,7 +1179,8 @@ export default function Home() {
         const data = await readApiPayload<{ updatedAt?: number }>(response);
         remoteUpdatedAt.current = Math.max(remoteUpdatedAt.current, data.updatedAt ?? 0);
       } catch {
-        setNotice("Hamlen cihazında kaydedildi; bağlantı gelince tekrar eşitlenecek.");
+        remoteUpdatedAt.current = 0;
+        setNotice("Toplu hamle kaydedilemedi; oda durumu yeniden eşitlenecek.");
       } finally {
         pendingRoomSaves.current = Math.max(0, pendingRoomSaves.current - 1);
       }
@@ -803,7 +1194,11 @@ export default function Home() {
     setSyncBusy(true);
     setHintVisible(false);
     if (dragRef.current) {
-      dragRef.current.element.classList.remove("dragging");
+      const drag = dragRef.current;
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      drag.element.classList.remove("dragging");
+      drag.element.setAttribute("style", drag.originalStyle);
       dragRef.current = null;
     }
     try {
@@ -812,8 +1207,9 @@ export default function Home() {
       if (!response.ok || !data.room) throw new Error(data.error || "Puzzle eşitlenemedi.");
       remoteUpdatedAt.current = data.room.updatedAt;
       lastLocalMove.current = Date.now();
-      setRoom(data.room);
-      setPieces(normalizePieces(data.room));
+      const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
+      setRoom(nextRoom);
+      setPieces(nextRoom.pieces);
       setLastHeldPieceId(null);
       setNotice("Puzzle tüm katılımcılarla eşitlendi.");
     } catch (error) {
@@ -826,9 +1222,14 @@ export default function Home() {
   useEffect(() => {
     const roomCode = room?.code;
     if (!roomCode) return;
-    const timer = window.setInterval(async () => {
-      const realtimeRecentlyDelivered = realtimeConnected.current && Date.now() - realtimeLastEventAt.current < 2500;
-      if (realtimeRecentlyDelivered || dragRef.current || pendingRoomSaves.current > 0 || Date.now() - lastLocalMove.current < 1200) return;
+    let lastPollAt = 0;
+    const pollRoom = async () => {
+      if (document.hidden) return;
+      if (dragRef.current || pendingRoomSaves.current > 0 || Date.now() - lastLocalMove.current < 1200) return;
+      const now = Date.now();
+      const minimumInterval = realtimeConnected.current ? 10_000 : 2_000;
+      if (now - lastPollAt < minimumInterval) return;
+      lastPollAt = now;
       try {
         const response = await fetch(`/api/room?code=${roomCode}&since=${remoteUpdatedAt.current}`, { cache: "no-store" });
         if (response.status === 204) return;
@@ -836,11 +1237,22 @@ export default function Home() {
         const data = await readApiPayload<{ room: Room }>(response);
         if (data.room.updatedAt <= remoteUpdatedAt.current) return;
         remoteUpdatedAt.current = data.room.updatedAt;
-        setRoom(data.room);
-        setPieces(normalizePieces(data.room));
+        const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
+        setRoom(nextRoom);
+        setPieces(nextRoom.pieces);
       } catch { /* Keep the board usable during brief connection drops. */ }
-    }, 400);
-    return () => window.clearInterval(timer);
+    };
+    const timer = window.setInterval(() => { void pollRoom(); }, 2_000);
+    const refreshWhenVisible = () => {
+      if (document.hidden) return;
+      lastPollAt = 0;
+      void pollRoom();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [room?.code]);
 
   const createRoom = async (galleryItem?: GalleryItem) => {
@@ -866,21 +1278,26 @@ export default function Home() {
       form.append("rows", String(r));
       form.append("cols", String(c));
       form.append("pieces", JSON.stringify(nextPieces));
-      if (galleryItem?.kind === "custom" && galleryItem.imageUrl.startsWith("/")) {
+      if (galleryItem) {
         const galleryResponse = await fetch(galleryItem.imageUrl, { cache: "no-store" });
         if (!galleryResponse.ok) throw new Error("Galeri görseli yüklenemedi.");
         const galleryBlob = await galleryResponse.blob();
         form.append("image", new File([galleryBlob], `${galleryItem.id}.jpg`, { type: galleryBlob.type || "image/jpeg" }));
-      } else if (galleryItem) form.append("defaultImage", galleryItem.imageUrl);
-      else if (file) form.append("image", file);
-      else form.append("defaultImage", imageUrl);
+      } else if (file) form.append("image", file);
+      else if (imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")) {
+        const defaultResponse = await fetch(imageUrl);
+        if (!defaultResponse.ok) throw new Error("Varsayılan puzzle görseli hazırlanamadı.");
+        const defaultBlob = await defaultResponse.blob();
+        form.append("image", new File([defaultBlob], "puzzlebeyond-default.jpg", { type: defaultBlob.type || "image/jpeg" }));
+      } else form.append("defaultImage", imageUrl);
       const response = await fetch("/api/room", { method: "POST", body: form });
       const data = await readApiPayload<{ room?: Room }>(response);
       if (!response.ok || !data.room) throw new Error(data.error || "Oda oluşturulamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
       storeRoomCode(data.room.code);
       setPendingImageAspect(null);
-      setRoom(data.room); setPieces(normalizePieces(data.room)); setRoomPlayers([]); setImageUrl(data.room.imageUrl); setUploadPreviewUrl("");
+      const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
+      setRoom(nextRoom); setPieces(nextRoom.pieces); setRoomPlayers([]); setImageUrl(data.room.imageUrl); setUploadPreviewUrl("");
       setIntroCompletion("idle");
       setGalleryOpen(false);
       setLastHeldPieceId(null);
@@ -901,7 +1318,8 @@ export default function Home() {
       remoteUpdatedAt.current = data.room.updatedAt;
       storeRoomCode(data.room.code);
       setPendingImageAspect(null);
-      setRoom(data.room); setPieces(normalizePieces(data.room)); setRoomPlayers([]); setImageUrl(data.room.imageUrl);
+      const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
+      setRoom(nextRoom); setPieces(nextRoom.pieces); setRoomPlayers([]); setImageUrl(data.room.imageUrl);
       setIntroCompletion("idle");
       setGalleryOpen(false);
       setLastHeldPieceId(null);
@@ -943,7 +1361,7 @@ export default function Home() {
     setFile(null);
     setUploadPreviewUrl("");
     setSelectedGalleryId(null);
-    setImageUrl(createDefaultImage());
+    void createDefaultImage().then(setImageUrl);
     setPieces(scatteredPieces(DEFAULT_ROWS, DEFAULT_COLS));
     setDifficulty("12");
     setTitle("Hafta sonu buluşması");
@@ -970,13 +1388,12 @@ export default function Home() {
     setBusy(true);
     setNotice("Fotoğraf hazırlanıyor…");
     try {
-      const selectedAspect = await validateImage(selected);
-      setPendingImageAspect(selectedAspect);
-      const preparedFile = await prepareUploadFile(selected);
-      setFile(preparedFile);
+      const prepared = await prepareUploadImage(selected);
+      setPendingImageAspect(prepared.aspect);
+      setFile(prepared.file);
       setSelectedGalleryId(null);
-      setUploadPreviewUrl(URL.createObjectURL(preparedFile));
-      setNotice(preparedFile === selected ? `${selected.name} kullanıma hazır.` : "Fotoğraf yükleme için optimize edildi.");
+      setUploadPreviewUrl(URL.createObjectURL(prepared.file));
+      setNotice(prepared.file === selected ? `${selected.name} kullanıma hazır.` : "Fotoğraf yükleme için optimize edildi.");
     } catch (error) {
       event.target.value = "";
       setFile(null);
@@ -986,57 +1403,66 @@ export default function Home() {
     }
   };
 
-  const rafRef = useRef<number | null>(null);
   const movePiece = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current || !boardRef.current) return;
+    if (!dragRef.current) return;
     const drag = dragRef.current;
-    const rect = boardRef.current.getBoundingClientRect();
-    const x = Math.max(0.005, Math.min(0.91, (event.clientX - rect.left) / rect.width - drag.offsetX));
-    const y = Math.max(0.005, Math.min(0.89, (event.clientY - rect.top) / rect.height - drag.offsetY));
-    drag.currentX = x;
-    drag.currentY = y;
+    drag.clientX = event.clientX;
+    drag.clientY = event.clientY;
     if (!rafRef.current) {
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null;
         if (dragRef.current) {
-          dragRef.current.element.style.left = `${dragRef.current.currentX * 100}%`;
-          dragRef.current.element.style.top = `${dragRef.current.currentY * 100}%`;
+          dragRef.current.element.style.left = `${dragRef.current.clientX - dragRef.current.width / 2}px`;
+          dragRef.current.element.style.top = `${dragRef.current.clientY - dragRef.current.height / 2}px`;
         }
       });
     }
-    const now = Date.now();
-    if (room && now - drag.lastBroadcastAt >= 80) {
-      realtimeSend.current?.({
-        piece: { id: drag.id, x, y, locked: false },
-        updatedAt: now,
-        optimistic: true,
-      });
-      drag.lastBroadcastAt = now;
+  }, []);
+
+  const cancelMove = useCallback(() => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     }
-  }, [room]);
+    drag.element.classList.remove("dragging");
+    drag.element.setAttribute("style", drag.originalStyle);
+    dragRef.current = null;
+  }, []);
 
   const endMove = useCallback(() => {
     if (!dragRef.current) return;
     const drag = dragRef.current;
     const movingId = drag.id;
-    drag.element.classList.remove("dragging");
-    dragRef.current = null;
-    const correctCol = movingId % cols;
-    const correctRow = Math.floor(movingId / cols);
-    const targetX = BOARD.left + correctCol * (BOARD.width / cols);
-    const targetY = BOARD.top + correctRow * (BOARD.height / rows);
-    const snaps = Math.abs(drag.currentX - targetX) < (BOARD.width / cols) * 0.72
-      && Math.abs(drag.currentY - targetY) < (BOARD.height / rows) * 0.72;
-    if (snaps) {
-      drag.element.style.transition = "none";
-      drag.element.style.left = `${targetX * 100}%`;
-      drag.element.style.top = `${targetY * 100}%`;
-      requestAnimationFrame(() => {
-        drag.element.style.transition = "";
-      });
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     }
-    const next = pieces.map((piece) => piece.id === movingId
-      ? { ...piece, x: snaps ? targetX : drag.currentX, y: snaps ? targetY : drag.currentY, locked: snaps }
+    drag.element.classList.remove("dragging");
+    drag.element.setAttribute("style", drag.originalStyle);
+    dragRef.current = null;
+    const rect = boardRef.current?.getBoundingClientRect();
+    const droppedOnBoard = Boolean(rect
+      && drag.clientX >= rect.left && drag.clientX <= rect.right
+      && drag.clientY >= rect.top && drag.clientY <= rect.bottom);
+    const maxX = Math.max(0, 1 - 1 / cols);
+    const maxY = Math.max(0, 1 - 1 / rows);
+    const boardX = rect ? Math.max(0, Math.min(maxX, (drag.clientX - rect.left) / rect.width - 1 / (2 * cols))) : 0;
+    const boardY = rect ? Math.max(0, Math.min(maxY, (drag.clientY - rect.top) / rect.height - 1 / (2 * rows))) : 0;
+    const { x: targetX, y: targetY } = pieceBoardTarget(movingId, rows, cols);
+    const snaps = droppedOnBoard
+      && Math.abs(boardX - targetX) < (1 / cols) * 0.72
+      && Math.abs(boardY - targetY) < (1 / rows) * 0.72;
+    const next = piecesRef.current.map((piece) => piece.id === movingId
+      ? {
+        ...piece,
+        x: droppedOnBoard ? (snaps ? targetX : boardX) : 0,
+        y: droppedOnBoard ? (snaps ? targetY : boardY) : 0,
+        zone: droppedOnBoard ? "board" as const : "mat" as const,
+        locked: snaps,
+        layoutVersion: PUZZLE_LAYOUT_VERSION,
+      }
       : piece);
     setPieces(next);
     void pushMove(next, movingId);
@@ -1044,7 +1470,71 @@ export default function Home() {
     if (snaps && !room && introCompletion === "idle" && next.every((piece) => piece.locked)) {
       setIntroCompletion("showing");
     }
-  }, [pieces, cols, rows, pushMove, room, introCompletion]);
+  }, [cols, rows, pushMove, room, introCompletion]);
+
+  useEffect(() => {
+    const cancelOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") cancelMove();
+    };
+    window.addEventListener("keydown", cancelOnEscape);
+    window.addEventListener("blur", cancelMove);
+    return () => {
+      window.removeEventListener("keydown", cancelOnEscape);
+      window.removeEventListener("blur", cancelMove);
+    };
+  }, [cancelMove]);
+
+  const placePieceFromKeyboard = useCallback((pieceId: number) => {
+    const target = pieceBoardTarget(pieceId, rows, cols);
+    const next = piecesRef.current.map((piece) => piece.id === pieceId
+      ? { ...piece, ...target, zone: "board" as const, locked: true, layoutVersion: PUZZLE_LAYOUT_VERSION }
+      : piece);
+    setPieces(next);
+    setLastHeldPieceId(pieceId);
+    setHintVisible(false);
+    void pushMove(next, pieceId);
+    setNotice("Tak! Parça klavyeyle doğru yerine yerleştirildi.");
+    if (!room && introCompletion === "idle" && next.every((piece) => piece.locked)) setIntroCompletion("showing");
+  }, [rows, cols, pushMove, room, introCompletion]);
+
+  const startMove = useCallback((event: PointerEvent<HTMLDivElement>, piece: Piece) => {
+    if (piece.locked || !boardRef.current || event.button !== 0 || !event.isPrimary) return;
+    if (dragRef.current) cancelMove();
+    const boardRect = boardRef.current.getBoundingClientRect();
+    const width = boardRect.width / cols;
+    const height = boardRect.height / rows;
+    const element = event.currentTarget;
+    const originalStyle = element.getAttribute("style") || "";
+    setLastHeldPieceId(piece.id);
+    setHintVisible(false);
+    event.preventDefault();
+    try { element.setPointerCapture(event.pointerId); } catch { /* Pointer capture can fail after an interrupted gesture. */ }
+    element.classList.add("dragging");
+    element.style.position = "fixed";
+    element.style.width = `${width}px`;
+    element.style.height = `${height}px`;
+    element.style.left = `${event.clientX - width / 2}px`;
+    element.style.top = `${event.clientY - height / 2}px`;
+    element.style.margin = "0";
+    element.style.zIndex = "1000";
+    dragRef.current = {
+      id: piece.id,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      width,
+      height,
+      originalStyle,
+      element,
+    };
+  }, [cancelMove, cols, rows]);
+
+  const handleLostPieceCapture = useCallback((pieceId: number) => {
+    if (dragRef.current?.id === pieceId) cancelMove();
+  }, [cancelMove]);
+
+  const focusPiece = useCallback((pieceId: number) => {
+    setLastHeldPieceId(pieceId);
+  }, []);
 
   const copyCode = useCallback(async () => {
     if (!room) return;
@@ -1065,64 +1555,21 @@ export default function Home() {
     hintTimer.current = window.setTimeout(() => setHintVisible(false), 3200);
   }, [hintPiece, lastHeldPieceId]);
 
-  const pushToSides = useCallback(() => {
-    const cellWidth = BOARD.width / cols;
-    const cellHeight = BOARD.height / rows;
-    const boardPadX = cellWidth * 0.3;
-    const boardPadY = cellHeight * 0.3;
-    const onBoard = pieces.filter((p) => {
-      if (p.locked) return false;
-      const cx = p.x + cellWidth / 2;
-      const cy = p.y + cellHeight / 2;
-      return cx >= BOARD.left - boardPadX && cx <= BOARD.left + BOARD.width + boardPadX
-        && cy >= BOARD.top - boardPadY && cy <= BOARD.top + BOARD.height + boardPadY;
-    });
-    if (onBoard.length === 0) {
-      setNotice("Tahta üzerinde kalan parça yok!");
+  const pushToMat = useCallback(() => {
+    const loosePieces = pieces.filter((piece) => !piece.locked);
+    if (loosePieces.length === 0) {
+      setNotice("Toplanacak serbest parça kalmadı!");
       return;
     }
     setHintVisible(false);
-    const stepX = cellWidth * 0.82;
-    const stepY = cellHeight * 0.82;
-    const slots: Array<{ x: number; y: number }> = [];
-    for (let y = 0.012; y <= 0.988 - cellHeight; y += stepY) {
-      for (let x = 0.012; x <= 0.988 - cellWidth; x += stepX) {
-        const fitsLeftTray = x + cellWidth * 0.9 < BOARD.left - 0.006;
-        const fitsRightTray = x > BOARD.left + BOARD.width + 0.006;
-        if (!fitsLeftTray && !fitsRightTray) continue;
-        slots.push({
-          x: Math.max(0.005, Math.min(0.99 - cellWidth, x + (Math.random() - 0.5) * cellWidth * 0.12)),
-          y: Math.max(0.005, Math.min(0.99 - cellHeight, y + (Math.random() - 0.5) * cellHeight * 0.12)),
-        });
-      }
-    }
-    for (let i = slots.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [slots[i], slots[j]] = [slots[j], slots[i]];
-    }
-    const ids = onBoard.map((p) => p.id);
-    for (let i = ids.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [ids[i], ids[j]] = [ids[j], ids[i]];
-    }
-    const fallbackX = (index: number) => index % 2 === 0
-      ? 0.006 + Math.random() * Math.max(0.006, BOARD.left - cellWidth - 0.018)
-      : BOARD.left + BOARD.width + 0.008 + Math.random() * Math.max(0.006, 0.982 - BOARD.left - BOARD.width - cellWidth);
     const next = pieces.map((piece) => {
-      if (piece.locked || !onBoard.some((p) => p.id === piece.id)) return piece;
-      const slotIndex = ids.indexOf(piece.id);
-      const slot = slots[slotIndex];
-      return {
-        ...piece,
-        x: slot?.x ?? fallbackX(slotIndex),
-        y: slot?.y ?? 0.01 + Math.random() * Math.max(0.01, 0.98 - cellHeight),
-        locked: false,
-      };
+      if (piece.locked) return piece;
+      return { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION };
     });
     setPieces(next);
     if (room) void pushPieces(next);
-    setNotice("Tahtadaki parçalar kenarlara dağıtıldı.");
-  }, [pieces, cols, rows, room, pushPieces]);
+    setNotice("Serbest parçalar aşağıdaki mata toplandı.");
+  }, [pieces, room, pushPieces]);
 
   const downloadCompletedImage = async () => {
     if (!room || progress !== 100 || downloadBusy) return;
@@ -1220,8 +1667,15 @@ export default function Home() {
             <div className="toolbar-right">
               {!room && !galleryVisible && <button className="skip-preview-button" onClick={skipPreviewPuzzle}>GALERİYE GEÇ →</button>}
               {room && <button className="sync-button" onClick={() => void forceSyncRoom()} disabled={syncBusy} title="Puzzle durumunu sunucudan yeniden al">{syncBusy ? "EŞİTLENİYOR…" : "↻ EŞİTLE"}</button>}
-              {(room || !galleryVisible) && <button className="push-sides-button" onClick={pushToSides} title="Kilitlenmemiş parçaları kenarlara topla">↹ KENARA İT</button>}
+              {(room || !galleryVisible) && <button className="push-mat-button" onClick={pushToMat} title="Kilitlenmemiş parçaları alttaki mata topla">↓ MATA TOPLA</button>}
               {(room || !galleryVisible) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
+              {(room || !galleryVisible) && (
+                <div className="zoom-controls" aria-label="Puzzle tahtası yakınlaştırma">
+                  <button type="button" onClick={() => setBoardZoom((zoom) => Math.max(1, zoom - .5))} disabled={boardZoom <= 1} aria-label="Uzaklaştır">−</button>
+                  <span>{boardZoom.toFixed(1)}×</span>
+                  <button type="button" onClick={() => setBoardZoom((zoom) => Math.min(3, zoom + .5))} disabled={boardZoom >= 3} aria-label="Yakınlaştır">+</button>
+                </div>
+              )}
               <div className="difficulty-pill" title={`${rows}×${cols}`}>{progress}% · {pieceCount} PARÇA</div>
             </div>
           </div>
@@ -1235,10 +1689,14 @@ export default function Home() {
                 <p>Bir karta dokunduğunda ortak oda açılır; kodu arkadaşlarınla paylaşabilirsin.</p>
               </div>
               <div className="gallery-grid">
-                {galleryItems.length === 0 && <p className="gallery-empty">Şimdilik hazır puzzle yok. Kendi fotoğrafınla ilk odayı kurabilirsin.</p>}
+                {galleryLoading
+                  ? <p className="gallery-empty">Hazır puzzlelar hazırlanıyor…</p>
+                  : galleryItems.length === 0 && <p className="gallery-empty">Şimdilik hazır puzzle yok. Kendi fotoğrafınla ilk odayı kurabilirsin.</p>}
                 {galleryItems.map((item) => (
                   <button key={item.id} className={`gallery-card ${selectedGalleryId === item.id ? "selected" : ""}`} onClick={() => selectGalleryPuzzle(item)} disabled={busy}>
-                    <img src={item.imageUrl} alt={`${item.title} puzzle görseli`} />
+                    {/* Generated and authenticated gallery URLs intentionally bypass the image optimizer. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={item.imageUrl} alt={`${item.title} puzzle görseli`} width={1200} height={800} loading="lazy" decoding="async" />
                     <span className="gallery-card-accent" style={{ background: item.accent }} />
                     <span className="gallery-card-copy"><b>{item.title}</b><small>{item.description}</small><em>{item.count} PARÇA · ORTAK ODA KUR →</em></span>
                   </button>
@@ -1252,77 +1710,105 @@ export default function Home() {
           ) : (
             <>
               <div
-                ref={boardRef}
+                ref={workspaceRef}
                 className={`puzzle-workspace ${previewReplay ? "preview-replay" : ""}`}
-                style={{ "--workspace-aspect": workspaceAspect } as CSSProperties}
+                style={workspaceStyle}
                 onPointerMove={movePiece}
                 onPointerUp={endMove}
-                onPointerCancel={endMove}
+                onPointerCancel={cancelMove}
               >
-                <div className="puzzle-board-guide">
-                  <div className="board-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}>
-                    {Array.from({ length: pieceCount }).map((_, i) => <span key={i} />)}
+                <div className={`puzzle-board-area ${boardZoom > 1 ? "zoomed" : ""}`} ref={boardAreaRef}>
+                  <div className="puzzle-board-guide" ref={boardRef} style={boardStyle} role="group" aria-label={`${rows} satır ve ${cols} sütunluk puzzle tahtası`} aria-describedby="puzzle-keyboard-help">
+                    <span className="sr-only" id="puzzle-keyboard-help">Bir parçaya odaklanıp Enter veya Boşluk tuşuyla doğru yerine yerleştirebilirsin.</span>
+                    <div
+                      className="board-grid"
+                      style={{
+                        "--grid-cell-width": `${100 / cols}%`,
+                        "--grid-cell-height": `${100 / rows}%`,
+                      } as CSSProperties}
+                      aria-hidden="true"
+                    />
+                    <p>PARÇALARI BURAYA YERLEŞTİR</p>
+                    {hintVisible && hintPiece && (
+                      <div
+                        className="hint-target"
+                        style={{
+                          left: `${(hintPiece.id % cols) * 100 / cols}%`,
+                          top: `${Math.floor(hintPiece.id / cols) * 100 / rows}%`,
+                          width: `${100 / cols}%`,
+                          height: `${100 / rows}%`,
+                        }}
+                      >
+                        <JigsawPiece id={hintPiece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
+                      </div>
+                    )}
+                    {pieceCount > 120 && lockedIds.length > 0 && (
+                      <LockedPiecesCanvas
+                        lockedIds={lockedIds}
+                        lockedIdsKey={lockedIdsKey}
+                        rows={rows}
+                        cols={cols}
+                        seed={puzzleSeed}
+                        imageUrl={imageUrl}
+                      />
+                    )}
+                    {interactiveBoardPieces.map((piece) => (
+                      <InteractivePuzzlePiece
+                        key={piece.id}
+                        piece={piece}
+                        zone="board"
+                        rows={rows}
+                        cols={cols}
+                        seed={puzzleSeed}
+                        imageUrl={imageUrl}
+                        pieceCount={pieceCount}
+                        isRecent={piece.id === lastHeldPieceId}
+                        isKeyboardPiece={piece.id === keyboardPieceId}
+                        onStart={startMove}
+                        onLostCapture={handleLostPieceCapture}
+                        onFocusPiece={focusPiece}
+                        onPlacePiece={placePieceFromKeyboard}
+                      />
+                    ))}
+                    {room && progress === 100 && (
+                      <div className="board-completion-card">
+                        <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
+                        <button className="download-image-button" type="button" onClick={() => void downloadCompletedImage()} disabled={downloadBusy}>{downloadBusy ? "HAZIRLANIYOR…" : "GÖRSELİ İNDİR ↓"}</button>
+                      </div>
+                    )}
+                    {!room && introCompletion === "showing" && (
+                      <div className="complete-badge intro-complete">
+                        <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
+                      </div>
+                    )}
                   </div>
-                  <p>PARÇALARI BURAYA YERLEŞTİR</p>
                 </div>
-                {hintVisible && hintPiece && (
-                  <div
-                    className="hint-target"
-                    style={{
-                      left: `${(BOARD.left + (hintPiece.id % cols) * BOARD.width / cols) * 100}%`,
-                      top: `${(BOARD.top + Math.floor(hintPiece.id / cols) * BOARD.height / rows) * 100}%`,
-                      width: `${BOARD.width * 100 / cols}%`,
-                      height: `${BOARD.height * 100 / rows}%`,
-                    }}
-                  >
-                    <JigsawPiece id={hintPiece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
+                <div className="piece-mat" ref={matRef} role="region" aria-label="Yerleştirilmeyi bekleyen puzzle parçaları">
+                  <div className="piece-mat-heading"><span>PARÇA MATI</span><small>{remainingCount} PARÇA</small></div>
+                  <div className="piece-mat-scroll" ref={matScrollRef}>
+                    {visibleMatPieces.map(({ piece, index }) => (
+                      <InteractivePuzzlePiece
+                        key={piece.id}
+                        piece={piece}
+                        zone="mat"
+                        rows={rows}
+                        cols={cols}
+                        seed={puzzleSeed}
+                        imageUrl={imageUrl}
+                        pieceCount={pieceCount}
+                        isRecent={piece.id === lastHeldPieceId}
+                        isKeyboardPiece={piece.id === keyboardPieceId}
+                        matColumn={Math.floor(index / matRowCount) + 1}
+                        matRow={(index % matRowCount) + 1}
+                        onStart={startMove}
+                        onLostCapture={handleLostPieceCapture}
+                        onFocusPiece={focusPiece}
+                        onPlacePiece={placePieceFromKeyboard}
+                      />
+                    ))}
+                    {totalMatColumns > 0 && <span className="mat-scroll-sizer" style={{ gridColumn: totalMatColumns, gridRow: 1 }} aria-hidden="true" />}
                   </div>
-                )}
-                {pieces.map((piece) => (
-                  <div
-                    key={piece.id}
-                    className={`puzzle-piece ${piece.locked ? "locked" : ""} ${piece.id === lastHeldPieceId ? "recent" : ""} ${pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : ""}`}
-                    style={{
-                      width: `${BOARD.width * 100 / cols}%`, height: `${BOARD.height * 100 / rows}%`,
-                      left: `${piece.x * 100}%`, top: `${piece.y * 100}%`,
-                    }}
-                    onPointerDown={(event) => {
-                      if (piece.locked || !boardRef.current) return;
-                      if (rafRef.current !== null) {
-                        cancelAnimationFrame(rafRef.current);
-                        rafRef.current = null;
-                      }
-                      setLastHeldPieceId(piece.id);
-                      setHintVisible(false);
-                      event.currentTarget.setPointerCapture(event.pointerId);
-                      const rect = boardRef.current.getBoundingClientRect();
-                      event.currentTarget.classList.add("dragging");
-                      dragRef.current = {
-                        id: piece.id,
-                        offsetX: (event.clientX - rect.left) / rect.width - piece.x,
-                        offsetY: (event.clientY - rect.top) / rect.height - piece.y,
-                        currentX: piece.x,
-                        currentY: piece.y,
-                        lastBroadcastAt: 0,
-                        element: event.currentTarget,
-                      };
-                    }}
-                    role="button" tabIndex={0} aria-label={`${piece.id + 1}. puzzle parçası`}
-                  >
-                    <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
-                  </div>
-                ))}
-                {room && progress === 100 && (
-                  <div className="board-completion-card">
-                    <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
-                    <button className="download-image-button" type="button" onClick={() => void downloadCompletedImage()} disabled={downloadBusy}>{downloadBusy ? "HAZIRLANIYOR…" : "GÖRSELİ İNDİR ↓"}</button>
-                  </div>
-                )}
-                {!room && introCompletion === "showing" && (
-                  <div className={`complete-badge ${room ? "" : "intro-complete"}`}>
-                    <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
-                  </div>
-                )}
+                </div>
               </div>
               <div className="mobile-room-actions">
                 {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
@@ -1371,7 +1857,13 @@ export default function Home() {
                 <label className="field"><span>Nickname</span><input value={nicknameInput} onChange={(e) => setNicknameInput(e.target.value)} maxLength={24} placeholder="Örn. Zeynep" /></label>
                 <label className="field"><span>Puzzle adı</span><input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={48} /></label>
                 <label className="upload-field">
-                  {(uploadPreviewUrl || imageUrl) ? <img src={uploadPreviewUrl || imageUrl} alt="Seçilen puzzle ön izlemesi" /> : <span className="upload-icon">＋</span>}
+                  {(uploadPreviewUrl || imageUrl) ? (
+                    <>
+                      {/* Generated and local preview URLs intentionally bypass the image optimizer. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={uploadPreviewUrl || imageUrl} alt="Seçilen puzzle ön izlemesi" width={95} height={74} loading="eager" decoding="async" />
+                    </>
+                  ) : <span className="upload-icon">＋</span>}
                   <div><b>{file ? file.name : selectedGalleryId ? "Galeriden seçilen puzzle" : "Fotoğrafını ekle"}</b><small>{selectedGalleryId ? "Hazır görsel seçildi · istersen değiştirebilirsin" : "JPG, PNG veya WEBP · en fazla 4 MB"}</small></div>
                   <input type="file" accept="image/jpeg,image/png,image/webp" onChange={onFile} />
                 </label>
@@ -1390,7 +1882,7 @@ export default function Home() {
                 <h2 id="dialog-title">Kodu gir, parçanı koy</h2>
                 <p className="dialog-copy">Sana gönderilen 6 karakterlik oda kodunu aşağıya yaz.</p>
                 <label className="field"><span>Nickname</span><input value={nicknameInput} onChange={(e) => setNicknameInput(e.target.value)} maxLength={24} placeholder="Örn. Zeynep" /></label>
-                <input className="code-input" autoFocus value={codeInput} onChange={(e) => setCodeInput(formatCode(e.target.value))} placeholder="A7K2P9" onKeyDown={(e) => e.key === "Enter" && joinRoom()} />
+                <input className="code-input" autoFocus value={codeInput} onChange={(e) => setCodeInput(formatCode(e.target.value))} placeholder="A7K2P9" maxLength={6} onKeyDown={(e) => e.key === "Enter" && joinRoom()} />
                 <button className="primary-button full dialog-submit" onClick={joinRoom} disabled={busy}>{busy ? "BAĞLANIYOR…" : "ODAYA KATIL →"}</button>
               </>
             ) : (

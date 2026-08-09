@@ -1,0 +1,23 @@
+# Local/generated artifacts that are not part of the Next.js deployment.
+.artifacts/
+.commandcode/
+.next/
+.openai/
+.vinext/
+.wrangler/
+dist/
+build/
+db/
+drizzle/
+examples/
+node_modules/
+outputs/
+work/
+worker/
+drizzle.config.ts
+vite.config.ts
+
+# Local state and logs.
+.devserver.*.log
+.dev3001.*.log
+*.tsbuildinfo

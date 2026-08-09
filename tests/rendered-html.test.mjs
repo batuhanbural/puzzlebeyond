@@ -9,15 +9,28 @@ async function read(relativePath) {
 }
 
 test("contains the puzzle app entry points", async () => {
-  const [page, layout, packageJson] = await Promise.all([
+  const [page, layout, styles, packageJson] = await Promise.all([
     read("app/page.tsx"),
     read("app/layout.tsx"),
+    read("app/globals.css"),
     read("package.json"),
   ]);
 
   assert.match(page, /export default function Home/);
   assert.match(page, /JigsawPiece/);
   assert.match(page, /GALERİYE GEÇ/);
+  assert.match(page, /type PieceZone = "board" \| "mat"/);
+  assert.match(page, /className="piece-mat"/);
+  assert.match(page, /MATA TOPLA/);
+  assert.match(page, /className="code-stamp">6</);
+  assert.match(page, /6 karakterlik oda kodunu/);
+  assert.match(page, /layoutVersion/);
+  assert.match(styles, /\.piece-mat/);
+  assert.doesNotMatch(
+    styles,
+    /\.piece-mat-scroll\s*\{[^}]*contain:[^;}]*(?:layout|paint)/,
+    "The scroll mat must not contain fixed-position drag previews",
+  );
   assert.match(layout, /generateMetadata|metadata/i);
   assert.match(packageJson, /\"build:vercel\"/);
 });

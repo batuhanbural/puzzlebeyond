@@ -75,12 +75,12 @@ export default function AdminPage() {
       setAuthenticated(false);
       return;
     }
-    const galleryPayload = await responsePayload<{ activeUsers: number; puzzles: AdminPuzzle[] }>(galleryResponse);
+    const galleryPayload = await responsePayload<{ puzzles: AdminPuzzle[] }>(galleryResponse);
     const sessionsPayload = await responsePayload<{ activeUsers: number; sessions: AdminSession[]; emptyRooms: AdminEmptyRoom[] }>(sessionsResponse);
     if (!galleryResponse.ok) throw new Error(galleryPayload.error || "Admin verileri okunamadı.");
     if (!sessionsResponse.ok) throw new Error(sessionsPayload.error || "Oturumlar okunamadı.");
     setData({
-      activeUsers: sessionsPayload.activeUsers ?? galleryPayload.activeUsers,
+      activeUsers: sessionsPayload.activeUsers,
       puzzles: galleryPayload.puzzles || [],
       sessions: sessionsPayload.sessions || [],
       emptyRooms: sessionsPayload.emptyRooms || [],
@@ -104,10 +104,17 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (authenticated !== true) return;
-    const timer = window.setInterval(() => {
-      if (!busy) void load().catch((error) => setNotice(error instanceof Error ? error.message : "Admin verileri yenilenemedi."));
-    }, 30_000);
-    return () => window.clearInterval(timer);
+    const refresh = () => {
+      if (document.hidden || busy) return;
+      void load().catch((error) => setNotice(error instanceof Error ? error.message : "Admin verileri yenilenemedi."));
+    };
+    const timer = window.setInterval(refresh, 30_000);
+    const refreshWhenVisible = () => { if (!document.hidden) refresh(); };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
   }, [authenticated, busy, load]);
 
   const login = async (event: FormEvent<HTMLFormElement>) => {
@@ -328,7 +335,7 @@ export default function AdminPage() {
           <p className="eyebrow">PUZZLEBEYOND / YÖNETİM</p>
           <h1>Admin paneli</h1>
           <p className="admin-muted">Bu alan yalnızca site sahibinin parolasıyla açılır.</p>
-          {!configured && <p className="admin-error">Vercel’de <code>ADMIN_PASSWORD</code> tanımlanmamış.</p>}
+          {!configured && <p className="admin-error">Vercel’de en az 12 karakterlik <code>ADMIN_PASSWORD</code> ve en az 32 karakterlik <code>ADMIN_SESSION_SECRET</code> tanımlanmalı.</p>}
           <form onSubmit={login} className="admin-login-form">
             <label><span>Admin parolası</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" autoFocus /></label>
             <button className="primary-button full" type="submit" disabled={busy || !configured}>{busy ? "KONTROL EDİLİYOR…" : "PANELE GİR →"}</button>
@@ -406,7 +413,13 @@ export default function AdminPage() {
           <div className="admin-puzzle-grid">
             {data?.puzzles.map((puzzle) => (
               <article className="admin-puzzle-card" key={puzzle.id}>
-                {puzzle.imageUrl ? <img src={puzzle.imageUrl} alt="" /> : <div className="admin-puzzle-placeholder" style={{ background: puzzle.accent }} />}
+                {puzzle.imageUrl ? (
+                  <>
+                    {/* Private gallery URLs intentionally bypass the image optimizer. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={puzzle.imageUrl} alt="" width={640} height={420} loading="lazy" decoding="async" />
+                  </>
+                ) : <div className="admin-puzzle-placeholder" style={{ background: puzzle.accent }} />}
                 <div className="admin-puzzle-copy"><b>{puzzle.title}</b><small>{puzzle.description || "Açıklama yok."}</small><span>{puzzle.count} PARÇA · {puzzle.rows}×{puzzle.cols}</span><button className="admin-delete-button" onClick={() => confirmAction(`"${puzzle.title}" galeriden silinsin mi?`, () => removePuzzle(puzzle))} disabled={busy}>ÇIKAR</button></div>
               </article>
             ))}

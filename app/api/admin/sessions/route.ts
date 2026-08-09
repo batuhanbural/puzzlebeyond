@@ -1,5 +1,6 @@
 import { deleteRoom, getActivePresences, getRoom, getRoomSummaries, removePresence, revokePresence, type PresenceRecord, type RoomSummary } from "@/lib/storage";
 import { isAdminRequest } from "@/lib/admin-auth";
+import { isValidRoomCode } from "@/lib/puzzle-validation";
 
 export const runtime = "nodejs";
 
@@ -98,7 +99,7 @@ export async function DELETE(request: Request) {
   const roomCode = searchParams.get("roomCode")?.trim().toUpperCase() || "";
   try {
     if (roomCode) {
-      if (!/^[A-Z0-9]{6}$/.test(roomCode)) return Response.json({ error: "Geçerli bir oda kodu gerekli." }, { status: 400 });
+      if (!isValidRoomCode(roomCode)) return Response.json({ error: "Geçerli bir oda kodu gerekli." }, { status: 400 });
       const room = await getRoom(roomCode);
       if (!room) return Response.json({ error: "Bu oda zaten silinmiş veya bulunamadı." }, { status: 404 });
       const activeRoomUser = (await activeSessions()).some((session) => session.room_code === roomCode);

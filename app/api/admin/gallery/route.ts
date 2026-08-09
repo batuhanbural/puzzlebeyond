@@ -3,9 +3,9 @@ import {
   createGalleryPuzzle,
   deleteGalleryImage,
   deleteGalleryPuzzle,
-  getActiveUserCount,
   getGalleryPuzzles,
   putGalleryImage,
+  validateImageUpload,
   type GalleryRecord,
 } from "@/lib/storage";
 import { isAdminRequest } from "@/lib/admin-auth";
@@ -13,6 +13,7 @@ import { isAdminRequest } from "@/lib/admin-auth";
 export const runtime = "nodejs";
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+const MAX_FORM_BYTES = Math.floor(4.5 * 1024 * 1024);
 
 function publicPuzzle(row: GalleryRecord) {
   return {
@@ -36,11 +37,8 @@ function unauthorized() {
 export async function GET(request: Request) {
   if (!isAdminRequest(request)) return unauthorized();
   try {
-    const [puzzles, activeUsers] = await Promise.all([
-      getGalleryPuzzles(),
-      getActiveUserCount(Date.now() - 90_000),
-    ]);
-    return Response.json({ activeUsers, puzzles: puzzles.map(publicPuzzle) }, { headers: { "Cache-Control": "no-store" } });
+    const puzzles = await getGalleryPuzzles();
+    return Response.json({ puzzles: puzzles.map(publicPuzzle) }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Admin verileri okunamadı:", error);
     return Response.json({ error: "Admin tabloları bulunamadı. Supabase migration dosyasını çalıştır." }, { status: 500 });
@@ -49,6 +47,10 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   if (!isAdminRequest(request)) return unauthorized();
+  const contentLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_FORM_BYTES) {
+    return Response.json({ error: "Yükleme isteği en fazla 4,5 MB olabilir." }, { status: 413 });
+  }
   let imageKey = "";
   try {
     const form = await request.formData();
@@ -68,8 +70,16 @@ export async function POST(request: Request) {
     if (file.size > MAX_IMAGE_BYTES) return Response.json({ error: "Görsel en fazla 4 MB olabilir." }, { status: 413 });
     if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return Response.json({ error: "Yalnızca JPG, PNG veya WebP kullanılabilir." }, { status: 415 });
 
+    const imageBody = await file.arrayBuffer();
+    let verifiedContentType: string;
+    try {
+      verifiedContentType = validateImageUpload(imageBody, file.type);
+    } catch {
+      return Response.json({ error: "Görsel içeriği veya boyutları geçersiz." }, { status: 415 });
+    }
+
     const id = `custom-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
-    imageKey = await putGalleryImage(id, await file.arrayBuffer(), file.type);
+    imageKey = await putGalleryImage(id, imageBody, verifiedContentType);
     const puzzle = await createGalleryPuzzle({
       id,
       title,
