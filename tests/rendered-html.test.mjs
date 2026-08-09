@@ -21,7 +21,9 @@ test("contains the puzzle app entry points", async () => {
   assert.match(page, /GALERİYE GEÇ/);
   assert.match(page, /type PieceZone = "board" \| "mat"/);
   assert.match(page, /function sidePiecePositions/);
-  assert.match(page, /MAX_VISIBLE_SIDE_PIECES = 120/);
+  assert.match(page, /function bandPiecePositions/);
+  assert.match(page, /MAX_VISIBLE_LOOSE_PIECES = 120/);
+  assert.match(page, /"horizontal-puzzle"/);
   assert.match(page, /"side-piece"/);
   assert.match(page, /KENARA İT/);
   assert.doesNotMatch(page, /className="piece-mat"/);
@@ -31,6 +33,10 @@ test("contains the puzzle app entry points", async () => {
   assert.match(page, /layoutVersion/);
   assert.match(styles, /\.puzzle-piece\.side-piece/);
   assert.match(styles, /\.puzzle-board-area\s*\{[^}]*left:20%;[^}]*top:15%;[^}]*width:60%;[^}]*height:70%/);
+  assert.match(styles, /@media \(max-width:760px\) and \(orientation:portrait\)/);
+  assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle\s*\{[^}]*--workspace-aspect:var\(--band-workspace-aspect\)/);
+  assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle \.puzzle-board-area\s*\{[^}]*left:6%;[^}]*top:26%;[^}]*width:88%;[^}]*height:48%/);
+  assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle \.puzzle-piece\.side-piece\s*\{[^}]*--band-piece-width/);
   assert.doesNotMatch(styles, /\.piece-mat/);
   assert.match(layout, /generateMetadata|metadata/i);
   assert.match(packageJson, /\"build:vercel\"/);

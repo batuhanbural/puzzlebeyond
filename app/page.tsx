@@ -41,8 +41,9 @@ const DEFAULT_IMAGE_ASPECT = 4 / 3;
 const ROOM_STORAGE_KEY = "puzzlebeyond-active-room";
 const NICKNAME_STORAGE_KEY = "puzzle-name";
 const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 } as const;
+const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 } as const;
 const PUZZLE_LAYOUT_VERSION = 3;
-const MAX_VISIBLE_SIDE_PIECES = 120;
+const MAX_VISIBLE_LOOSE_PIECES = 120;
 const PUZZLE_SIZES = [
   { count: 12, rows: 3, cols: 4, label: "RAHAT" },
   { count: 20, rows: 4, cols: 5, label: "KOLAY" },
@@ -200,9 +201,11 @@ function pieceBoardTarget(id: number, rows: number, cols: number) {
   };
 }
 
-type SidePiecePosition = { x: number; y: number };
+type PieceRailPosition = { x: number; y: number };
+type PieceRailMode = "sides" | "top-bottom";
+type BoardFrame = { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
 
-function sidePiecePositions(rows: number, cols: number, seed: string) {
+function pieceRailPositions(rows: number, cols: number, seed: string, board: BoardFrame, mode: PieceRailMode) {
   let state = Array.from(seed).reduce(
     (total, character) => Math.imul(total ^ character.charCodeAt(0), 2654435761),
     2166136261,
@@ -219,51 +222,82 @@ function sidePiecePositions(rows: number, cols: number, seed: string) {
     return values;
   };
   const count = rows * cols;
-  const cellWidth = BOARD.width / cols;
-  const cellHeight = BOARD.height / rows;
+  const cellWidth = board.width / cols;
+  const cellHeight = board.height / rows;
   const ids = shuffle(Array.from({ length: count }, (_, id) => id));
-  const positions = new Map<number, SidePiecePosition>();
+  const positions = new Map<number, PieceRailPosition>();
 
   if (count <= 20) {
-    const perSide = Math.ceil(count / 2);
+    const perRail = Math.ceil(count / 2);
     ids.forEach((id, index) => {
-      const side = index % 2;
+      const rail = index % 2;
       const slot = Math.floor(index / 2);
-      const y = Math.min(0.99 - cellHeight, ((slot + 0.18 + random() * 0.64) / perSide) * (0.99 - cellHeight));
-      const x = side === 0
-        ? 0.012 + random() * 0.018
-        : Math.min(0.99 - cellWidth, BOARD.left + BOARD.width + 0.014 + random() * 0.018);
+      const spread = (slot + 0.18 + random() * 0.64) / perRail;
+      const x = mode === "sides"
+        ? (rail === 0
+          ? 0.012 + random() * 0.018
+          : Math.min(0.99 - cellWidth, board.left + board.width + 0.014 + random() * 0.018))
+        : Math.min(0.99 - cellWidth, spread * (0.99 - cellWidth));
+      const y = mode === "top-bottom"
+        ? (rail === 0
+          ? 0.012 + random() * 0.018
+          : Math.min(0.99 - cellHeight, board.top + board.height + 0.014 + random() * 0.018))
+        : Math.min(0.99 - cellHeight, spread * (0.99 - cellHeight));
       positions.set(id, { x, y });
     });
     return positions;
   }
 
-  const slots: SidePiecePosition[] = [];
+  const firstRailSlots: PieceRailPosition[] = [];
+  const secondRailSlots: PieceRailPosition[] = [];
   const stepX = cellWidth * 0.82;
   const stepY = cellHeight * 0.82;
   for (let y = 0.012; y <= 0.988 - cellHeight; y += stepY) {
     for (let x = 0.012; x <= 0.988 - cellWidth; x += stepX) {
-      const fitsLeft = x + cellWidth * 0.9 < BOARD.left - 0.006;
-      const fitsRight = x > BOARD.left + BOARD.width + 0.006;
-      if (!fitsLeft && !fitsRight) continue;
-      slots.push({
+      const fitsFirst = mode === "sides"
+        ? x + cellWidth * 0.9 < board.left - 0.006
+        : y + cellHeight * 0.9 < board.top - 0.006;
+      const fitsSecond = mode === "sides"
+        ? x > board.left + board.width + 0.006
+        : y > board.top + board.height + 0.006;
+      if (!fitsFirst && !fitsSecond) continue;
+      const position = {
         x: Math.max(0.005, Math.min(0.99 - cellWidth, x + (random() - 0.5) * cellWidth * 0.12)),
         y: Math.max(0.005, Math.min(0.99 - cellHeight, y + (random() - 0.5) * cellHeight * 0.12)),
-      });
+      };
+      (fitsFirst ? firstRailSlots : secondRailSlots).push(position);
     }
   }
-  shuffle(slots);
+  shuffle(firstRailSlots);
+  shuffle(secondRailSlots);
+  const slots: PieceRailPosition[] = [];
+  for (let index = 0; index < Math.max(firstRailSlots.length, secondRailSlots.length); index++) {
+    if (firstRailSlots[index]) slots.push(firstRailSlots[index]);
+    if (secondRailSlots[index]) slots.push(secondRailSlots[index]);
+  }
   ids.forEach((id, index) => {
     const rawFallbackX = index % 2 === 0
-      ? 0.006 + random() * Math.max(0.006, BOARD.left - cellWidth - 0.018)
-      : BOARD.left + BOARD.width + 0.008 + random() * Math.max(0.006, 0.982 - BOARD.left - BOARD.width - cellWidth);
+      ? 0.006 + random() * Math.max(0.006, board.left - cellWidth - 0.018)
+      : board.left + board.width + 0.008 + random() * Math.max(0.006, 0.982 - board.left - board.width - cellWidth);
+    const rawFallbackY = index % 2 === 0
+      ? 0.006 + random() * Math.max(0.006, board.top - cellHeight - 0.018)
+      : board.top + board.height + 0.008 + random() * Math.max(0.006, 0.982 - board.top - board.height - cellHeight);
     const fallbackX = Math.max(0.005, Math.min(0.99 - cellWidth, rawFallbackX));
+    const fallbackY = Math.max(0.005, Math.min(0.99 - cellHeight, rawFallbackY));
     positions.set(id, slots[index] ?? {
-      x: fallbackX,
-      y: 0.01 + random() * Math.max(0.01, 0.98 - cellHeight),
+      x: mode === "sides" ? fallbackX : 0.01 + random() * Math.max(0.01, 0.98 - cellWidth),
+      y: mode === "top-bottom" ? fallbackY : 0.01 + random() * Math.max(0.01, 0.98 - cellHeight),
     });
   });
   return positions;
+}
+
+function sidePiecePositions(rows: number, cols: number, seed: string) {
+  return pieceRailPositions(rows, cols, seed, BOARD, "sides");
+}
+
+function bandPiecePositions(rows: number, cols: number, seed: string) {
+  return pieceRailPositions(rows, cols, seed, MOBILE_HORIZONTAL_BOARD, "top-bottom");
 }
 
 function scatteredPieces(rows: number, cols: number, _seed?: string) {
@@ -617,6 +651,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   isRecent,
   isKeyboardPiece,
   sidePosition,
+  bandPosition,
   onStart,
   onLostCapture,
   onFocusPiece,
@@ -631,7 +666,8 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   pieceCount: number;
   isRecent: boolean;
   isKeyboardPiece: boolean;
-  sidePosition?: SidePiecePosition;
+  sidePosition?: PieceRailPosition;
+  bandPosition?: PieceRailPosition;
   onStart: (event: PointerEvent<HTMLDivElement>, piece: Piece) => void;
   onLostCapture: (pieceId: number) => void;
   onFocusPiece: (pieceId: number) => void;
@@ -641,11 +677,15 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   const style = isBoardPiece
     ? { width: `${100 / cols}%`, height: `${100 / rows}%`, left: `${piece.x * 100}%`, top: `${piece.y * 100}%` }
     : {
-      width: `${BOARD.width * 100 / cols}%`,
-      height: `${BOARD.height * 100 / rows}%`,
-      left: `${(sidePosition?.x ?? 0) * 100}%`,
-      top: `${(sidePosition?.y ?? 0) * 100}%`,
-    };
+      "--side-piece-width": `${BOARD.width * 100 / cols}%`,
+      "--side-piece-height": `${BOARD.height * 100 / rows}%`,
+      "--side-piece-x": `${(sidePosition?.x ?? 0) * 100}%`,
+      "--side-piece-y": `${(sidePosition?.y ?? 0) * 100}%`,
+      "--band-piece-width": `${MOBILE_HORIZONTAL_BOARD.width * 100 / cols}%`,
+      "--band-piece-height": `${MOBILE_HORIZONTAL_BOARD.height * 100 / rows}%`,
+      "--band-piece-x": `${(bandPosition?.x ?? 0) * 100}%`,
+      "--band-piece-y": `${(bandPosition?.y ?? 0) * 100}%`,
+    } as CSSProperties;
   const densityClass = pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : "";
   return (
     <div
@@ -1101,9 +1141,11 @@ export default function Home() {
   const remainingCount = pieceCount - solvedCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);
   const galleryVisible = !room && (galleryOpen || introCompletion === "gallery");
-  const workspaceAspect = imageAspect * BOARD.height / BOARD.width;
+  const sideWorkspaceAspect = imageAspect * BOARD.height / BOARD.width;
+  const bandWorkspaceAspect = imageAspect * MOBILE_HORIZONTAL_BOARD.height / MOBILE_HORIZONTAL_BOARD.width;
   const workspaceStyle = {
-    "--workspace-aspect": workspaceAspect,
+    "--side-workspace-aspect": sideWorkspaceAspect,
+    "--band-workspace-aspect": bandWorkspaceAspect,
   } as CSSProperties;
   const boardStyle = boardSize.width > 0
     ? { width: `${boardSize.width * boardZoom}px`, height: `${boardSize.height * boardZoom}px` }
@@ -1120,17 +1162,18 @@ export default function Home() {
   const lockedIds = useMemo(() => pieces.filter((piece) => piece.locked).map((piece) => piece.id), [pieces]);
   const lockedIdsKey = useMemo(() => lockedIds.join(","), [lockedIds]);
   const sideLayout = useMemo(() => sidePiecePositions(rows, cols, puzzleSeed), [rows, cols, puzzleSeed]);
-  const sidePieces = useMemo(() => pieces
+  const bandLayout = useMemo(() => bandPiecePositions(rows, cols, puzzleSeed), [rows, cols, puzzleSeed]);
+  const loosePieces = useMemo(() => pieces
     .filter((piece) => !piece.locked && piece.zone !== "board")
     .sort((left, right) => left.id - right.id), [pieces]);
-  const visibleSidePieces = useMemo(() => {
-    if (sidePieces.length <= MAX_VISIBLE_SIDE_PIECES) return sidePieces;
-    const visible = sidePieces.slice(0, MAX_VISIBLE_SIDE_PIECES);
-    const keyboardPiece = sidePieces.find((piece) => piece.id === keyboardPieceId);
+  const visibleLoosePieces = useMemo(() => {
+    if (loosePieces.length <= MAX_VISIBLE_LOOSE_PIECES) return loosePieces;
+    const visible = loosePieces.slice(0, MAX_VISIBLE_LOOSE_PIECES);
+    const keyboardPiece = loosePieces.find((piece) => piece.id === keyboardPieceId);
     return keyboardPiece && !visible.some((piece) => piece.id === keyboardPiece.id)
       ? [...visible, keyboardPiece]
       : visible;
-  }, [sidePieces, keyboardPieceId]);
+  }, [loosePieces, keyboardPieceId]);
   const commitNickname = () => {
     const name = normalizeNickname(nicknameInput);
     if (!name) {
@@ -1590,7 +1633,7 @@ export default function Home() {
     });
     setPieces(next);
     if (room) void pushPieces(next);
-    setNotice("Serbest parçalar tahtanın iki yanına toplandı.");
+    setNotice("Serbest parçalar tahta çevresine toplandı.");
   }, [pieces, room, pushPieces]);
 
   const downloadCompletedImage = async () => {
@@ -1689,7 +1732,7 @@ export default function Home() {
             <div className="toolbar-right">
               {!room && !galleryVisible && <button className="skip-preview-button" onClick={skipPreviewPuzzle}>GALERİYE GEÇ →</button>}
               {room && <button className="sync-button" onClick={() => void forceSyncRoom()} disabled={syncBusy} title="Puzzle durumunu sunucudan yeniden al">{syncBusy ? "EŞİTLENİYOR…" : "↻ EŞİTLE"}</button>}
-              {(room || !galleryVisible) && <button className="push-sides-button" onClick={pushToSides} title="Kilitlenmemiş parçaları tahtanın iki yanına topla">↹ KENARA İT</button>}
+              {(room || !galleryVisible) && <button className="push-sides-button" onClick={pushToSides} title="Kilitlenmemiş parçaları tahta çevresine topla">↹ KENARA İT</button>}
               {(room || !galleryVisible) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
               {(room || !galleryVisible) && (
                 <div className="zoom-controls" aria-label="Puzzle tahtası yakınlaştırma">
@@ -1732,7 +1775,7 @@ export default function Home() {
           ) : (
             <>
               <div
-                className={`puzzle-workspace ${previewReplay ? "preview-replay" : ""}`}
+                className={`puzzle-workspace ${imageAspect > 1 ? "horizontal-puzzle" : ""} ${previewReplay ? "preview-replay" : ""}`}
                 style={workspaceStyle}
                 onPointerMove={movePiece}
                 onPointerUp={endMove}
@@ -1804,7 +1847,7 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-                {visibleSidePieces.map((piece) => (
+                {visibleLoosePieces.map((piece) => (
                   <InteractivePuzzlePiece
                     key={piece.id}
                     piece={piece}
@@ -1817,6 +1860,7 @@ export default function Home() {
                     isRecent={piece.id === lastHeldPieceId}
                     isKeyboardPiece={piece.id === keyboardPieceId}
                     sidePosition={sideLayout.get(piece.id)}
+                    bandPosition={bandLayout.get(piece.id)}
                     onStart={startMove}
                     onLostCapture={handleLostPieceCapture}
                     onFocusPiece={focusPiece}

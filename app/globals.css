@@ -98,7 +98,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .zoom-controls button:hover:not(:disabled) { background:var(--blue); color:var(--white); }
 .zoom-controls button:disabled { opacity:.35; cursor:default; }
 .zoom-controls span { min-width:34px; display:grid; place-items:center; font-size:7px; letter-spacing:0; }
-.puzzle-workspace { --workspace-aspect:1.55; position:relative; width:min(100%,calc((100dvh - 280px) * var(--workspace-aspect))); max-height:100%; min-width:0; min-height:0; aspect-ratio:var(--workspace-aspect); margin:auto; background:#d8d1c3; border:3px solid var(--ink); box-shadow:7px 7px 0 rgba(21,21,21,.22); overflow:hidden; touch-action:none; user-select:none; }
+.puzzle-workspace { --side-workspace-aspect:1.55; --band-workspace-aspect:1; --workspace-aspect:var(--side-workspace-aspect); position:relative; width:min(100%,calc((100dvh - 280px) * var(--workspace-aspect))); max-height:100%; min-width:0; min-height:0; aspect-ratio:var(--workspace-aspect); margin:auto; background:#d8d1c3; border:3px solid var(--ink); box-shadow:7px 7px 0 rgba(21,21,21,.22); overflow:hidden; touch-action:none; user-select:none; }
 .puzzle-workspace.preview-replay { animation:previewReplay .7s cubic-bezier(.22,.8,.24,1) both; }
 @keyframes previewReplay { from { opacity:0; transform:translateY(12px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
 .puzzle-workspace::before { content:""; position:absolute; inset:0; z-index:0; opacity:.22; background-image:radial-gradient(#151515 0.8px,transparent 0.8px); background-size:13px 13px; pointer-events:none; }
@@ -118,6 +118,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .puzzle-piece { position:absolute; z-index:5; cursor:grab; transition:left .16s ease-out, top .16s ease-out, filter .2s, transform .2s; touch-action:none; }
 .piece-canvas { position:absolute; left:-34%; top:-34%; width:168%; height:auto; display:block; overflow:visible; filter:drop-shadow(3px 4px 1px rgba(21,21,21,.4)); pointer-events:none; }
 .puzzle-piece:hover { z-index:30; filter:brightness(1.08); transform:scale(1.04) rotate(1deg); }
+.puzzle-piece:focus-visible { z-index:35; outline:3px solid var(--coral); outline-offset:2px; }
 .puzzle-piece:active { z-index:40; cursor:grabbing; transform:scale(1.07) rotate(-1deg); transition:none; }
 .puzzle-piece.dragging { z-index:1000; cursor:grabbing; transform:scale(1.035) rotate(-1deg); transition:none!important; filter:brightness(1.08); will-change:left,top; }
 .puzzle-piece.locked { z-index:4; cursor:default; }
@@ -127,7 +128,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .puzzle-piece.dense-piece .piece-canvas { filter:none; }
 .puzzle-piece.dense-piece.locked,.puzzle-piece.dense-piece.locked:hover { filter:none; }
 .puzzle-piece.recent { z-index:25; }
-.puzzle-piece.side-piece { transform-origin:center; }
+.puzzle-piece.side-piece { width:var(--side-piece-width); height:var(--side-piece-height); left:var(--side-piece-x); top:var(--side-piece-y); transform-origin:center; }
 .locked-pieces-canvas { position:absolute; z-index:4; inset:0; width:100%; height:100%; display:block; pointer-events:none; }
 .complete-badge { position:absolute; z-index:100; left:50%; top:50%; display:grid; justify-items:center; gap:9px; transform:translate(-50%,-50%) rotate(-2deg); padding:13px 20px; border:3px solid var(--ink); background:var(--lime); box-shadow:7px 7px 0 var(--ink); font-size:22px; font-weight:950; white-space:nowrap; }
 .complete-label { display:flex; align-items:center; }
@@ -276,6 +277,11 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
   .dialog { padding:28px 22px; }
   .dialog h2 { font-size:34px; }
   .code-input { font-size:30px; letter-spacing:8px; }
+}
+@media (max-width:760px) and (orientation:portrait) {
+  .puzzle-workspace.horizontal-puzzle { --workspace-aspect:var(--band-workspace-aspect); }
+  .puzzle-workspace.horizontal-puzzle .puzzle-board-area { left:6%; top:26%; width:88%; height:48%; }
+  .puzzle-workspace.horizontal-puzzle .puzzle-piece.side-piece { width:var(--band-piece-width); height:var(--band-piece-height); left:var(--band-piece-x); top:var(--band-piece-y); }
 }
 @media (max-height:560px) and (orientation:landscape) {
   .site-shell { min-height:100dvh; height:auto; grid-template-rows:48px minmax(0,1fr) 30px; overflow:auto; }
