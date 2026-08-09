@@ -52,6 +52,7 @@ function compileInlineLayoutHelpers(source) {
   const helperSpecs = [
     ["fitPuzzleSize", ["size", "aspect"]],
     ["pieceBoardTarget", ["id", "rows", "cols"]],
+    ["sidePiecePositions", ["rows", "cols", "seed"]],
     ["scatteredPieces", ["rows", "cols", "_seed"]],
     ["normalizePieceLayout", ["pieces", "rows", "cols", "seed"]],
   ];
@@ -59,14 +60,19 @@ function compileInlineLayoutHelpers(source) {
     extractFunction(source, name),
     name,
     parameters,
-  ).replace(/\s+as const\b/g, ""));
+  )
+    .replace(/\s+as const\b/g, "")
+    .replace(/const shuffle = <T,>\(values: T\[\]\) =>/, "const shuffle = (values) =>")
+    .replace(/const slots: SidePiecePosition\[\] =/, "const slots =")
+    .replace(/new Map<number, SidePiecePosition>\(\)/g, "new Map()"));
 
   const factory = Function(`
     "use strict";
     const DEFAULT_IMAGE_ASPECT = ${JSON.stringify(defaultAspect)};
     const PUZZLE_LAYOUT_VERSION = ${JSON.stringify(layoutVersion)};
+    const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, pieceBoardTarget, scatteredPieces, normalizePieceLayout };
+    return { fitPuzzleSize, pieceBoardTarget, sidePiecePositions, scatteredPieces, normalizePieceLayout };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
@@ -159,6 +165,45 @@ test("contained board sizing preserves every supported image aspect", async () =
   }
 });
 
+test("side-rail workspace preserves portrait and landscape board ratios", () => {
+  const board = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 };
+  for (const imageAspect of [9 / 16, 3 / 4, 1, 16 / 9]) {
+    const workspaceAspect = imageAspect * board.height / board.width;
+    const physicalBoardWidth = workspaceAspect * board.width;
+    const physicalBoardHeight = board.height;
+    assert.ok(Math.abs(physicalBoardWidth / physicalBoardHeight - imageAspect) < 1e-12);
+    assert.equal(board.left + board.width, 0.8);
+    assert.ok(board.top > 0 && board.top + board.height < 1);
+  }
+});
+
+test("side-piece projection is deterministic and remains inside both rails", async () => {
+  const { fitPuzzleSize, sidePiecePositions } = await helpersPromise;
+  const board = { left: 0.2, width: 0.6 };
+  for (const imageAspect of [9 / 16, 3 / 4, 1, 16 / 9]) {
+    for (const size of puzzleSizes) {
+      const { rows, cols, count } = fitPuzzleSize(size, imageAspect);
+      const first = sidePiecePositions(rows, cols, "ROOM42");
+      const second = sidePiecePositions(rows, cols, "ROOM42");
+      const cellWidth = board.width / cols;
+      const cellHeight = 0.7 / rows;
+      assert.equal(first.size, count);
+      assert.deepEqual([...first], [...second]);
+      for (const [id, position] of first) {
+        assert.ok(id >= 0 && id < count);
+        assert.ok(Number.isFinite(position.x) && Number.isFinite(position.y));
+        assert.ok(position.x >= 0.005 && position.x + cellWidth <= 0.991);
+        assert.ok(position.y >= 0.005 && position.y + cellHeight <= 0.991);
+        const centerX = position.x + cellWidth / 2;
+        assert.ok(
+          centerX < board.left || centerX > board.left + board.width,
+          `piece ${id} for ${rows}x${cols} must stay in a side rail`,
+        );
+      }
+    }
+  }
+});
+
 test("piece targets stay inside the normalized board for all reviewed grids", async () => {
   const { fitPuzzleSize, pieceBoardTarget } = await helpersPromise;
   for (const aspect of [9 / 16, 3 / 4, 1, 16 / 9]) {
@@ -243,13 +288,20 @@ test("piece normalization enforces board bounds and board/mat zones", async () =
   })));
 });
 
-test("the rendered puzzle keeps board and mat coordinate domains separate", async () => {
+test("the rendered puzzle projects the unplaced pool into bounded side rails", async () => {
   const source = await pageSourcePromise;
+  assert.match(source, /const BOARD = \{ left: 0\.2, top: 0\.15, width: 0\.6, height: 0\.7 \} as const/);
+  assert.match(source, /const workspaceAspect = imageAspect \* BOARD\.height \/ BOARD\.width/);
+  assert.match(source, /function sidePiecePositions/);
+  assert.match(source, /MAX_VISIBLE_SIDE_PIECES = 120/);
   assert.match(source, /piece\.zone === "board" \|\| piece\.locked/);
   assert.match(source, /!piece\.locked && piece\.zone !== "board"/);
+  assert.match(source, /!piece\.locked && piece\.zone === "board"/);
   assert.match(source, /zone: droppedOnBoard \? "board" as const : "mat" as const/);
   assert.match(source, /onPointerCancel=\{cancelMove\}/);
   assert.match(source, /onLostPointerCapture=/);
+  assert.match(source, /classList\.add\("drag-active"\)/);
+  assert.match(source, /classList\.remove\("drag-active"\)/);
   assert.match(source, /Math\.min\(3, zoom \+ \.5\)/, "dense portrait boards keep a bounded local zoom control");
   assert.match(source, /puzzle-board-area \$\{boardZoom > 1 \? "zoomed" : ""\}/);
 });

@@ -20,17 +20,18 @@ test("contains the puzzle app entry points", async () => {
   assert.match(page, /JigsawPiece/);
   assert.match(page, /GALERİYE GEÇ/);
   assert.match(page, /type PieceZone = "board" \| "mat"/);
-  assert.match(page, /className="piece-mat"/);
-  assert.match(page, /MATA TOPLA/);
+  assert.match(page, /function sidePiecePositions/);
+  assert.match(page, /MAX_VISIBLE_SIDE_PIECES = 120/);
+  assert.match(page, /"side-piece"/);
+  assert.match(page, /KENARA İT/);
+  assert.doesNotMatch(page, /className="piece-mat"/);
+  assert.doesNotMatch(page, /MATA TOPLA/);
   assert.match(page, /className="code-stamp">6</);
   assert.match(page, /6 karakterlik oda kodunu/);
   assert.match(page, /layoutVersion/);
-  assert.match(styles, /\.piece-mat/);
-  assert.doesNotMatch(
-    styles,
-    /\.piece-mat-scroll\s*\{[^}]*contain:[^;}]*(?:layout|paint)/,
-    "The scroll mat must not contain fixed-position drag previews",
-  );
+  assert.match(styles, /\.puzzle-piece\.side-piece/);
+  assert.match(styles, /\.puzzle-board-area\s*\{[^}]*left:20%;[^}]*top:15%;[^}]*width:60%;[^}]*height:70%/);
+  assert.doesNotMatch(styles, /\.piece-mat/);
   assert.match(layout, /generateMetadata|metadata/i);
   assert.match(packageJson, /\"build:vercel\"/);
 });

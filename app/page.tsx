@@ -40,7 +40,9 @@ const DEFAULT_COLS = 4;
 const DEFAULT_IMAGE_ASPECT = 4 / 3;
 const ROOM_STORAGE_KEY = "puzzlebeyond-active-room";
 const NICKNAME_STORAGE_KEY = "puzzle-name";
+const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 } as const;
 const PUZZLE_LAYOUT_VERSION = 3;
+const MAX_VISIBLE_SIDE_PIECES = 120;
 const PUZZLE_SIZES = [
   { count: 12, rows: 3, cols: 4, label: "RAHAT" },
   { count: 20, rows: 4, cols: 5, label: "KOLAY" },
@@ -198,14 +200,70 @@ function pieceBoardTarget(id: number, rows: number, cols: number) {
   };
 }
 
-function stablePieceOrder(seed: string, id: number) {
-  let hash = 2166136261;
-  const value = `${seed}:mat:${id}`;
-  for (let index = 0; index < value.length; index++) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
+type SidePiecePosition = { x: number; y: number };
+
+function sidePiecePositions(rows: number, cols: number, seed: string) {
+  let state = Array.from(seed).reduce(
+    (total, character) => Math.imul(total ^ character.charCodeAt(0), 2654435761),
+    2166136261,
+  ) >>> 0;
+  const random = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+  const shuffle = <T,>(values: T[]) => {
+    for (let index = values.length - 1; index > 0; index--) {
+      const swapIndex = Math.floor(random() * (index + 1));
+      [values[index], values[swapIndex]] = [values[swapIndex], values[index]];
+    }
+    return values;
+  };
+  const count = rows * cols;
+  const cellWidth = BOARD.width / cols;
+  const cellHeight = BOARD.height / rows;
+  const ids = shuffle(Array.from({ length: count }, (_, id) => id));
+  const positions = new Map<number, SidePiecePosition>();
+
+  if (count <= 20) {
+    const perSide = Math.ceil(count / 2);
+    ids.forEach((id, index) => {
+      const side = index % 2;
+      const slot = Math.floor(index / 2);
+      const y = Math.min(0.99 - cellHeight, ((slot + 0.18 + random() * 0.64) / perSide) * (0.99 - cellHeight));
+      const x = side === 0
+        ? 0.012 + random() * 0.018
+        : Math.min(0.99 - cellWidth, BOARD.left + BOARD.width + 0.014 + random() * 0.018);
+      positions.set(id, { x, y });
+    });
+    return positions;
   }
-  return hash >>> 0;
+
+  const slots: SidePiecePosition[] = [];
+  const stepX = cellWidth * 0.82;
+  const stepY = cellHeight * 0.82;
+  for (let y = 0.012; y <= 0.988 - cellHeight; y += stepY) {
+    for (let x = 0.012; x <= 0.988 - cellWidth; x += stepX) {
+      const fitsLeft = x + cellWidth * 0.9 < BOARD.left - 0.006;
+      const fitsRight = x > BOARD.left + BOARD.width + 0.006;
+      if (!fitsLeft && !fitsRight) continue;
+      slots.push({
+        x: Math.max(0.005, Math.min(0.99 - cellWidth, x + (random() - 0.5) * cellWidth * 0.12)),
+        y: Math.max(0.005, Math.min(0.99 - cellHeight, y + (random() - 0.5) * cellHeight * 0.12)),
+      });
+    }
+  }
+  shuffle(slots);
+  ids.forEach((id, index) => {
+    const rawFallbackX = index % 2 === 0
+      ? 0.006 + random() * Math.max(0.006, BOARD.left - cellWidth - 0.018)
+      : BOARD.left + BOARD.width + 0.008 + random() * Math.max(0.006, 0.982 - BOARD.left - BOARD.width - cellWidth);
+    const fallbackX = Math.max(0.005, Math.min(0.99 - cellWidth, rawFallbackX));
+    positions.set(id, slots[index] ?? {
+      x: fallbackX,
+      y: 0.01 + random() * Math.max(0.01, 0.98 - cellHeight),
+    });
+  });
+  return positions;
 }
 
 function scatteredPieces(rows: number, cols: number, _seed?: string) {
@@ -558,8 +616,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   pieceCount,
   isRecent,
   isKeyboardPiece,
-  matColumn,
-  matRow,
+  sidePosition,
   onStart,
   onLostCapture,
   onFocusPiece,
@@ -574,8 +631,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   pieceCount: number;
   isRecent: boolean;
   isKeyboardPiece: boolean;
-  matColumn?: number;
-  matRow?: number;
+  sidePosition?: SidePiecePosition;
   onStart: (event: PointerEvent<HTMLDivElement>, piece: Piece) => void;
   onLostCapture: (pieceId: number) => void;
   onFocusPiece: (pieceId: number) => void;
@@ -584,11 +640,16 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   const isBoardPiece = zone === "board";
   const style = isBoardPiece
     ? { width: `${100 / cols}%`, height: `${100 / rows}%`, left: `${piece.x * 100}%`, top: `${piece.y * 100}%` }
-    : { gridColumn: matColumn, gridRow: matRow };
+    : {
+      width: `${BOARD.width * 100 / cols}%`,
+      height: `${BOARD.height * 100 / rows}%`,
+      left: `${(sidePosition?.x ?? 0) * 100}%`,
+      top: `${(sidePosition?.y ?? 0) * 100}%`,
+    };
   const densityClass = pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : "";
   return (
     <div
-      className={`puzzle-piece ${isBoardPiece ? "board-piece" : "mat-piece"} ${piece.locked ? "locked" : ""} ${isRecent ? "recent" : ""} ${densityClass}`}
+      className={`puzzle-piece ${isBoardPiece ? "board-piece" : "side-piece"} ${piece.locked ? "locked" : ""} ${isRecent ? "recent" : ""} ${densityClass}`}
       style={style}
       onPointerDown={(event) => onStart(event, piece)}
       onLostPointerCapture={() => onLostCapture(piece.id)}
@@ -759,15 +820,11 @@ export default function Home() {
   const [nicknameInput, setNicknameInput] = useState(() => getStoredNickname());
   const [roomPlayers, setRoomPlayers] = useState<RoomPlayer[]>([]);
   const clientId = "self";
-  const workspaceRef = useRef<HTMLDivElement>(null);
   const boardAreaRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
-  const matRef = useRef<HTMLDivElement>(null);
-  const matScrollRef = useRef<HTMLDivElement>(null);
   const piecesRef = useRef(pieces);
   const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
   const [boardZoom, setBoardZoom] = useState(1);
-  const [matColumnWindow, setMatColumnWindow] = useState({ start: 0, end: 20 });
   const lastLocalMove = useRef(0);
   const remoteUpdatedAt = useRef(0);
   const realtimeConnected = useRef(false);
@@ -972,6 +1029,7 @@ export default function Home() {
     if (dragRef.current) {
       dragRef.current.element.classList.remove("dragging");
       dragRef.current.element.setAttribute("style", dragRef.current.originalStyle);
+      boardAreaRef.current?.classList.remove("drag-active");
       dragRef.current = null;
     }
   }, []);
@@ -1039,14 +1097,13 @@ export default function Home() {
   const cols = room?.cols ?? DEFAULT_COLS;
   const pieceCount = rows * cols;
   const puzzleSeed = room?.code ?? previewSeed;
-  const matRowCount = pieceCount <= 20 ? 1 : pieceCount <= 120 ? 2 : 3;
   const solvedCount = useMemo(() => pieces.filter((piece) => piece.locked).length, [pieces]);
   const remainingCount = pieceCount - solvedCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);
   const galleryVisible = !room && (galleryOpen || introCompletion === "gallery");
+  const workspaceAspect = imageAspect * BOARD.height / BOARD.width;
   const workspaceStyle = {
-    "--piece-aspect": imageAspect * rows / cols,
-    "--mat-rows": matRowCount,
+    "--workspace-aspect": workspaceAspect,
   } as CSSProperties;
   const boardStyle = boardSize.width > 0
     ? { width: `${boardSize.width * boardZoom}px`, height: `${boardSize.height * boardZoom}px` }
@@ -1062,57 +1119,18 @@ export default function Home() {
     : boardPieces, [boardPieces, pieceCount]);
   const lockedIds = useMemo(() => pieces.filter((piece) => piece.locked).map((piece) => piece.id), [pieces]);
   const lockedIdsKey = useMemo(() => lockedIds.join(","), [lockedIds]);
-  const matOrderIds = useMemo(() => Array.from({ length: pieceCount }, (_, id) => ({
-    id,
-    order: stablePieceOrder(puzzleSeed, id),
-  })).sort((left, right) => left.order - right.order || left.id - right.id).map((entry) => entry.id), [pieceCount, puzzleSeed]);
-  const matPieces = useMemo(() => {
-    const byId = new Map(pieces.map((piece) => [piece.id, piece]));
-    return matOrderIds.flatMap((id) => {
-      const piece = byId.get(id);
-      return piece && !piece.locked && piece.zone !== "board" ? [piece] : [];
-    });
-  }, [pieces, matOrderIds]);
-  const totalMatColumns = Math.ceil(matPieces.length / matRowCount);
-  const visibleMatPieces = useMemo(() => {
-    const firstIndex = Math.max(0, matColumnWindow.start * matRowCount);
-    const lastIndex = Math.min(matPieces.length, matColumnWindow.end * matRowCount);
-    const visible = matPieces.slice(firstIndex, lastIndex).map((piece, offset) => ({ piece, index: firstIndex + offset }));
-    const keyboardIndex = matPieces.findIndex((piece) => piece.id === keyboardPieceId);
-    if (keyboardIndex >= 0 && (keyboardIndex < firstIndex || keyboardIndex >= lastIndex)) {
-      visible.push({ piece: matPieces[keyboardIndex], index: keyboardIndex });
-      visible.sort((left, right) => left.index - right.index);
-    }
-    return visible;
-  }, [matPieces, matColumnWindow, matRowCount, keyboardPieceId]);
-
-  useEffect(() => {
-    const scroll = matScrollRef.current;
-    if (!scroll) return;
-    let frame: number | null = null;
-    const updateWindow = () => {
-      frame = null;
-      const style = window.getComputedStyle(scroll);
-      const columnWidth = Number.parseFloat(style.gridAutoColumns) || 64;
-      const columnGap = Number.parseFloat(style.columnGap) || 0;
-      const pitch = Math.max(1, columnWidth + columnGap);
-      const start = Math.max(0, Math.floor(scroll.scrollLeft / pitch) - 2);
-      const end = Math.min(totalMatColumns, Math.ceil((scroll.scrollLeft + scroll.clientWidth) / pitch) + 2);
-      setMatColumnWindow((current) => current.start === start && current.end === end ? current : { start, end });
-    };
-    const scheduleUpdate = () => {
-      if (frame === null) frame = window.requestAnimationFrame(updateWindow);
-    };
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleUpdate);
-    observer?.observe(scroll);
-    scroll.addEventListener("scroll", scheduleUpdate, { passive: true });
-    scheduleUpdate();
-    return () => {
-      if (frame !== null) window.cancelAnimationFrame(frame);
-      observer?.disconnect();
-      scroll.removeEventListener("scroll", scheduleUpdate);
-    };
-  }, [totalMatColumns, matRowCount, puzzleSeed]);
+  const sideLayout = useMemo(() => sidePiecePositions(rows, cols, puzzleSeed), [rows, cols, puzzleSeed]);
+  const sidePieces = useMemo(() => pieces
+    .filter((piece) => !piece.locked && piece.zone !== "board")
+    .sort((left, right) => left.id - right.id), [pieces]);
+  const visibleSidePieces = useMemo(() => {
+    if (sidePieces.length <= MAX_VISIBLE_SIDE_PIECES) return sidePieces;
+    const visible = sidePieces.slice(0, MAX_VISIBLE_SIDE_PIECES);
+    const keyboardPiece = sidePieces.find((piece) => piece.id === keyboardPieceId);
+    return keyboardPiece && !visible.some((piece) => piece.id === keyboardPiece.id)
+      ? [...visible, keyboardPiece]
+      : visible;
+  }, [sidePieces, keyboardPieceId]);
   const commitNickname = () => {
     const name = normalizeNickname(nicknameInput);
     if (!name) {
@@ -1199,6 +1217,7 @@ export default function Home() {
       rafRef.current = null;
       drag.element.classList.remove("dragging");
       drag.element.setAttribute("style", drag.originalStyle);
+      boardAreaRef.current?.classList.remove("drag-active");
       dragRef.current = null;
     }
     try {
@@ -1428,6 +1447,7 @@ export default function Home() {
     }
     drag.element.classList.remove("dragging");
     drag.element.setAttribute("style", drag.originalStyle);
+    boardAreaRef.current?.classList.remove("drag-active");
     dragRef.current = null;
   }, []);
 
@@ -1441,6 +1461,7 @@ export default function Home() {
     }
     drag.element.classList.remove("dragging");
     drag.element.setAttribute("style", drag.originalStyle);
+    boardAreaRef.current?.classList.remove("drag-active");
     dragRef.current = null;
     const rect = boardRef.current?.getBoundingClientRect();
     const droppedOnBoard = Boolean(rect
@@ -1510,6 +1531,7 @@ export default function Home() {
     event.preventDefault();
     try { element.setPointerCapture(event.pointerId); } catch { /* Pointer capture can fail after an interrupted gesture. */ }
     element.classList.add("dragging");
+    if (piece.zone === "board") boardAreaRef.current?.classList.add("drag-active");
     element.style.position = "fixed";
     element.style.width = `${width}px`;
     element.style.height = `${height}px`;
@@ -1555,20 +1577,20 @@ export default function Home() {
     hintTimer.current = window.setTimeout(() => setHintVisible(false), 3200);
   }, [hintPiece, lastHeldPieceId]);
 
-  const pushToMat = useCallback(() => {
-    const loosePieces = pieces.filter((piece) => !piece.locked);
-    if (loosePieces.length === 0) {
-      setNotice("Toplanacak serbest parça kalmadı!");
+  const pushToSides = useCallback(() => {
+    const boardLoosePieces = pieces.filter((piece) => !piece.locked && piece.zone === "board");
+    if (boardLoosePieces.length === 0) {
+      setNotice("Tahta üzerinde kenara alınacak parça yok!");
       return;
     }
     setHintVisible(false);
     const next = pieces.map((piece) => {
-      if (piece.locked) return piece;
+      if (piece.locked || piece.zone !== "board") return piece;
       return { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION };
     });
     setPieces(next);
     if (room) void pushPieces(next);
-    setNotice("Serbest parçalar aşağıdaki mata toplandı.");
+    setNotice("Serbest parçalar tahtanın iki yanına toplandı.");
   }, [pieces, room, pushPieces]);
 
   const downloadCompletedImage = async () => {
@@ -1667,7 +1689,7 @@ export default function Home() {
             <div className="toolbar-right">
               {!room && !galleryVisible && <button className="skip-preview-button" onClick={skipPreviewPuzzle}>GALERİYE GEÇ →</button>}
               {room && <button className="sync-button" onClick={() => void forceSyncRoom()} disabled={syncBusy} title="Puzzle durumunu sunucudan yeniden al">{syncBusy ? "EŞİTLENİYOR…" : "↻ EŞİTLE"}</button>}
-              {(room || !galleryVisible) && <button className="push-mat-button" onClick={pushToMat} title="Kilitlenmemiş parçaları alttaki mata topla">↓ MATA TOPLA</button>}
+              {(room || !galleryVisible) && <button className="push-sides-button" onClick={pushToSides} title="Kilitlenmemiş parçaları tahtanın iki yanına topla">↹ KENARA İT</button>}
               {(room || !galleryVisible) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
               {(room || !galleryVisible) && (
                 <div className="zoom-controls" aria-label="Puzzle tahtası yakınlaştırma">
@@ -1710,7 +1732,6 @@ export default function Home() {
           ) : (
             <>
               <div
-                ref={workspaceRef}
                 className={`puzzle-workspace ${previewReplay ? "preview-replay" : ""}`}
                 style={workspaceStyle}
                 onPointerMove={movePiece}
@@ -1783,32 +1804,25 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-                <div className="piece-mat" ref={matRef} role="region" aria-label="Yerleştirilmeyi bekleyen puzzle parçaları">
-                  <div className="piece-mat-heading"><span>PARÇA MATI</span><small>{remainingCount} PARÇA</small></div>
-                  <div className="piece-mat-scroll" ref={matScrollRef}>
-                    {visibleMatPieces.map(({ piece, index }) => (
-                      <InteractivePuzzlePiece
-                        key={piece.id}
-                        piece={piece}
-                        zone="mat"
-                        rows={rows}
-                        cols={cols}
-                        seed={puzzleSeed}
-                        imageUrl={imageUrl}
-                        pieceCount={pieceCount}
-                        isRecent={piece.id === lastHeldPieceId}
-                        isKeyboardPiece={piece.id === keyboardPieceId}
-                        matColumn={Math.floor(index / matRowCount) + 1}
-                        matRow={(index % matRowCount) + 1}
-                        onStart={startMove}
-                        onLostCapture={handleLostPieceCapture}
-                        onFocusPiece={focusPiece}
-                        onPlacePiece={placePieceFromKeyboard}
-                      />
-                    ))}
-                    {totalMatColumns > 0 && <span className="mat-scroll-sizer" style={{ gridColumn: totalMatColumns, gridRow: 1 }} aria-hidden="true" />}
-                  </div>
-                </div>
+                {visibleSidePieces.map((piece) => (
+                  <InteractivePuzzlePiece
+                    key={piece.id}
+                    piece={piece}
+                    zone="mat"
+                    rows={rows}
+                    cols={cols}
+                    seed={puzzleSeed}
+                    imageUrl={imageUrl}
+                    pieceCount={pieceCount}
+                    isRecent={piece.id === lastHeldPieceId}
+                    isKeyboardPiece={piece.id === keyboardPieceId}
+                    sidePosition={sideLayout.get(piece.id)}
+                    onStart={startMove}
+                    onLostCapture={handleLostPieceCapture}
+                    onFocusPiece={focusPiece}
+                    onPlacePiece={placePieceFromKeyboard}
+                  />
+                ))}
               </div>
               <div className="mobile-room-actions">
                 {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
