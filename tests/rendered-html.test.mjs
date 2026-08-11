@@ -65,6 +65,9 @@ test("pointer release commits a piece without replaying its movement", async () 
   assert.match(endMove, /event: PointerEvent<HTMLDivElement>/);
   assert.match(endMove, /drag\.clientX = event\.clientX/);
   assert.match(endMove, /drag\.clientY = event\.clientY/);
+  assert.match(endMove, /const matX = workspaceRect/);
+  assert.match(endMove, /const matY = workspaceRect/);
+  assert.match(endMove, /positioned: droppedOnBoard \? undefined : \(true as const\)/);
   assert.ok(
     endMove.indexOf("getBoundingClientRect()") < endMove.indexOf('setAttribute("style", drag.originalStyle)'),
     "drop geometry must be measured before restoring the pre-drag style",
@@ -127,7 +130,7 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   const hideRoom = styles.match(/@media \(max-width:1180px\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
   const hideBoth = styles.match(/@media \(max-width:900px\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
   const shortLandscape = styles.match(/@media \(max-height:640px\) and \(orientation:landscape\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
-  const phoneLandscape = styles.match(/@media \(orientation:landscape\) and \(hover:none\) and \(pointer:coarse\), \(max-height:500px\) and \(orientation:landscape\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
+  const phoneLandscape = styles.match(/@media \(max-width:1024px\) and \(orientation:landscape\), \(orientation:landscape\) and \(hover:none\) and \(pointer:coarse\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
 
   assert.match(hideRoom, /\.room-panel\s*\{\s*display:none/);
   assert.match(hideRoom, /grid-template-columns:minmax\(0,1fr\) 210px/);
@@ -143,6 +146,10 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.match(phoneLandscape, /\.site-shell\.puzzle-active \.mobile-room-actions/);
   assert.match(phoneLandscape, /grid-template-rows:minmax\(0,1fr\)/);
   assert.match(phoneLandscape, /width:min\(100%,calc\(100dvh \* var\(--workspace-aspect\)\)\)/);
+  assert.match(phoneLandscape, /--workspace-aspect:var\(--landscape-workspace-aspect\)/);
+  assert.match(phoneLandscape, /\.puzzle-board-area\s*\{[^}]*left:14%;[^}]*top:4%;[^}]*width:72%;[^}]*height:92%/);
+  assert.match(phoneLandscape, /\.puzzle-piece\.side-piece\s*\{[^}]*--landscape-piece-width/);
+  assert.match(page, /const sideX = piece\.positioned \? piece\.x/);
 });
 
 test("exposes the production API routes", async () => {

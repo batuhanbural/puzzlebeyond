@@ -108,6 +108,16 @@ test("piece validation canonicalizes solved targets and rejects hidden board coo
   assert.equal(normalizePuzzlePiece({ id: 11, x: 1, y: 1, zone: "mat", locked: true }, 3, 4), null);
   assert.equal(normalizePuzzlePiece({ id: 1, x: 0.76, y: 0, zone: "board", locked: false }, 3, 4), null);
   assert.equal(normalizePuzzlePiece({ id: "1", x: 0, y: 0, zone: "board", locked: false }, 3, 4), null);
+  assert.deepEqual(normalizePuzzlePiece({ id: 1, x: 0.4, y: 0.5, zone: "mat", positioned: true, locked: false }, 3, 4), {
+    id: 1,
+    x: 0.4,
+    y: 0.5,
+    locked: false,
+    layoutVersion: 3,
+    zone: "mat",
+    positioned: true,
+  });
+  assert.equal(normalizePuzzlePiece({ id: 1, x: 0.99, y: 0.5, zone: "mat", positioned: true, locked: false }, 3, 4), null);
 });
 
 test("uploaded images require matching magic bytes and safe portrait dimensions", () => {

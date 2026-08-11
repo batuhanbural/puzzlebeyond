@@ -10,6 +10,7 @@ export type Piece = {
   locked?: boolean;
   layoutVersion?: number;
   zone?: "board" | "mat";
+  positioned?: true;
 };
 export type RoomRecord = {
   code: string;

@@ -32,6 +32,12 @@ async function readPngDimensions(file) {
   return { width: image.readUInt32BE(16), height: image.readUInt32BE(20) };
 }
 
+async function pngHasTransparency(file) {
+  const image = await readFile(file);
+  const colorType = image[25];
+  return colorType === 4 || colorType === 6 || image.includes(Buffer.from("tRNS"));
+}
+
 async function findFiles(directory, suffix) {
   const matches = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -121,8 +127,12 @@ test("profile-style site icons have the expected sizes and metadata", async () =
     assert.deepEqual(icon.dimensions, { width: icon.size, height: icon.size });
     assert.ok(icon.stats.size <= 160 * kibibytes, `${icon.name} exceeds its 160 KiB budget`);
     assert.match(layout, new RegExp(`/${icon.name.replace(".", "\\.")}`));
+    assert.equal(await pngHasTransparency(path.join(projectRoot, "public", icon.name)), true, `${icon.name} must have transparent corners`);
   }
-  assert.doesNotMatch(layout, /favicon\.svg/);
+  const svg = await readFile(path.join(projectRoot, "public", "icon.svg"), "utf8");
+  assert.match(layout, /url: "\/icon\.svg", type: "image\/svg\+xml"/);
+  assert.match(svg, /<svg[^>]*viewBox="0 0 512 512"/);
+  assert.doesNotMatch(svg, /<rect[^>]+(?:fill="#fff|fill="white)/i);
 });
 
 test("client manifests do not include server and alternate-host packages", async () => {

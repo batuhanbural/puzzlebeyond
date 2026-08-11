@@ -5,7 +5,7 @@ import type { GalleryKind } from "@/lib/gallery";
 import type { RealtimeSubscription, RoomActionMessage, RoomDragMessage } from "@/lib/realtime-client";
 
 type PieceZone = "board" | "mat";
-type Piece = { id: number; x: number; y: number; locked?: boolean; layoutVersion?: number; zone?: PieceZone };
+type Piece = { id: number; x: number; y: number; locked?: boolean; layoutVersion?: number; zone?: PieceZone; positioned?: true };
 type Room = {
   code: string;
   title: string;
@@ -58,6 +58,7 @@ const ROOM_STORAGE_KEY = "puzzlebeyond-active-room";
 const NICKNAME_STORAGE_KEY = "puzzle-name";
 const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 } as const;
 const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 } as const;
+const MOBILE_LANDSCAPE_BOARD = { left: 0.14, top: 0.04, width: 0.72, height: 0.92 } as const;
 const PUZZLE_LAYOUT_VERSION = 3;
 const MAX_VISIBLE_LOOSE_PIECES = 120;
 const LIVE_DRAG_INTERVAL_MS = 33;
@@ -371,6 +372,10 @@ function bandPiecePositions(rows: number, cols: number, seed: string) {
   return pieceRailPositions(rows, cols, seed, MOBILE_HORIZONTAL_BOARD, "top-bottom");
 }
 
+function landscapePiecePositions(rows: number, cols: number, seed: string) {
+  return pieceRailPositions(rows, cols, seed, MOBILE_LANDSCAPE_BOARD, "sides");
+}
+
 function scatteredPieces(rows: number, cols: number, _seed?: string) {
   void _seed;
   return Array.from({ length: rows * cols }, (_, id) => ({
@@ -397,8 +402,15 @@ function normalizePieceLayout(pieces: Piece[], rows: number, cols: number, seed:
       && piece.zone === "board"
       && Number.isFinite(piece.x) && Number.isFinite(piece.y)
       && piece.x >= 0 && piece.x <= maxX && piece.y >= 0 && piece.y <= maxY;
+    const usesPositionedMat = piece.layoutVersion === PUZZLE_LAYOUT_VERSION
+      && piece.zone === "mat" && piece.positioned === true
+      && Number.isFinite(piece.x) && Number.isFinite(piece.y)
+      && piece.x >= 0 && piece.x <= 1 - 0.6 / cols
+      && piece.y >= 0 && piece.y <= 1 - 0.48 / rows;
     return usesCurrentLayout
       ? { ...piece, id, zone: "board" as const, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION }
+      : usesPositionedMat
+        ? { ...piece, id, zone: "mat" as const, locked: false, positioned: true as const, layoutVersion: PUZZLE_LAYOUT_VERSION }
       : { id, x: 0, y: 0, zone: "mat" as const, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION };
   });
 }
@@ -731,6 +743,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   playerColor,
   sidePosition,
   bandPosition,
+  landscapePosition,
   onStart,
   onLostCapture,
   onFocusPiece,
@@ -749,12 +762,19 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   playerColor: string;
   sidePosition?: PieceRailPosition;
   bandPosition?: PieceRailPosition;
+  landscapePosition?: PieceRailPosition;
   onStart: (event: PointerEvent<HTMLDivElement>, piece: Piece) => void;
   onLostCapture: (pieceId: number) => void;
   onFocusPiece: (pieceId: number) => void;
   onPlacePiece: (pieceId: number) => void;
 }) {
   const isBoardPiece = zone === "board";
+  const sideX = piece.positioned ? piece.x : sidePosition?.x ?? 0;
+  const sideY = piece.positioned ? piece.y : sidePosition?.y ?? 0;
+  const bandX = piece.positioned ? piece.x : bandPosition?.x ?? 0;
+  const bandY = piece.positioned ? piece.y : bandPosition?.y ?? 0;
+  const landscapeX = piece.positioned ? piece.x : landscapePosition?.x ?? 0;
+  const landscapeY = piece.positioned ? piece.y : landscapePosition?.y ?? 0;
   const style = isBoardPiece
     ? {
       "--player-color": playerColor,
@@ -767,12 +787,16 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
       "--player-color": playerColor,
       "--side-piece-width": `${BOARD.width * 100 / cols}%`,
       "--side-piece-height": `${BOARD.height * 100 / rows}%`,
-      "--side-piece-x": `${(sidePosition?.x ?? 0) * 100}%`,
-      "--side-piece-y": `${(sidePosition?.y ?? 0) * 100}%`,
+      "--side-piece-x": `${sideX * 100}%`,
+      "--side-piece-y": `${sideY * 100}%`,
       "--band-piece-width": `${MOBILE_HORIZONTAL_BOARD.width * 100 / cols}%`,
       "--band-piece-height": `${MOBILE_HORIZONTAL_BOARD.height * 100 / rows}%`,
-      "--band-piece-x": `${(bandPosition?.x ?? 0) * 100}%`,
-      "--band-piece-y": `${(bandPosition?.y ?? 0) * 100}%`,
+      "--band-piece-x": `${bandX * 100}%`,
+      "--band-piece-y": `${bandY * 100}%`,
+      "--landscape-piece-width": `${MOBILE_LANDSCAPE_BOARD.width * 100 / cols}%`,
+      "--landscape-piece-height": `${MOBILE_LANDSCAPE_BOARD.height * 100 / rows}%`,
+      "--landscape-piece-x": `${landscapeX * 100}%`,
+      "--landscape-piece-y": `${landscapeY * 100}%`,
     } as CSSProperties;
   const densityClass = pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : "";
   return (
@@ -1029,6 +1053,7 @@ export default function Home() {
   const clientId = "self";
   const boardAreaRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const piecesRef = useRef(pieces);
   const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
   const lastLocalMove = useRef(0);
@@ -1333,7 +1358,7 @@ export default function Home() {
       setPieces((current) => {
         const next = current.map((piece) => piece.locked || piece.zone !== "board"
           ? piece
-          : { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION });
+          : { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, positioned: undefined, layoutVersion: PUZZLE_LAYOUT_VERSION });
         piecesRef.current = next;
         return next;
       });
@@ -1398,9 +1423,11 @@ export default function Home() {
   const galleryVisible = !room && (galleryOpen || introCompletion === "gallery");
   const sideWorkspaceAspect = imageAspect * BOARD.height / BOARD.width;
   const bandWorkspaceAspect = imageAspect * MOBILE_HORIZONTAL_BOARD.height / MOBILE_HORIZONTAL_BOARD.width;
+  const landscapeWorkspaceAspect = imageAspect * MOBILE_LANDSCAPE_BOARD.height / MOBILE_LANDSCAPE_BOARD.width;
   const workspaceStyle = {
     "--side-workspace-aspect": sideWorkspaceAspect,
     "--band-workspace-aspect": bandWorkspaceAspect,
+    "--landscape-workspace-aspect": landscapeWorkspaceAspect,
   } as CSSProperties;
   const boardStyle = boardSize.width > 0
     ? { width: `${boardSize.width}px`, height: `${boardSize.height}px` }
@@ -1419,6 +1446,7 @@ export default function Home() {
   const lockedIdsKey = useMemo(() => lockedIds.join(","), [lockedIds]);
   const sideLayout = useMemo(() => sidePiecePositions(rows, cols, puzzleSeed), [rows, cols, puzzleSeed]);
   const bandLayout = useMemo(() => bandPiecePositions(rows, cols, puzzleSeed), [rows, cols, puzzleSeed]);
+  const landscapeLayout = useMemo(() => landscapePiecePositions(rows, cols, puzzleSeed), [rows, cols, puzzleSeed]);
   const loosePieces = useMemo(() => pieces
     .filter((piece) => !piece.locked && piece.zone !== "board")
     .sort((left, right) => left.id - right.id), [pieces]);
@@ -1807,6 +1835,7 @@ export default function Home() {
       rafRef.current = null;
     }
     const rect = boardRef.current?.getBoundingClientRect();
+    const workspaceRect = workspaceRef.current?.getBoundingClientRect();
     const droppedOnBoard = Boolean(rect
       && drag.clientX >= rect.left && drag.clientX <= rect.right
       && drag.clientY >= rect.top && drag.clientY <= rect.bottom);
@@ -1820,6 +1849,12 @@ export default function Home() {
       && Math.abs(boardY - targetY) < (1 / rows) * 0.72;
     const finalBoardX = snaps ? targetX : boardX;
     const finalBoardY = snaps ? targetY : boardY;
+    const matX = workspaceRect
+      ? Math.max(0, Math.min(1 - drag.width / workspaceRect.width, (drag.clientX - workspaceRect.left - drag.width / 2) / workspaceRect.width))
+      : 0;
+    const matY = workspaceRect
+      ? Math.max(0, Math.min(1 - drag.height / workspaceRect.height, (drag.clientY - workspaceRect.top - drag.height / 2) / workspaceRect.height))
+      : 0;
     if (liveEndMessage && droppedOnBoard) {
       liveEndMessage.x = finalBoardX + 1 / (2 * cols);
       liveEndMessage.y = finalBoardY + 1 / (2 * rows);
@@ -1827,10 +1862,11 @@ export default function Home() {
     const next = piecesRef.current.map((piece) => piece.id === movingId
       ? {
         ...piece,
-        x: droppedOnBoard ? finalBoardX : 0,
-        y: droppedOnBoard ? finalBoardY : 0,
+        x: droppedOnBoard ? finalBoardX : matX,
+        y: droppedOnBoard ? finalBoardY : matY,
         zone: droppedOnBoard ? "board" as const : "mat" as const,
         locked: snaps,
+        positioned: droppedOnBoard ? undefined : (true as const),
         layoutVersion: PUZZLE_LAYOUT_VERSION,
       }
       : piece);
@@ -1949,7 +1985,7 @@ export default function Home() {
     setHintVisible(false);
     const next = pieces.map((piece) => {
       if (piece.locked || piece.zone !== "board") return piece;
-      return { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION };
+      return { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, positioned: undefined, layoutVersion: PUZZLE_LAYOUT_VERSION };
     });
     setPieces(next);
     if (room) {
@@ -2101,6 +2137,7 @@ export default function Home() {
             <>
               <div
                 className={`puzzle-workspace ${imageAspect > 1 ? "horizontal-puzzle" : ""} ${previewReplay ? "preview-replay" : ""}`}
+                ref={workspaceRef}
                 style={workspaceStyle}
                 onPointerMove={movePiece}
                 onPointerUp={endMove}
@@ -2202,6 +2239,7 @@ export default function Home() {
                     playerColor={localPlayerColor}
                     sidePosition={sideLayout.get(piece.id)}
                     bandPosition={bandLayout.get(piece.id)}
+                    landscapePosition={landscapeLayout.get(piece.id)}
                     onStart={startMove}
                     onLostCapture={handleLostPieceCapture}
                     onFocusPiece={focusPiece}

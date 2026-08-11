@@ -55,6 +55,7 @@ function compileInlineLayoutHelpers(source) {
     ["pieceRailPositions", ["rows", "cols", "seed", "board", "mode"]],
     ["sidePiecePositions", ["rows", "cols", "seed"]],
     ["bandPiecePositions", ["rows", "cols", "seed"]],
+    ["landscapePiecePositions", ["rows", "cols", "seed"]],
     ["scatteredPieces", ["rows", "cols", "_seed"]],
     ["normalizePieceLayout", ["pieces", "rows", "cols", "seed"]],
   ];
@@ -74,8 +75,9 @@ function compileInlineLayoutHelpers(source) {
     const PUZZLE_LAYOUT_VERSION = ${JSON.stringify(layoutVersion)};
     const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 };
     const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 };
+    const MOBILE_LANDSCAPE_BOARD = { left: 0.14, top: 0.04, width: 0.72, height: 0.92 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, pieceBoardTarget, sidePiecePositions, bandPiecePositions, scatteredPieces, normalizePieceLayout };
+    return { fitPuzzleSize, pieceBoardTarget, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
@@ -172,6 +174,7 @@ test("side and mobile band workspaces preserve board and piece ratios", () => {
   const boards = [
     { left: 0.2, top: 0.15, width: 0.6, height: 0.7 },
     { left: 0.06, top: 0.26, width: 0.88, height: 0.48 },
+    { left: 0.14, top: 0.04, width: 0.72, height: 0.92 },
   ];
   for (const imageAspect of [1 / 5, 9 / 16, 3 / 4, 1, 16 / 9, 5]) {
     for (const board of boards) {
@@ -190,7 +193,7 @@ test("side and mobile band workspaces preserve board and piece ratios", () => {
 });
 
 test("side and mobile band projections are deterministic and bounded", async () => {
-  const { bandPiecePositions, fitPuzzleSize, sidePiecePositions } = await helpersPromise;
+  const { bandPiecePositions, fitPuzzleSize, landscapePiecePositions, sidePiecePositions } = await helpersPromise;
   const modes = [
     {
       name: "side",
@@ -203,6 +206,14 @@ test("side and mobile band projections are deterministic and bounded", async () 
       board: { left: 0.06, top: 0.26, width: 0.88, height: 0.48 },
       positions: bandPiecePositions,
       outside: (x, y, cellWidth, cellHeight) => y + cellHeight / 2 < 0.26 || y + cellHeight / 2 > 0.74,
+    },
+    {
+      name: "landscape",
+      board: { left: 0.14, top: 0.04, width: 0.72, height: 0.92 },
+      positions: landscapePiecePositions,
+      outside: (x, y, cellWidth) => cellWidth * 0.9 + 0.005 >= 0.14
+        || x + cellWidth / 2 < 0.14 || x + cellWidth / 2 > 0.86,
+      before: (x) => x < 0.5,
     },
   ];
   for (const mode of modes) {
@@ -226,9 +237,11 @@ test("side and mobile band projections are deterministic and bounded", async () 
             mode.outside(position.x, position.y, cellWidth, cellHeight),
             `${mode.name} piece ${id} for ${rows}x${cols} must stay outside the board`,
           );
-          const before = mode.name === "side"
-            ? position.x + cellWidth / 2 < mode.board.left
-            : position.y + cellHeight / 2 < mode.board.top;
+          const before = mode.before
+            ? mode.before(position.x, position.y, cellWidth, cellHeight)
+            : mode.name === "side"
+              ? position.x + cellWidth / 2 < mode.board.left
+              : position.y + cellHeight / 2 < mode.board.top;
           if (before) firstRailCount += 1;
           else secondRailCount += 1;
         }
@@ -271,6 +284,16 @@ test("piece normalization enforces board bounds and board/mat zones", async () =
   };
 
   assert.deepEqual(normalizePieceLayout([validBoardPiece], rows, cols, "ROOM")[0], validBoardPiece);
+  const positionedMatPiece = {
+    id: 5,
+    x: 0.4,
+    y: 0.5,
+    zone: "mat",
+    positioned: true,
+    locked: false,
+    layoutVersion,
+  };
+  assert.deepEqual(normalizePieceLayout([positionedMatPiece], rows, cols, "ROOM")[0], positionedMatPiece);
 
   for (const invalidPiece of [
     { ...validBoardPiece, x: -0.01 },
@@ -327,17 +350,22 @@ test("the rendered puzzle switches horizontal mobile images to top and bottom ra
   const source = await pageSourcePromise;
   assert.match(source, /const BOARD = \{ left: 0\.2, top: 0\.15, width: 0\.6, height: 0\.7 \} as const/);
   assert.match(source, /const MOBILE_HORIZONTAL_BOARD = \{ left: 0\.06, top: 0\.26, width: 0\.88, height: 0\.48 \} as const/);
+  assert.match(source, /const MOBILE_LANDSCAPE_BOARD = \{ left: 0\.14, top: 0\.04, width: 0\.72, height: 0\.92 \} as const/);
   assert.match(source, /const sideWorkspaceAspect = imageAspect \* BOARD\.height \/ BOARD\.width/);
   assert.match(source, /const bandWorkspaceAspect = imageAspect \* MOBILE_HORIZONTAL_BOARD\.height \/ MOBILE_HORIZONTAL_BOARD\.width/);
+  assert.match(source, /const landscapeWorkspaceAspect = imageAspect \* MOBILE_LANDSCAPE_BOARD\.height \/ MOBILE_LANDSCAPE_BOARD\.width/);
   assert.match(source, /function pieceRailPositions/);
   assert.match(source, /function sidePiecePositions/);
   assert.match(source, /function bandPiecePositions/);
+  assert.match(source, /function landscapePiecePositions/);
   assert.match(source, /MAX_VISIBLE_LOOSE_PIECES = 120/);
   assert.match(source, /imageAspect > 1 \? "horizontal-puzzle" : ""/);
   assert.match(source, /piece\.zone === "board" \|\| piece\.locked/);
   assert.match(source, /!piece\.locked && piece\.zone !== "board"/);
   assert.match(source, /!piece\.locked && piece\.zone === "board"/);
   assert.match(source, /zone: droppedOnBoard \? "board" as const : "mat" as const/);
+  assert.match(source, /positioned: droppedOnBoard \? undefined : \(true as const\)/);
+  assert.match(source, /const workspaceRect = workspaceRef\.current\?\.getBoundingClientRect\(\)/);
   assert.match(source, /onPointerCancel=\{cancelMove\}/);
   assert.match(source, /onLostPointerCapture=/);
   assert.match(source, /classList\.add\("drag-active"\)/);
