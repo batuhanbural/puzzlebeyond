@@ -62,9 +62,9 @@ const PUZZLE_LAYOUT_VERSION = 3;
 const MAX_VISIBLE_LOOSE_PIECES = 120;
 const LIVE_DRAG_INTERVAL_MS = 33;
 const REMOTE_MOVE_TRANSITION_MS = 90;
-const REMOTE_SETTLE_TRANSITION_MS = 160;
+const REMOTE_SETTLE_TRANSITION_MS = 110;
 const REMOTE_DRAG_TTL_MS = 2_500;
-const REMOTE_DROP_HANDOFF_MS = 1_200;
+const REMOTE_DROP_HANDOFF_MS = 2_500;
 const MAX_REMOTE_DRAGS = 16;
 const PUZZLE_SIZES = [
   { count: 12, rows: 3, cols: 4, label: "RAHAT" },
@@ -1191,26 +1191,21 @@ export default function Home() {
     dragSequences.clear();
     if (!realtimeSenderId.current) realtimeSenderId.current = crypto.randomUUID();
 
-    const refreshAuthoritativeRoom = async (force = false) => {
+    const refreshAuthoritativeRoom = async () => {
       const now = Date.now();
-      if (cancelled || document.hidden || refreshInFlight || dragRef.current || pendingRoomSaves.current > 0 || (!force && now - lastRefreshAt < 750)) return false;
+      if (cancelled || document.hidden || refreshInFlight || dragRef.current || pendingRoomSaves.current > 0 || now - lastRefreshAt < 750) return;
       refreshInFlight = true;
       lastRefreshAt = now;
       try {
         const response = await fetch(`/api/room?code=${encodeURIComponent(roomCode)}&since=${remoteUpdatedAt.current}`, { cache: "no-store" });
-        if (response.status === 204) return true;
-        if (!response.ok) return false;
+        if (response.status === 204 || !response.ok) return;
         const data = await readApiPayload<{ room?: Room }>(response);
-        if (!data.room || data.room.code !== roomCode || data.room.rows !== roomRows || data.room.cols !== roomCols) return false;
-        if (data.room.updatedAt <= remoteUpdatedAt.current) return true;
+        if (!data.room || data.room.code !== roomCode || data.room.rows !== roomRows || data.room.cols !== roomCols || data.room.updatedAt <= remoteUpdatedAt.current) return;
         const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
         remoteUpdatedAt.current = data.room.updatedAt;
         setRoom(nextRoom);
         setPieces(nextRoom.pieces);
-        return true;
-      } catch {
-        return false; // Polling retries authoritative state after transient failures.
-      }
+      } catch { /* Polling retries authoritative state after transient failures. */ }
       finally { refreshInFlight = false; }
     };
 
@@ -1232,7 +1227,6 @@ export default function Home() {
         setRemoteDrags((current) => current.map((drag) => drag.senderId === message.senderId && drag.gestureId === message.gestureId
           ? { ...message, expiresAt }
           : drag));
-        void refreshAuthoritativeRoom(true);
         return;
       }
       const piece = piecesRef.current.find((candidate) => candidate.id === message.pieceId);
@@ -1717,9 +1711,8 @@ export default function Home() {
     boardAreaRef.current?.classList.remove("drag-active");
     dragRef.current = null;
     setPieces(next);
-    void pushMove(next, movingId).finally(() => {
-      if (liveEndMessage) drag.subscription?.sendDrag(liveEndMessage);
-    });
+    if (liveEndMessage) drag.subscription?.sendDrag(liveEndMessage);
+    void pushMove(next, movingId);
     if (snaps) setNotice("Tak! Parça doğru yerine oturdu.");
     if (snaps && !room && introCompletion === "idle" && next.every((piece) => piece.locked)) {
       setIntroCompletion("showing");
