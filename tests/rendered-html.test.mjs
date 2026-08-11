@@ -106,6 +106,7 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   const hideRoom = styles.match(/@media \(max-width:1180px\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
   const hideBoth = styles.match(/@media \(max-width:900px\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
   const shortLandscape = styles.match(/@media \(max-height:640px\) and \(orientation:landscape\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
+  const phoneLandscape = styles.match(/@media \(max-height:500px\) and \(orientation:landscape\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
 
   assert.match(hideRoom, /\.room-panel\s*\{\s*display:none/);
   assert.match(hideRoom, /grid-template-columns:minmax\(0,1fr\) 210px/);
@@ -113,6 +114,9 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.match(hideBoth, /grid-template-columns:minmax\(0,1fr\)/);
   assert.match(shortLandscape, /\.room-panel,\s*\.progress-panel\s*\{\s*display:none/);
   assert.match(shortLandscape, /footer\s*\{\s*display:none/);
+  assert.match(phoneLandscape, /grid-template-rows:minmax\(0,1fr\) 40px/);
+  assert.match(phoneLandscape, /\.topbar,\.hero-strip,footer\s*\{\s*display:none/);
+  assert.match(phoneLandscape, /100dvh - 100px/);
 });
 
 test("exposes the production API routes", async () => {

@@ -305,6 +305,11 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
   .puzzle-workspace { width:min(100%,calc((100dvh - 150px) * var(--workspace-aspect))); }
   footer { display:none; }
 }
+@media (max-height:500px) and (orientation:landscape) {
+  .site-shell { grid-template-rows:minmax(0,1fr) 40px; }
+  .topbar,.hero-strip,footer { display:none; }
+  .puzzle-workspace { width:min(100%,calc((100dvh - 100px) * var(--workspace-aspect))); }
+}
 @media (max-width:380px) {
   .brand>span:last-child { display:none; }
   .header-actions { margin-left:auto; }
