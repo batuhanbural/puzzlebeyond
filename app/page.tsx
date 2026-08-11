@@ -1993,7 +1993,7 @@ export default function Home() {
   };
 
   return (
-    <main className="site-shell">
+    <main className={`site-shell ${galleryVisible ? "gallery-active" : "puzzle-active"}`}>
       <header className="topbar">
         <button className="brand" onClick={resetPreviewPuzzle} aria-label="puzzlebeyond ana sayfa">
           <span className="brand-mark">P</span><span>puzzlebeyond</span>
