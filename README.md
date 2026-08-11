@@ -34,7 +34,7 @@ Vercel uyumluluk derlemesi:
     npm ci
     npm run build
 
-`npm run build:vercel` aynı Next.js üretim derlemesinin açık isimli alias'ıdır. Ayrı Sites/Cloudflare hedefi gerekiyorsa `npm run build:sites` kullanılır. Vercel derleme ve fonksiyon çalışma zamanı Node.js 22.x olarak sabitlenmiştir.
+`npm run build:vercel` aynı Next.js üretim derlemesinin açık isimli alias'ıdır. Ayrı Sites/Cloudflare hedefi gerekiyorsa `npm run build:sites` kullanılır. Vercel derleme ve fonksiyon çalışma zamanı Node.js 24.x olarak sabitlenmiştir.
 
 Fotoğraf yükleme boyutu Vercel Functions sınırları için 4 MB ile sınırlıdır.
 
