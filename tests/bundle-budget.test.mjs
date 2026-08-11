@@ -26,6 +26,12 @@ async function measureFiles(files) {
   );
 }
 
+async function readPngDimensions(file) {
+  const image = await readFile(file);
+  assert.equal(image.subarray(1, 4).toString("ascii"), "PNG", `${path.basename(file)} is not a PNG`);
+  return { width: image.readUInt32BE(16), height: image.readUInt32BE(20) };
+}
+
 async function findFiles(directory, suffix) {
   const matches = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -95,6 +101,28 @@ test("social preview image stays lightweight and metadata matches", async () => 
   assert.ok(preview.size <= 350 * kibibytes, "The social preview exceeds its 350 KiB budget");
   assert.match(layout, /url: "\/og\.jpg", width: 1200, height: 630/);
   assert.match(layout, /images: \["\/og\.jpg"\]/);
+});
+
+test("profile-style site icons have the expected sizes and metadata", async () => {
+  const iconFiles = [
+    ["favicon-32.png", 32],
+    ["apple-touch-icon.png", 180],
+    ["icon.png", 512],
+  ];
+  const [layout, icons] = await Promise.all([
+    readFile(path.join(projectRoot, "app", "layout.tsx"), "utf8"),
+    Promise.all(iconFiles.map(async ([name, size]) => {
+      const file = path.join(projectRoot, "public", name);
+      return { name, size, dimensions: await readPngDimensions(file), stats: await stat(file) };
+    })),
+  ]);
+
+  for (const icon of icons) {
+    assert.deepEqual(icon.dimensions, { width: icon.size, height: icon.size });
+    assert.ok(icon.stats.size <= 160 * kibibytes, `${icon.name} exceeds its 160 KiB budget`);
+    assert.match(layout, new RegExp(`/${icon.name.replace(".", "\\.")}`));
+  }
+  assert.doesNotMatch(layout, /favicon\.svg/);
 });
 
 test("client manifests do not include server and alternate-host packages", async () => {
