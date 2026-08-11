@@ -68,6 +68,23 @@ test("pointer release commits a piece without replaying its movement", async () 
   assert.match(endMove, /setPieces\(next\)/);
 });
 
+test("a piece moved onto the board paints before the handoff frame", async () => {
+  const page = await read("app/page.tsx");
+  const start = page.indexOf("const JigsawPiece = memo");
+  const end = page.indexOf("\n\nconst LockedPiecesCanvas", start);
+  assert.ok(start >= 0 && end > start, "JigsawPiece must remain inspectable");
+  const component = page.slice(start, end);
+
+  assert.match(component, /useState\(eager\)/);
+  assert.match(component, /useLayoutEffect\(\(\) =>/);
+  assert.ok(
+    component.indexOf("useLayoutEffect") > component.indexOf("return observePuzzlePiece"),
+    "the canvas draw, not the visibility observer, must run before paint",
+  );
+  assert.match(component, /if \(eager\) drawPiece\(\)/);
+  assert.match(page, /imageUrl=\{imageUrl\} eager=\{isRecent\}/);
+});
+
 test("side panels yield before the puzzle map becomes unusable", async () => {
   const styles = await read("app/globals.css");
   const hideRoom = styles.match(/@media \(max-width:1180px\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";

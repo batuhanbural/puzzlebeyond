@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, CSSProperties, PointerEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, CSSProperties, PointerEvent, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { GalleryKind } from "@/lib/gallery";
 import type { RealtimeSubscription, RoomDragMessage } from "@/lib/realtime-client";
 
@@ -460,9 +460,9 @@ function traceJigsawPiecePath(
   path.closePath();
 }
 
-const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl }: { id: number; rows: number; cols: number; seed: string; imageUrl: string }) {
+const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, eager = false }: { id: number; rows: number; cols: number; seed: string; imageUrl: string; eager?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(eager);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -470,7 +470,7 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl }
     return observePuzzlePiece(canvas, setVisible);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !imageUrl) return;
     if (!visible) {
@@ -481,48 +481,50 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl }
     let cancelled = false;
     let drawTimer: number | undefined;
     void loadPuzzleImage(imageUrl).then((image) => {
-      drawTimer = window.setTimeout(() => {
+      const drawPiece = () => {
         if (cancelled) return;
-      const row = Math.floor(id / cols);
-      const col = id % cols;
-      const imageRatio = image.naturalWidth / image.naturalHeight || DEFAULT_IMAGE_ASPECT;
-      const boardWidth = imageRatio >= 1 ? 800 : 800 * imageRatio;
-      const boardHeight = boardWidth / imageRatio;
-      const cellWidth = boardWidth / cols;
-      const cellHeight = boardHeight / rows;
-      const padX = cellWidth * 0.34;
-      const padY = cellHeight * 0.34;
-      const width = cellWidth + padX * 2;
-      const height = cellHeight + padY * 2;
-      const scale = rows * cols > 120 ? 1 : 2;
-      canvas.width = Math.ceil(width * scale);
-      canvas.height = Math.ceil(height * scale);
-      const context = canvas.getContext("2d");
-      if (!context) return;
-      context.scale(scale, scale);
+        const row = Math.floor(id / cols);
+        const col = id % cols;
+        const imageRatio = image.naturalWidth / image.naturalHeight || DEFAULT_IMAGE_ASPECT;
+        const boardWidth = imageRatio >= 1 ? 800 : 800 * imageRatio;
+        const boardHeight = boardWidth / imageRatio;
+        const cellWidth = boardWidth / cols;
+        const cellHeight = boardHeight / rows;
+        const padX = cellWidth * 0.34;
+        const padY = cellHeight * 0.34;
+        const width = cellWidth + padX * 2;
+        const height = cellHeight + padY * 2;
+        const scale = rows * cols > 120 ? 1 : 2;
+        canvas.width = Math.ceil(width * scale);
+        canvas.height = Math.ceil(height * scale);
+        const context = canvas.getContext("2d");
+        if (!context) return;
+        context.scale(scale, scale);
 
-      context.beginPath();
-      traceJigsawPiecePath(context, id, rows, cols, seed, padX, padY, cellWidth, cellHeight);
-      context.save();
-      context.clip();
-      context.drawImage(image, padX - col * cellWidth, padY - row * cellHeight, boardWidth, boardHeight);
-      context.restore();
-      context.lineJoin = "round";
-      context.lineCap = "round";
-      const edgeScale = rows * cols <= 20 ? 1 : Math.max(0.18, Math.sqrt(20 / (rows * cols)));
-      context.strokeStyle = "rgba(21,21,21,.92)";
-      context.lineWidth = 3 * edgeScale;
-      context.stroke();
-      context.strokeStyle = "rgba(255,255,255,.46)";
-      context.lineWidth = 0.9 * edgeScale;
-      context.stroke();
-      }, (id % 64) * 4);
+        context.beginPath();
+        traceJigsawPiecePath(context, id, rows, cols, seed, padX, padY, cellWidth, cellHeight);
+        context.save();
+        context.clip();
+        context.drawImage(image, padX - col * cellWidth, padY - row * cellHeight, boardWidth, boardHeight);
+        context.restore();
+        context.lineJoin = "round";
+        context.lineCap = "round";
+        const edgeScale = rows * cols <= 20 ? 1 : Math.max(0.18, Math.sqrt(20 / (rows * cols)));
+        context.strokeStyle = "rgba(21,21,21,.92)";
+        context.lineWidth = 3 * edgeScale;
+        context.stroke();
+        context.strokeStyle = "rgba(255,255,255,.46)";
+        context.lineWidth = 0.9 * edgeScale;
+        context.stroke();
+      };
+      if (eager) drawPiece();
+      else drawTimer = window.setTimeout(drawPiece, (id % 64) * 4);
     }).catch(() => { /* The next image URL change retries the render. */ });
     return () => {
       cancelled = true;
       if (drawTimer !== undefined) window.clearTimeout(drawTimer);
     };
-  }, [id, rows, cols, seed, imageUrl, visible]);
+  }, [id, rows, cols, seed, imageUrl, visible, eager]);
 
   return <canvas ref={canvasRef} className="piece-canvas" aria-hidden="true" />;
 });
@@ -726,7 +728,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
       aria-disabled={isBoardPiece ? piece.locked : undefined}
       aria-label={`${piece.id + 1}. puzzle parçası${piece.locked ? ", yerleştirildi" : ". Enter ile doğru yerine yerleştir"}`}
     >
-      <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} />
+      <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager={isRecent} />
     </div>
   );
 });
@@ -758,7 +760,7 @@ const RemotePuzzlePiece = memo(function RemotePuzzlePiece({
       }}
       aria-hidden="true"
     >
-      <JigsawPiece id={drag.pieceId} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} />
+      <JigsawPiece id={drag.pieceId} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager />
     </div>
   );
 });
