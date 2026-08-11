@@ -1299,6 +1299,7 @@ export default function Home() {
     let cancelled = false;
     let refreshInFlight = false;
     let lastRefreshAt = 0;
+    let refreshTimer: number | null = null;
     let subscription: RealtimeSubscription | null = null;
     const dragSequences = remoteDragSequence.current;
     const actionSequences = remoteActionSequence.current;
@@ -1310,9 +1311,26 @@ export default function Home() {
     actionSequences.clear();
     if (!realtimeSenderId.current) realtimeSenderId.current = crypto.randomUUID();
 
-    const refreshAuthoritativeRoom = async () => {
+    const scheduleAuthoritativeRefresh = (delayMs: number): void => {
+      if (cancelled || refreshTimer !== null || document.hidden) return;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = null;
+        void refreshAuthoritativeRoom();
+      }, Math.max(0, delayMs));
+    };
+
+    const refreshAuthoritativeRoom = async (): Promise<void> => {
       const now = Date.now();
-      if (cancelled || document.hidden || refreshInFlight || dragRef.current || pendingRoomSaves.current > 0 || now - lastRefreshAt < 750) return;
+      if (cancelled || document.hidden) return;
+      if (refreshInFlight || dragRef.current || pendingRoomSaves.current > 0) {
+        scheduleAuthoritativeRefresh(120);
+        return;
+      }
+      const refreshDelay = 750 - (now - lastRefreshAt);
+      if (refreshDelay > 0) {
+        scheduleAuthoritativeRefresh(refreshDelay);
+        return;
+      }
       refreshInFlight = true;
       lastRefreshAt = now;
       try {
@@ -1353,7 +1371,9 @@ export default function Home() {
       if (!piece || piece.locked || dragRef.current?.id === message.pieceId) return;
       const nextDrag: RemoteDrag = { ...message, expiresAt: Date.now() + REMOTE_DRAG_TTL_MS };
       setRemoteDrags((current) => {
-        const active = current.filter((drag) => drag.senderId !== message.senderId && drag.expiresAt > Date.now());
+        const now = Date.now();
+        const active = current.filter((drag) => drag.expiresAt > now
+          && (drag.senderId !== message.senderId || drag.phase === "end"));
         return [...active, nextDrag].slice(-MAX_REMOTE_DRAGS);
       });
     };
@@ -1421,6 +1441,7 @@ export default function Home() {
       pendingRoomActionRef.current = null;
       dragSequences.clear();
       actionSequences.clear();
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
       setRemoteDrags([]);
     };
   }, [room?.code, room?.rows, room?.cols]);

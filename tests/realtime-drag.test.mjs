@@ -65,6 +65,7 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   const handler = page.slice(start, end);
   assert.match(handler, /setRemoteDrags/);
   assert.match(handler, /expiresAt = Date\.now\(\) \+ REMOTE_DROP_HANDOFF_MS/);
+  assert.match(handler, /drag\.senderId !== message\.senderId \|\| drag\.phase === "end"/);
   assert.doesNotMatch(handler, /refreshAuthoritativeRoom\(true\)/);
   assert.doesNotMatch(handler, /setPieces|remoteUpdatedAt\.current\s*=/);
 
@@ -72,6 +73,9 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   assert.match(page, /removeCommittedRemoteDrops\(current, nextRoom\.pieces\)/);
   assert.match(page, /drag\.phase === "end" && drag\.dropZone !== "mat"/);
   assert.match(page, /liveEndMessage\.dropZone = droppedOnBoard \? "board" : "mat"/);
+  assert.match(page, /const refreshDelay = 750 - \(now - lastRefreshAt\)/);
+  assert.match(page, /scheduleAuthoritativeRefresh\(refreshDelay\)/);
+  assert.match(page, /scheduleAuthoritativeRefresh\(120\)/);
   assert.match(page, /new ResizeObserver\(\(\) => positionRemotePuzzlePiece/);
   assert.match(page, /realtimeSubscriptionRef\.current \?\? drag\.subscription/);
   assert.match(page, /pendingLiveDragRef\.current = message/);
