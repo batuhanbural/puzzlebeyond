@@ -103,8 +103,11 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.doesNotMatch(page, /pieceCount > 120|rows \* cols > 120/);
   assert.match(component, /if \(eager\) return;[\s\S]*observePuzzlePiece/);
   assert.match(page, /drag\.phase === "end" \? "remote-drop-handoff"/);
+  assert.match(page, /drag\.dropZone === "mat" \? "remote-mat-handoff"/);
   assert.match(page, /liveEndMessage\.x = finalBoardX \+ 1 \/ \(2 \* cols\)/);
   assert.match(page, /liveEndMessage\.y = finalBoardY \+ 1 \/ \(2 \* rows\)/);
+  assert.match(page, /liveEndMessage\.dropX = droppedOnBoard \? finalBoardX : matX/);
+  assert.match(page, /liveEndMessage\.dropY = droppedOnBoard \? finalBoardY : matY/);
   const remoteRule = styles.match(/\.puzzle-piece\.remote-drag-piece\s*\{[^}]*\}/)?.[0] || "";
   const remoteHeldRule = styles.match(/\.puzzle-piece\.remote-held:not\(\.dragging\)\s*\{[^}]*\}/)?.[0] || "";
   assert.match(remoteRule, /will-change:transform/);

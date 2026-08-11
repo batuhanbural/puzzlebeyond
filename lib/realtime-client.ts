@@ -14,6 +14,9 @@ export type RoomDragMessage = {
   y: number;
   seq: number;
   phase: "move" | "end";
+  dropZone?: "board" | "mat";
+  dropX?: number;
+  dropY?: number;
 };
 
 export type RoomActionMessage = {
@@ -53,7 +56,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function parseRoomDragMessage(value: unknown): RoomDragMessage | null {
   if (!isRecord(value)) return null;
-  const { senderId, gestureId, pieceId, x, y, seq, phase } = value;
+  const { senderId, gestureId, pieceId, x, y, seq, phase, dropZone, dropX, dropY } = value;
   if (typeof senderId !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(senderId)) return null;
   if (typeof gestureId !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(gestureId)) return null;
   if (!Number.isInteger(pieceId) || Number(pieceId) < 0 || Number(pieceId) >= 48 * 48) return null;
@@ -61,6 +64,13 @@ export function parseRoomDragMessage(value: unknown): RoomDragMessage | null {
   if (typeof y !== "number" || !Number.isFinite(y) || y < -2 || y > 3) return null;
   if (!Number.isInteger(seq) || Number(seq) < 0 || Number(seq) > 1_000_000_000) return null;
   if (phase !== "move" && phase !== "end") return null;
+  const hasDropTarget = dropZone !== undefined || dropX !== undefined || dropY !== undefined;
+  if (hasDropTarget) {
+    if (phase !== "end" || (dropZone !== "board" && dropZone !== "mat")) return null;
+    if (typeof dropX !== "number" || !Number.isFinite(dropX) || dropX < 0 || dropX > 1) return null;
+    if (typeof dropY !== "number" || !Number.isFinite(dropY) || dropY < 0 || dropY > 1) return null;
+    return { senderId, gestureId, pieceId: Number(pieceId), x, y, seq: Number(seq), phase, dropZone, dropX, dropY };
+  }
   return { senderId, gestureId, pieceId: Number(pieceId), x, y, seq: Number(seq), phase };
 }
 

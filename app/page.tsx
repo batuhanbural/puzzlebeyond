@@ -86,6 +86,18 @@ let puzzlePieceObserver: IntersectionObserver | null = null;
 let generatedDefaultImage: string | null = null;
 let generatedDefaultImagePromise: Promise<string> | null = null;
 
+function removeCommittedRemoteDrops(current: RemoteDrag[], nextPieces: Piece[]) {
+  if (!current.some((drag) => drag.phase === "end" && drag.dropZone && drag.dropX !== undefined && drag.dropY !== undefined)) return current;
+  const piecesById = new Map(nextPieces.map((piece) => [piece.id, piece]));
+  const next = current.filter((drag) => {
+    if (drag.phase !== "end" || !drag.dropZone || drag.dropX === undefined || drag.dropY === undefined) return true;
+    const piece = piecesById.get(drag.pieceId);
+    if (!piece || (piece.zone ?? "mat") !== drag.dropZone) return true;
+    return Math.abs(piece.x - drag.dropX) > 0.000_001 || Math.abs(piece.y - drag.dropY) > 0.000_001;
+  });
+  return next.length === current.length ? current : next;
+}
+
 function puzzlePieceCanvasKey(id: number, rows: number, cols: number, seed: string, imageUrl: string) {
   return `${imageUrl}\u0000${seed}\u0000${rows}x${cols}\u0000${id}`;
 }
@@ -829,7 +841,7 @@ function positionRemotePuzzlePiece(element: HTMLDivElement, drag: RemoteDrag, ro
   const x = (drag.x - 1 / (2 * cols)) * board.clientWidth;
   const y = (drag.y - 1 / (2 * rows)) * board.clientHeight;
   element.style.transition = animate
-    ? drag.phase === "end"
+    ? drag.phase === "end" && drag.dropZone !== "mat"
       ? `transform ${REMOTE_SETTLE_TRANSITION_MS}ms cubic-bezier(.2,.8,.2,1), filter 120ms ease, opacity 120ms ease`
       : `transform ${REMOTE_MOVE_TRANSITION_MS}ms linear, filter 120ms ease, opacity 120ms ease`
     : "none";
@@ -878,7 +890,7 @@ const RemotePuzzlePiece = memo(function RemotePuzzlePiece({
   return (
     <div
       ref={elementRef}
-      className={`puzzle-piece remote-drag-piece ${drag.phase === "end" ? "remote-drop-handoff" : ""} ${densityClass}`}
+      className={`puzzle-piece remote-drag-piece ${drag.phase === "end" ? "remote-drop-handoff" : ""} ${drag.dropZone === "mat" ? "remote-mat-handoff" : ""} ${densityClass}`}
       style={{
         "--player-color": playerColor,
         width: `${100 / cols}%`,
@@ -1196,6 +1208,7 @@ export default function Home() {
       const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
       setRoom(nextRoom);
       setPieces(nextRoom.pieces);
+      setRemoteDrags((current) => removeCommittedRemoteDrops(current, nextRoom.pieces));
       setRoomPlayers([]);
       setImageUrl(data.room.imageUrl);
       setGalleryOpen(false);
@@ -1311,6 +1324,7 @@ export default function Home() {
         remoteUpdatedAt.current = data.room.updatedAt;
         setRoom(nextRoom);
         setPieces(nextRoom.pieces);
+        setRemoteDrags((current) => removeCommittedRemoteDrops(current, nextRoom.pieces));
       } catch { /* Polling retries authoritative state after transient failures. */ }
       finally { refreshInFlight = false; }
     };
@@ -1550,6 +1564,7 @@ export default function Home() {
       const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
       setRoom(nextRoom);
       setPieces(nextRoom.pieces);
+      setRemoteDrags((current) => removeCommittedRemoteDrops(current, nextRoom.pieces));
       setLastHeldPieceId(null);
       setNotice("Puzzle tüm katılımcılarla eşitlendi.");
     } catch (error) {
@@ -1580,6 +1595,7 @@ export default function Home() {
         const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
         setRoom(nextRoom);
         setPieces(nextRoom.pieces);
+        setRemoteDrags((current) => removeCommittedRemoteDrops(current, nextRoom.pieces));
       } catch { /* Keep the board usable during brief connection drops. */ }
     };
     const timer = window.setInterval(() => { void pollRoom(); }, 2_000);
@@ -1848,9 +1864,14 @@ export default function Home() {
     const matY = workspaceRect
       ? Math.max(0, Math.min(1 - drag.height / workspaceRect.height, (drag.clientY - workspaceRect.top - drag.height / 2) / workspaceRect.height))
       : 0;
-    if (liveEndMessage && droppedOnBoard) {
-      liveEndMessage.x = finalBoardX + 1 / (2 * cols);
-      liveEndMessage.y = finalBoardY + 1 / (2 * rows);
+    if (liveEndMessage) {
+      liveEndMessage.dropZone = droppedOnBoard ? "board" : "mat";
+      liveEndMessage.dropX = droppedOnBoard ? finalBoardX : matX;
+      liveEndMessage.dropY = droppedOnBoard ? finalBoardY : matY;
+      if (droppedOnBoard) {
+        liveEndMessage.x = finalBoardX + 1 / (2 * cols);
+        liveEndMessage.y = finalBoardY + 1 / (2 * rows);
+      }
     }
     const next = piecesRef.current.map((piece) => piece.id === movingId
       ? {

@@ -21,6 +21,12 @@ test("live drag messages accept only bounded ephemeral coordinates", () => {
   assert.equal(parseRoomDragMessage({ ...valid, pieceId: 48 * 48 }), null);
   assert.equal(parseRoomDragMessage({ ...valid, x: Number.NaN }), null);
   assert.equal(parseRoomDragMessage({ ...valid, phase: "drop" }), null);
+  const matDrop = { ...valid, phase: "end", dropZone: "mat", dropX: 0.18, dropY: 0.64 };
+  assert.deepEqual(parseRoomDragMessage(matDrop), matDrop);
+  assert.equal(parseRoomDragMessage({ ...matDrop, dropZone: "side" }), null);
+  assert.equal(parseRoomDragMessage({ ...matDrop, dropY: undefined }), null);
+  assert.equal(parseRoomDragMessage({ ...matDrop, dropX: 1.1 }), null);
+  assert.equal(parseRoomDragMessage({ ...matDrop, phase: "move" }), null);
 });
 
 test("room actions accept only a bounded push-to-edges event", () => {
@@ -63,6 +69,9 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   assert.doesNotMatch(handler, /setPieces|remoteUpdatedAt\.current\s*=/);
 
   assert.match(page, /transform = `translate3d\(\$\{x\}px,\$\{y\}px,0\)`/);
+  assert.match(page, /removeCommittedRemoteDrops\(current, nextRoom\.pieces\)/);
+  assert.match(page, /drag\.phase === "end" && drag\.dropZone !== "mat"/);
+  assert.match(page, /liveEndMessage\.dropZone = droppedOnBoard \? "board" : "mat"/);
   assert.match(page, /new ResizeObserver\(\(\) => positionRemotePuzzlePiece/);
   assert.match(page, /realtimeSubscriptionRef\.current \?\? drag\.subscription/);
   assert.match(page, /pendingLiveDragRef\.current = message/);
