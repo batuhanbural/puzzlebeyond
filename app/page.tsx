@@ -2,7 +2,7 @@
 
 import { ChangeEvent, CSSProperties, PointerEvent, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { GalleryKind } from "@/lib/gallery";
-import type { RealtimeSubscription, RoomDragMessage } from "@/lib/realtime-client";
+import type { RealtimeSubscription, RoomActionMessage, RoomDragMessage } from "@/lib/realtime-client";
 
 type PieceZone = "board" | "mat";
 type Piece = { id: number; x: number; y: number; locked?: boolean; layoutVersion?: number; zone?: PieceZone };
@@ -1038,7 +1038,9 @@ export default function Home() {
   const realtimeSenderId = useRef("");
   const realtimeSequence = useRef(0);
   const pendingLiveDragRef = useRef<RoomDragMessage | null>(null);
+  const pendingRoomActionRef = useRef<{ message: RoomActionMessage; expiresAt: number } | null>(null);
   const remoteDragSequence = useRef(new Map<string, number>());
+  const remoteActionSequence = useRef(new Map<string, number>());
   const presenceRevoked = useRef(false);
   const hintTimer = useRef<number | null>(null);
   const roomSaveQueue = useRef<Promise<void>>(Promise.resolve());
@@ -1260,10 +1262,13 @@ export default function Home() {
     let lastRefreshAt = 0;
     let subscription: RealtimeSubscription | null = null;
     const dragSequences = remoteDragSequence.current;
+    const actionSequences = remoteActionSequence.current;
     realtimeConnected.current = false;
     realtimeSubscriptionRef.current = null;
     pendingLiveDragRef.current = null;
+    pendingRoomActionRef.current = null;
     dragSequences.clear();
+    actionSequences.clear();
     if (!realtimeSenderId.current) realtimeSenderId.current = crypto.randomUUID();
 
     const refreshAuthoritativeRoom = async () => {
@@ -1313,6 +1318,27 @@ export default function Home() {
       });
     };
 
+    const applyRemoteAction = (message: RoomActionMessage) => {
+      if (message.senderId === realtimeSenderId.current || message.action !== "push-edges") return;
+      const lastSequence = actionSequences.get(message.senderId) ?? -1;
+      if (message.seq <= lastSequence) return;
+      actionSequences.set(message.senderId, message.seq);
+      if (actionSequences.size > 64) {
+        const oldestSender = actionSequences.keys().next().value;
+        if (typeof oldestSender === "string") actionSequences.delete(oldestSender);
+      }
+      lastLocalMove.current = Date.now();
+      setHintVisible(false);
+      setRemoteDrags([]);
+      setPieces((current) => {
+        const next = current.map((piece) => piece.locked || piece.zone !== "board"
+          ? piece
+          : { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION });
+        piecesRef.current = next;
+        return next;
+      });
+    };
+
     void fetch("/api/realtime").then(async (response) => {
       if (!response.ok) return null;
       return await response.json() as { enabled?: boolean; url?: string; key?: string };
@@ -1329,10 +1355,17 @@ export default function Home() {
           if (status === "connected") {
             const pending = pendingLiveDragRef.current;
             if (pending && subscription?.sendDrag(pending)) pendingLiveDragRef.current = null;
+            const pendingAction = pendingRoomActionRef.current;
+            if (pendingAction && pendingAction.expiresAt > Date.now() && subscription?.sendAction(pendingAction.message)) {
+              pendingRoomActionRef.current = null;
+            } else if (pendingAction?.expiresAt && pendingAction.expiresAt <= Date.now()) {
+              pendingRoomActionRef.current = null;
+            }
           }
           if (status === "disconnected") setRemoteDrags([]);
         },
         applyRemoteDrag,
+        applyRemoteAction,
       );
       realtimeSubscriptionRef.current = subscription;
     }).catch(() => {
@@ -1345,7 +1378,9 @@ export default function Home() {
       subscription?.unsubscribe();
       if (realtimeSubscriptionRef.current === subscription) realtimeSubscriptionRef.current = null;
       pendingLiveDragRef.current = null;
+      pendingRoomActionRef.current = null;
       dragSequences.clear();
+      actionSequences.clear();
       setRemoteDrags([]);
     };
   }, [room?.code, room?.rows, room?.cols]);
@@ -1917,7 +1952,19 @@ export default function Home() {
       return { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION };
     });
     setPieces(next);
-    if (room) void pushPieces(next);
+    if (room) {
+      if (!realtimeSenderId.current) realtimeSenderId.current = crypto.randomUUID();
+      const message: RoomActionMessage = {
+        senderId: realtimeSenderId.current,
+        actionId: crypto.randomUUID(),
+        seq: ++realtimeSequence.current,
+        action: "push-edges",
+      };
+      if (!realtimeSubscriptionRef.current?.sendAction(message)) {
+        pendingRoomActionRef.current = { message, expiresAt: Date.now() + 2_500 };
+      }
+      void pushPieces(next);
+    }
     setNotice("Serbest parçalar tahta çevresine toplandı.");
   }, [pieces, room, pushPieces]);
 

@@ -118,7 +118,8 @@ test("pushing pieces to the edge updates immediately and persists in the backgro
   assert.ok(start >= 0 && end > start, "pushToSides must remain inspectable");
   const pushToSides = page.slice(start, end);
   assert.ok(pushToSides.indexOf("setPieces(next)") < pushToSides.indexOf("pushPieces(next)"));
-  assert.match(pushToSides, /if \(room\) void pushPieces\(next\)/);
+  assert.ok(pushToSides.indexOf("sendAction(message)") < pushToSides.indexOf("pushPieces(next)"));
+  assert.match(pushToSides, /if \(room\) \{[\s\S]*void pushPieces\(next\)/);
 });
 
 test("side panels yield before the puzzle map becomes unusable", async () => {

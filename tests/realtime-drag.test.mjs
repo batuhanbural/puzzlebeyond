@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { parseRoomDragMessage } from "../lib/realtime-client.ts";
+import { parseRoomActionMessage, parseRoomDragMessage } from "../lib/realtime-client.ts";
 
 const root = new URL("../", import.meta.url);
 
@@ -23,6 +23,19 @@ test("live drag messages accept only bounded ephemeral coordinates", () => {
   assert.equal(parseRoomDragMessage({ ...valid, phase: "drop" }), null);
 });
 
+test("room actions accept only a bounded push-to-edges event", () => {
+  const valid = {
+    senderId: "sender_123456",
+    actionId: "action_123456",
+    seq: 13,
+    action: "push-edges",
+  };
+  assert.deepEqual(parseRoomActionMessage(valid), valid);
+  assert.equal(parseRoomActionMessage({ ...valid, actionId: "short" }), null);
+  assert.equal(parseRoomActionMessage({ ...valid, action: "reset-room" }), null);
+  assert.equal(parseRoomActionMessage({ ...valid, seq: -1 }), null);
+});
+
 test("live motion is throttled, bounded and never authoritative", async () => {
   const [page, realtime] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
@@ -36,11 +49,12 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   assert.match(page, /MAX_REMOTE_DRAGS = 16/);
   assert.match(realtime, /socket\.bufferedAmount > 64 \* 1024/);
   assert.match(realtime, /event: "piece-drag"/);
+  assert.match(realtime, /event: "room-action"/);
   assert.match(page, /playerColor\(drag\.senderId\)/);
   assert.doesNotMatch(realtime, /playerName/);
 
   const start = page.indexOf("const applyRemoteDrag");
-  const end = page.indexOf("\n\n    void fetch(\"/api/realtime\")", start);
+  const end = page.indexOf("\n\n    const applyRemoteAction", start);
   assert.ok(start >= 0 && end > start, "remote drag handler must remain inspectable");
   const handler = page.slice(start, end);
   assert.match(handler, /setRemoteDrags/);
@@ -54,4 +68,13 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   assert.match(page, /pendingLiveDragRef\.current = message/);
   assert.match(page, /pending && subscription\?\.sendDrag\(pending\)/);
   assert.doesNotMatch(page, /if \(!drag\.subscription \|\| !realtimeSenderId\.current\) return null/);
+
+  const actionStart = page.indexOf("const applyRemoteAction");
+  const actionEnd = page.indexOf("\n\n    void fetch(\"/api/realtime\")", actionStart);
+  assert.ok(actionStart >= 0 && actionEnd > actionStart, "remote action handler must remain inspectable");
+  const actionHandler = page.slice(actionStart, actionEnd);
+  assert.match(actionHandler, /message\.action !== "push-edges"/);
+  assert.match(actionHandler, /setPieces\(\(current\) =>/);
+  assert.match(actionHandler, /piece\.locked \|\| piece\.zone !== "board"/);
+  assert.match(page, /pendingRoomActionRef\.current = \{ message, expiresAt: Date\.now\(\) \+ 2_500 \}/);
 });

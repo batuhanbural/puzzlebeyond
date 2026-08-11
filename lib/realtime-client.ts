@@ -2,6 +2,7 @@ export type RealtimeStatus = "connecting" | "connected" | "disconnected";
 
 export type RealtimeSubscription = {
   sendDrag: (message: RoomDragMessage) => boolean;
+  sendAction: (message: RoomActionMessage) => boolean;
   unsubscribe: () => void;
 };
 
@@ -13,6 +14,13 @@ export type RoomDragMessage = {
   y: number;
   seq: number;
   phase: "move" | "end";
+};
+
+export type RoomActionMessage = {
+  senderId: string;
+  actionId: string;
+  seq: number;
+  action: "push-edges";
 };
 
 type RealtimeConfig = {
@@ -56,6 +64,16 @@ export function parseRoomDragMessage(value: unknown): RoomDragMessage | null {
   return { senderId, gestureId, pieceId: Number(pieceId), x, y, seq: Number(seq), phase };
 }
 
+export function parseRoomActionMessage(value: unknown): RoomActionMessage | null {
+  if (!isRecord(value)) return null;
+  const { senderId, actionId, seq, action } = value;
+  if (typeof senderId !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(senderId)) return null;
+  if (typeof actionId !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(actionId)) return null;
+  if (!Number.isInteger(seq) || Number(seq) < 0 || Number(seq) > 1_000_000_000) return null;
+  if (action !== "push-edges") return null;
+  return { senderId, actionId, seq: Number(seq), action };
+}
+
 function realtimeWebSocketUrl(config: RealtimeConfig) {
   const projectUrl = new URL(config.url);
   const protocol = projectUrl.protocol === "http:" ? "ws:" : "wss:";
@@ -74,9 +92,10 @@ export function subscribeToRoomRealtime(
   onUpdate: () => void,
   onStatus?: (status: RealtimeStatus) => void,
   onDrag?: (message: RoomDragMessage) => void,
+  onAction?: (message: RoomActionMessage) => void,
 ): RealtimeSubscription {
   if (typeof window === "undefined" || typeof WebSocket === "undefined") {
-    return { sendDrag: () => false, unsubscribe: () => {} };
+    return { sendDrag: () => false, sendAction: () => false, unsubscribe: () => {} };
   }
 
   const topic = `realtime:puzzlebeyond-room-${roomCode}`;
@@ -170,9 +189,15 @@ export function subscribeToRoomRealtime(
         onUpdate();
         return;
       }
-      if (envelope.event !== "piece-drag") return;
-      const drag = parseRoomDragMessage(envelope.payload);
-      if (drag) onDrag?.(drag);
+      if (envelope.event === "piece-drag") {
+        const drag = parseRoomDragMessage(envelope.payload);
+        if (drag) onDrag?.(drag);
+        return;
+      }
+      if (envelope.event === "room-action") {
+        const action = parseRoomActionMessage(envelope.payload);
+        if (action) onAction?.(action);
+      }
     };
 
     nextSocket.onerror = () => {
@@ -224,6 +249,11 @@ export function subscribeToRoomRealtime(
       if (!joined || !socket || socket.readyState !== WebSocket.OPEN || socket.bufferedAmount > 64 * 1024) return false;
       const drag = parseRoomDragMessage(message);
       return drag ? send("broadcast", { type: "broadcast", event: "piece-drag", payload: drag }) : false;
+    },
+    sendAction: (message) => {
+      if (!joined || !socket || socket.readyState !== WebSocket.OPEN || socket.bufferedAmount > 64 * 1024) return false;
+      const action = parseRoomActionMessage(message);
+      return action ? send("broadcast", { type: "broadcast", event: "room-action", payload: action }) : false;
     },
     unsubscribe: () => {
       stopped = true;
