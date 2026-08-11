@@ -78,10 +78,59 @@ const PUZZLE_SIZES = [
 
 const puzzleImageCache = new Map<string, Promise<HTMLImageElement>>();
 const MAX_CACHED_PUZZLE_IMAGES = 12;
+const puzzlePieceCanvasCache = new Map<string, HTMLCanvasElement>();
+const MAX_CACHED_PUZZLE_CANVASES = 128;
 const puzzlePieceVisibility = new Map<Element, (visible: boolean) => void>();
 let puzzlePieceObserver: IntersectionObserver | null = null;
 let generatedDefaultImage: string | null = null;
 let generatedDefaultImagePromise: Promise<string> | null = null;
+
+function puzzlePieceCanvasKey(id: number, rows: number, cols: number, seed: string, imageUrl: string) {
+  return `${imageUrl}\u0000${seed}\u0000${rows}x${cols}\u0000${id}`;
+}
+
+function rememberPuzzlePieceCanvas(key: string, canvas: HTMLCanvasElement) {
+  if (canvas.width <= 1 || canvas.height <= 1) return;
+  const previous = puzzlePieceCanvasCache.get(key);
+  if (previous && previous !== canvas) {
+    previous.width = 1;
+    previous.height = 1;
+  }
+  puzzlePieceCanvasCache.delete(key);
+  puzzlePieceCanvasCache.set(key, canvas);
+  while (puzzlePieceCanvasCache.size > MAX_CACHED_PUZZLE_CANVASES) {
+    const oldestKey = puzzlePieceCanvasCache.keys().next().value;
+    if (typeof oldestKey !== "string") break;
+    const oldest = puzzlePieceCanvasCache.get(oldestKey);
+    if (oldest) {
+      oldest.width = 1;
+      oldest.height = 1;
+    }
+    puzzlePieceCanvasCache.delete(oldestKey);
+  }
+}
+
+function restorePuzzlePieceCanvas(key: string, canvas: HTMLCanvasElement) {
+  const cached = puzzlePieceCanvasCache.get(key);
+  if (!cached) return false;
+  puzzlePieceCanvasCache.delete(key);
+  if (cached === canvas) return true;
+  canvas.width = cached.width;
+  canvas.height = cached.height;
+  const context = canvas.getContext("2d");
+  if (context) context.drawImage(cached, 0, 0);
+  cached.width = 1;
+  cached.height = 1;
+  return Boolean(context);
+}
+
+function clearPuzzlePieceCanvasCache() {
+  for (const canvas of puzzlePieceCanvasCache.values()) {
+    canvas.width = 1;
+    canvas.height = 1;
+  }
+  puzzlePieceCanvasCache.clear();
+}
 
 function normalizeNickname(value: string) {
   return value.trim().replace(/\s+/g, " ").slice(0, 24);
@@ -481,6 +530,9 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, 
       canvas.height = 1;
       return;
     }
+    const canvasKey = puzzlePieceCanvasKey(id, rows, cols, seed, imageUrl);
+    const preserveCanvas = () => rememberPuzzlePieceCanvas(canvasKey, canvas);
+    if (restorePuzzlePieceCanvas(canvasKey, canvas)) return preserveCanvas;
     let cancelled = false;
     let drawTimer: number | undefined;
     void loadPuzzleImage(imageUrl).then((image) => {
@@ -526,6 +578,7 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, 
     return () => {
       cancelled = true;
       if (drawTimer !== undefined) window.clearTimeout(drawTimer);
+      preserveCanvas();
     };
   }, [id, rows, cols, seed, imageUrl, visible, eager]);
 
@@ -1283,6 +1336,7 @@ export default function Home() {
   const cols = room?.cols ?? DEFAULT_COLS;
   const pieceCount = rows * cols;
   const puzzleSeed = room?.code ?? previewSeed;
+  useEffect(() => () => clearPuzzlePieceCanvasCache(), [imageUrl, rows, cols, puzzleSeed]);
   const solvedCount = useMemo(() => pieces.filter((piece) => piece.locked).length, [pieces]);
   const remainingCount = pieceCount - solvedCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);

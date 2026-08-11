@@ -99,6 +99,19 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.doesNotMatch(remoteRule, /transition:[^;}]*(?:left|top)/);
   assert.match(remoteHeldRule, /opacity:0/);
   assert.match(remoteHeldRule, /pointer-events:none/);
+  assert.match(page, /const puzzlePieceCanvasCache = new Map<string, HTMLCanvasElement>\(\)/);
+  assert.match(page, /restorePuzzlePieceCanvas\(canvasKey, canvas\)/);
+  assert.match(page, /rememberPuzzlePieceCanvas\(canvasKey, canvas\)/);
+});
+
+test("pushing pieces to the edge updates immediately and persists in the background", async () => {
+  const page = await read("app/page.tsx");
+  const start = page.indexOf("const pushToSides = useCallback");
+  const end = page.indexOf("\n\n  const downloadCompletedImage", start);
+  assert.ok(start >= 0 && end > start, "pushToSides must remain inspectable");
+  const pushToSides = page.slice(start, end);
+  assert.ok(pushToSides.indexOf("setPieces(next)") < pushToSides.indexOf("pushPieces(next)"));
+  assert.match(pushToSides, /if \(room\) void pushPieces\(next\)/);
 });
 
 test("side panels yield before the puzzle map becomes unusable", async () => {
