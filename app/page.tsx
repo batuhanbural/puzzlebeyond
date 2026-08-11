@@ -60,7 +60,9 @@ const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 } as const;
 const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 } as const;
 const PUZZLE_LAYOUT_VERSION = 3;
 const MAX_VISIBLE_LOOSE_PIECES = 120;
-const LIVE_DRAG_INTERVAL_MS = 50;
+const LIVE_DRAG_INTERVAL_MS = 33;
+const REMOTE_MOVE_TRANSITION_MS = 90;
+const REMOTE_SETTLE_TRANSITION_MS = 160;
 const REMOTE_DRAG_TTL_MS = 2_500;
 const REMOTE_DROP_HANDOFF_MS = 1_200;
 const MAX_REMOTE_DRAGS = 16;
@@ -734,6 +736,19 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   );
 });
 
+function positionRemotePuzzlePiece(element: HTMLDivElement, drag: RemoteDrag, rows: number, cols: number, animate: boolean) {
+  const board = element.parentElement;
+  if (!board || board.clientWidth <= 0 || board.clientHeight <= 0) return;
+  const x = (drag.x - 1 / (2 * cols)) * board.clientWidth;
+  const y = (drag.y - 1 / (2 * rows)) * board.clientHeight;
+  element.style.transition = animate
+    ? drag.phase === "end"
+      ? `transform ${REMOTE_SETTLE_TRANSITION_MS}ms cubic-bezier(.2,.8,.2,1), filter 120ms ease, opacity 120ms ease`
+      : `transform ${REMOTE_MOVE_TRANSITION_MS}ms linear, filter 120ms ease, opacity 120ms ease`
+    : "none";
+  element.style.transform = `translate3d(${x}px,${y}px,0)`;
+}
+
 const RemotePuzzlePiece = memo(function RemotePuzzlePiece({
   drag,
   rows,
@@ -749,15 +764,37 @@ const RemotePuzzlePiece = memo(function RemotePuzzlePiece({
   imageUrl: string;
   pieceCount: number;
 }) {
+  const elementRef = useRef<HTMLDivElement>(null);
+  const latestDragRef = useRef(drag);
+  const positionedRef = useRef(false);
   const densityClass = pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : "";
+
+  useLayoutEffect(() => {
+    latestDragRef.current = drag;
+    const element = elementRef.current;
+    if (!element) return;
+    positionRemotePuzzlePiece(element, drag, rows, cols, positionedRef.current);
+    positionedRef.current = true;
+  }, [drag, rows, cols]);
+
+  useEffect(() => {
+    const element = elementRef.current;
+    const board = element?.parentElement;
+    if (!element || !board || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => positionRemotePuzzlePiece(element, latestDragRef.current, rows, cols, false));
+    observer.observe(board);
+    return () => observer.disconnect();
+  }, [rows, cols]);
+
   return (
     <div
+      ref={elementRef}
       className={`puzzle-piece remote-drag-piece ${drag.phase === "end" ? "remote-drop-handoff" : ""} ${densityClass}`}
       style={{
         width: `${100 / cols}%`,
         height: `${100 / rows}%`,
-        left: `${(drag.x - 1 / (2 * cols)) * 100}%`,
-        top: `${(drag.y - 1 / (2 * rows)) * 100}%`,
+        left: 0,
+        top: 0,
       }}
       aria-hidden="true"
     >

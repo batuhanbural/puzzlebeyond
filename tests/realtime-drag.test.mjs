@@ -28,7 +28,9 @@ test("live motion is throttled, bounded and never authoritative", async () => {
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("lib/realtime-client.ts", root), "utf8"),
   ]);
-  assert.match(page, /LIVE_DRAG_INTERVAL_MS = 50/);
+  assert.match(page, /LIVE_DRAG_INTERVAL_MS = 33/);
+  assert.match(page, /REMOTE_MOVE_TRANSITION_MS = 90/);
+  assert.match(page, /REMOTE_SETTLE_TRANSITION_MS = 160/);
   assert.match(page, /REMOTE_DRAG_TTL_MS = 2_500/);
   assert.match(page, /REMOTE_DROP_HANDOFF_MS = 1_200/);
   assert.match(page, /MAX_REMOTE_DRAGS = 16/);
@@ -43,4 +45,7 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   assert.match(handler, /refreshAuthoritativeRoom\(true\)/);
   assert.match(handler, /expiresAt = Date\.now\(\) \+ REMOTE_DROP_HANDOFF_MS/);
   assert.doesNotMatch(handler, /setPieces|remoteUpdatedAt\.current\s*=/);
+
+  assert.match(page, /transform = `translate3d\(\$\{x\}px,\$\{y\}px,0\)`/);
+  assert.match(page, /new ResizeObserver\(\(\) => positionRemotePuzzlePiece/);
 });

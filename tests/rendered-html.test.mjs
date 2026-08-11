@@ -69,7 +69,7 @@ test("pointer release commits a piece without replaying its movement", async () 
 });
 
 test("a piece moved onto the board paints before the handoff frame", async () => {
-  const page = await read("app/page.tsx");
+  const [page, styles] = await Promise.all([read("app/page.tsx"), read("app/globals.css")]);
   const start = page.indexOf("const JigsawPiece = memo");
   const end = page.indexOf("\n\nconst LockedPiecesCanvas", start);
   assert.ok(start >= 0 && end > start, "JigsawPiece must remain inspectable");
@@ -86,6 +86,9 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.match(page, /drag\.phase === "end" \? "remote-drop-handoff"/);
   assert.match(page, /liveEndMessage\.x = finalBoardX \+ 1 \/ \(2 \* cols\)/);
   assert.match(page, /liveEndMessage\.y = finalBoardY \+ 1 \/ \(2 \* rows\)/);
+  const remoteRule = styles.match(/\.puzzle-piece\.remote-drag-piece\s*\{[^}]*\}/)?.[0] || "";
+  assert.match(remoteRule, /will-change:transform/);
+  assert.doesNotMatch(remoteRule, /transition:[^;}]*(?:left|top)/);
 });
 
 test("side panels yield before the puzzle map becomes unusable", async () => {
