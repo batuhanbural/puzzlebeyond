@@ -375,3 +375,13 @@ test("the rendered puzzle switches horizontal mobile images to top and bottom ra
   assert.match(source, /observer\.observe\(area\)/);
   assert.doesNotMatch(source, /boardZoom|zoom-controls|Yakınlaştır|Uzaklaştır/);
 });
+
+test("every large puzzle tier uses the immediate dense rendering path", async () => {
+  const source = await pageSourcePromise;
+  const threshold = readArithmeticConstant(source, "LARGE_PUZZLE_THRESHOLD");
+  assert.equal(threshold, 120);
+  assert.deepEqual(puzzleSizes.filter(({ count }) => count >= threshold).map(({ count }) => count), [120, 300, 600, 1024]);
+  assert.match(source, /pieceCount >= LARGE_PUZZLE_THRESHOLD/);
+  assert.match(source, /rows \* cols >= LARGE_PUZZLE_THRESHOLD \? 1 : 2/);
+  assert.doesNotMatch(source, /pieceCount > 120|rows \* cols > 120/);
+});

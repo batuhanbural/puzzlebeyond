@@ -60,6 +60,7 @@ const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 } as const;
 const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 } as const;
 const MOBILE_LANDSCAPE_BOARD = { left: 0.14, top: 0.04, width: 0.72, height: 0.92 } as const;
 const PUZZLE_LAYOUT_VERSION = 3;
+const LARGE_PUZZLE_THRESHOLD = 120;
 const LIVE_DRAG_INTERVAL_MS = 33;
 const REMOTE_MOVE_TRANSITION_MS = 90;
 const REMOTE_SETTLE_TRANSITION_MS = 110;
@@ -561,7 +562,7 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, 
         const padY = cellHeight * 0.34;
         const width = cellWidth + padX * 2;
         const height = cellHeight + padY * 2;
-        const scale = rows * cols > 120 ? 1 : 2;
+        const scale = rows * cols >= LARGE_PUZZLE_THRESHOLD ? 1 : 2;
         canvas.width = Math.ceil(width * scale);
         canvas.height = Math.ceil(height * scale);
         const context = canvas.getContext("2d");
@@ -798,7 +799,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
       "--landscape-piece-x": `${landscapeX * 100}%`,
       "--landscape-piece-y": `${landscapeY * 100}%`,
     } as CSSProperties;
-  const densityClass = pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : "";
+  const densityClass = pieceCount >= LARGE_PUZZLE_THRESHOLD ? "dense-piece" : pieceCount > 20 ? "compact-piece" : "";
   return (
     <div
       className={`puzzle-piece ${isBoardPiece ? "board-piece" : "side-piece"} ${piece.locked ? "locked" : ""} ${isRecent ? "recent" : ""} ${isRemoteHeld ? "remote-held" : ""} ${densityClass}`}
@@ -817,7 +818,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
       aria-disabled={isBoardPiece ? piece.locked : undefined}
       aria-label={`${piece.id + 1}. puzzle parçası${piece.locked ? ", yerleştirildi" : ". Enter ile doğru yerine yerleştir"}`}
     >
-      <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager={pieceCount > 120 || isRecent || isRemoteHeld} />
+      <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager={pieceCount >= LARGE_PUZZLE_THRESHOLD || isRecent || isRemoteHeld} />
     </div>
   );
 });
@@ -855,7 +856,7 @@ const RemotePuzzlePiece = memo(function RemotePuzzlePiece({
   const elementRef = useRef<HTMLDivElement>(null);
   const latestDragRef = useRef(drag);
   const positionedRef = useRef(false);
-  const densityClass = pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : "";
+  const densityClass = pieceCount >= LARGE_PUZZLE_THRESHOLD ? "dense-piece" : pieceCount > 20 ? "compact-piece" : "";
 
   useLayoutEffect(() => {
     latestDragRef.current = drag;
@@ -1439,7 +1440,7 @@ export default function Home() {
     ?? -1;
   const remoteHeldIds = useMemo(() => new Set(remoteDrags.map((drag) => drag.pieceId)), [remoteDrags]);
   const boardPieces = useMemo(() => pieces.filter((piece) => piece.zone === "board" || piece.locked), [pieces]);
-  const interactiveBoardPieces = useMemo(() => pieceCount > 120
+  const interactiveBoardPieces = useMemo(() => pieceCount >= LARGE_PUZZLE_THRESHOLD
     ? boardPieces.filter((piece) => !piece.locked)
     : boardPieces, [boardPieces, pieceCount]);
   const lockedIds = useMemo(() => pieces.filter((piece) => piece.locked).map((piece) => piece.id), [pieces]);
@@ -2160,7 +2161,7 @@ export default function Home() {
                         <JigsawPiece id={hintPiece.id} rows={rows} cols={cols} seed={room?.code ?? previewSeed} imageUrl={imageUrl} />
                       </div>
                     )}
-                    {pieceCount > 120 && lockedIds.length > 0 && (
+                    {pieceCount >= LARGE_PUZZLE_THRESHOLD && lockedIds.length > 0 && (
                       <LockedPiecesCanvas
                         lockedIds={lockedIds}
                         lockedIdsKey={lockedIdsKey}

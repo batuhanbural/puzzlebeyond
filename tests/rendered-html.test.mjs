@@ -97,7 +97,10 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
     "the canvas draw, not the visibility observer, must run before paint",
   );
   assert.match(component, /if \(eager\) drawPiece\(\)/);
-  assert.match(page, /imageUrl=\{imageUrl\} eager=\{pieceCount > 120 \|\| isRecent \|\| isRemoteHeld\}/);
+  assert.match(page, /const LARGE_PUZZLE_THRESHOLD = 120/);
+  assert.match(page, /imageUrl=\{imageUrl\} eager=\{pieceCount >= LARGE_PUZZLE_THRESHOLD \|\| isRecent \|\| isRemoteHeld\}/);
+  assert.match(component, /rows \* cols >= LARGE_PUZZLE_THRESHOLD \? 1 : 2/);
+  assert.doesNotMatch(page, /pieceCount > 120|rows \* cols > 120/);
   assert.match(component, /if \(eager\) return;[\s\S]*observePuzzlePiece/);
   assert.match(page, /drag\.phase === "end" \? "remote-drop-handoff"/);
   assert.match(page, /liveEndMessage\.x = finalBoardX \+ 1 \/ \(2 \* cols\)/);
