@@ -62,6 +62,7 @@ const PUZZLE_LAYOUT_VERSION = 3;
 const MAX_VISIBLE_LOOSE_PIECES = 120;
 const LIVE_DRAG_INTERVAL_MS = 50;
 const REMOTE_DRAG_TTL_MS = 2_500;
+const REMOTE_DROP_HANDOFF_MS = 1_200;
 const MAX_REMOTE_DRAGS = 16;
 const PUZZLE_SIZES = [
   { count: 12, rows: 3, cols: 4, label: "RAHAT" },
@@ -728,7 +729,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
       aria-disabled={isBoardPiece ? piece.locked : undefined}
       aria-label={`${piece.id + 1}. puzzle parçası${piece.locked ? ", yerleştirildi" : ". Enter ile doğru yerine yerleştir"}`}
     >
-      <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager={isRecent} />
+      <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager={isRecent || isRemoteHeld} />
     </div>
   );
 });
@@ -751,7 +752,7 @@ const RemotePuzzlePiece = memo(function RemotePuzzlePiece({
   const densityClass = pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : "";
   return (
     <div
-      className={`puzzle-piece remote-drag-piece ${densityClass}`}
+      className={`puzzle-piece remote-drag-piece ${drag.phase === "end" ? "remote-drop-handoff" : ""} ${densityClass}`}
       style={{
         width: `${100 / cols}%`,
         height: `${100 / rows}%`,
@@ -947,7 +948,7 @@ export default function Home() {
         const active = current.filter((drag) => drag.expiresAt > now);
         return active.length === current.length ? current : active;
       });
-    }, 500);
+    }, 250);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -1153,21 +1154,26 @@ export default function Home() {
     dragSequences.clear();
     if (!realtimeSenderId.current) realtimeSenderId.current = crypto.randomUUID();
 
-    const refreshAuthoritativeRoom = async () => {
+    const refreshAuthoritativeRoom = async (force = false) => {
       const now = Date.now();
-      if (cancelled || document.hidden || refreshInFlight || dragRef.current || pendingRoomSaves.current > 0 || now - lastRefreshAt < 750) return;
+      if (cancelled || document.hidden || refreshInFlight || dragRef.current || pendingRoomSaves.current > 0 || (!force && now - lastRefreshAt < 750)) return false;
       refreshInFlight = true;
       lastRefreshAt = now;
       try {
         const response = await fetch(`/api/room?code=${encodeURIComponent(roomCode)}&since=${remoteUpdatedAt.current}`, { cache: "no-store" });
-        if (response.status === 204 || !response.ok) return;
+        if (response.status === 204) return true;
+        if (!response.ok) return false;
         const data = await readApiPayload<{ room?: Room }>(response);
-        if (!data.room || data.room.code !== roomCode || data.room.rows !== roomRows || data.room.cols !== roomCols || data.room.updatedAt <= remoteUpdatedAt.current) return;
+        if (!data.room || data.room.code !== roomCode || data.room.rows !== roomRows || data.room.cols !== roomCols) return false;
+        if (data.room.updatedAt <= remoteUpdatedAt.current) return true;
         const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
         remoteUpdatedAt.current = data.room.updatedAt;
         setRoom(nextRoom);
         setPieces(nextRoom.pieces);
-      } catch { /* Polling retries authoritative state after transient failures. */ }
+        return true;
+      } catch {
+        return false; // Polling retries authoritative state after transient failures.
+      }
       finally { refreshInFlight = false; }
     };
 
@@ -1185,8 +1191,11 @@ export default function Home() {
         if (typeof oldestSender === "string") dragSequences.delete(oldestSender);
       }
       if (message.phase === "end") {
-        setRemoteDrags((current) => current.filter((drag) => drag.senderId !== message.senderId));
-        void refreshAuthoritativeRoom();
+        const expiresAt = Date.now() + REMOTE_DROP_HANDOFF_MS;
+        setRemoteDrags((current) => current.map((drag) => drag.senderId === message.senderId && drag.gestureId === message.gestureId
+          ? { ...message, expiresAt }
+          : drag));
+        void refreshAuthoritativeRoom(true);
         return;
       }
       const piece = piecesRef.current.find((candidate) => candidate.id === message.pieceId);
@@ -1650,11 +1659,17 @@ export default function Home() {
     const snaps = droppedOnBoard
       && Math.abs(boardX - targetX) < (1 / cols) * 0.72
       && Math.abs(boardY - targetY) < (1 / rows) * 0.72;
+    const finalBoardX = snaps ? targetX : boardX;
+    const finalBoardY = snaps ? targetY : boardY;
+    if (liveEndMessage && droppedOnBoard) {
+      liveEndMessage.x = finalBoardX + 1 / (2 * cols);
+      liveEndMessage.y = finalBoardY + 1 / (2 * rows);
+    }
     const next = piecesRef.current.map((piece) => piece.id === movingId
       ? {
         ...piece,
-        x: droppedOnBoard ? (snaps ? targetX : boardX) : 0,
-        y: droppedOnBoard ? (snaps ? targetY : boardY) : 0,
+        x: droppedOnBoard ? finalBoardX : 0,
+        y: droppedOnBoard ? finalBoardY : 0,
         zone: droppedOnBoard ? "board" as const : "mat" as const,
         locked: snaps,
         layoutVersion: PUZZLE_LAYOUT_VERSION,
