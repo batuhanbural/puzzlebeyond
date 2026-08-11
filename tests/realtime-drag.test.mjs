@@ -9,7 +9,6 @@ const root = new URL("../", import.meta.url);
 test("live drag messages accept only bounded ephemeral coordinates", () => {
   const valid = {
     senderId: "sender_123456",
-    playerName: "Deniz",
     gestureId: "gesture_123456",
     pieceId: 47,
     x: 0.42,
@@ -19,8 +18,6 @@ test("live drag messages accept only bounded ephemeral coordinates", () => {
   };
   assert.deepEqual(parseRoomDragMessage(valid), valid);
   assert.equal(parseRoomDragMessage({ ...valid, senderId: "short" }), null);
-  assert.equal(parseRoomDragMessage({ ...valid, playerName: "x".repeat(25) }), null);
-  assert.equal(parseRoomDragMessage({ ...valid, playerName: "Deniz\nAdmin" }), null);
   assert.equal(parseRoomDragMessage({ ...valid, pieceId: 48 * 48 }), null);
   assert.equal(parseRoomDragMessage({ ...valid, x: Number.NaN }), null);
   assert.equal(parseRoomDragMessage({ ...valid, phase: "drop" }), null);
@@ -39,8 +36,8 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   assert.match(page, /MAX_REMOTE_DRAGS = 16/);
   assert.match(realtime, /socket\.bufferedAmount > 64 \* 1024/);
   assert.match(realtime, /event: "piece-drag"/);
-  assert.match(page, /playerName: normalizeNickname\(playerName\) \|\| "Oyuncu"/);
   assert.match(page, /playerColor\(drag\.senderId\)/);
+  assert.doesNotMatch(realtime, /playerName/);
 
   const start = page.indexOf("const applyRemoteDrag");
   const end = page.indexOf("\n\n    void fetch(\"/api/realtime\")", start);

@@ -728,7 +728,6 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   isRecent,
   isKeyboardPiece,
   isRemoteHeld,
-  localPlayerName,
   playerColor,
   sidePosition,
   bandPosition,
@@ -747,7 +746,6 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   isRecent: boolean;
   isKeyboardPiece: boolean;
   isRemoteHeld: boolean;
-  localPlayerName: string;
   playerColor: string;
   sidePosition?: PieceRailPosition;
   bandPosition?: PieceRailPosition;
@@ -796,7 +794,6 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
       aria-label={`${piece.id + 1}. puzzle parçası${piece.locked ? ", yerleştirildi" : ". Enter ile doğru yerine yerleştir"}`}
     >
       <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager={isRecent || isRemoteHeld} />
-      <span className="piece-player-label local-piece-player-label">{localPlayerName}</span>
     </div>
   );
 });
@@ -867,7 +864,6 @@ const RemotePuzzlePiece = memo(function RemotePuzzlePiece({
       aria-hidden="true"
     >
       <JigsawPiece id={drag.pieceId} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager />
-      {drag.phase === "move" && <span className="piece-player-label">{drag.playerName}</span>}
     </div>
   );
 });
@@ -1701,9 +1697,6 @@ export default function Home() {
     }
     const message: RoomDragMessage = {
       senderId: realtimeSenderId.current,
-      // Public broadcast metadata is cosmetic only; the parser bounds it and
-      // no name or color is ever applied to authoritative room state.
-      playerName: normalizeNickname(playerName) || "Oyuncu",
       gestureId: drag.gestureId,
       pieceId: drag.id,
       x: drag.liveX,
@@ -1712,7 +1705,7 @@ export default function Home() {
       phase,
     };
     return message;
-  }, [playerName]);
+  }, []);
 
   const sendLiveDragMessage = useCallback((drag: LocalDrag, message: RoomDragMessage) => {
     const subscription = realtimeSubscriptionRef.current ?? drag.subscription;
@@ -2114,7 +2107,6 @@ export default function Home() {
                         isRecent={piece.id === lastHeldPieceId}
                         isKeyboardPiece={piece.id === keyboardPieceId}
                         isRemoteHeld={remoteHeldIds.has(piece.id)}
-                        localPlayerName={playerName}
                         playerColor={localPlayerColor}
                         onStart={startMove}
                         onLostCapture={handleLostPieceCapture}
@@ -2160,7 +2152,6 @@ export default function Home() {
                     isRecent={piece.id === lastHeldPieceId}
                     isKeyboardPiece={piece.id === keyboardPieceId}
                     isRemoteHeld={remoteHeldIds.has(piece.id)}
-                    localPlayerName={playerName}
                     playerColor={localPlayerColor}
                     sidePosition={sideLayout.get(piece.id)}
                     bandPosition={bandLayout.get(piece.id)}

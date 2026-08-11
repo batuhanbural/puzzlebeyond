@@ -104,8 +104,8 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.match(remoteHeldRule, /opacity:0/);
   assert.match(remoteHeldRule, /pointer-events:none/);
   assert.match(remoteRule, /var\(--player-color/);
-  assert.match(styles, /\.piece-player-label\s*\{[^}]*bottom:calc\(100% \+ 5px\)[^}]*background:var\(--player-color/);
-  assert.match(page, /drag\.phase === "move" && <span className="piece-player-label">\{drag\.playerName\}<\/span>/);
+  assert.doesNotMatch(styles, /\.piece-player-label|\.local-piece-player-label/);
+  assert.doesNotMatch(page, /className="piece-player-label"/);
   assert.match(page, /const puzzlePieceCanvasCache = new Map<string, HTMLCanvasElement>\(\)/);
   assert.match(page, /restorePuzzlePieceCanvas\(canvasKey, canvas\)/);
   assert.match(page, /rememberPuzzlePieceCanvas\(canvasKey, canvas\)/);
