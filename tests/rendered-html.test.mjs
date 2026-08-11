@@ -94,8 +94,11 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.match(page, /liveEndMessage\.x = finalBoardX \+ 1 \/ \(2 \* cols\)/);
   assert.match(page, /liveEndMessage\.y = finalBoardY \+ 1 \/ \(2 \* rows\)/);
   const remoteRule = styles.match(/\.puzzle-piece\.remote-drag-piece\s*\{[^}]*\}/)?.[0] || "";
+  const remoteHeldRule = styles.match(/\.puzzle-piece\.remote-held:not\(\.dragging\)\s*\{[^}]*\}/)?.[0] || "";
   assert.match(remoteRule, /will-change:transform/);
   assert.doesNotMatch(remoteRule, /transition:[^;}]*(?:left|top)/);
+  assert.match(remoteHeldRule, /opacity:0/);
+  assert.match(remoteHeldRule, /pointer-events:none/);
 });
 
 test("side panels yield before the puzzle map becomes unusable", async () => {
