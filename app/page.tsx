@@ -2,7 +2,7 @@
 
 import { ChangeEvent, CSSProperties, PointerEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GalleryKind } from "@/lib/gallery";
-import type { RealtimeSubscription } from "@/lib/realtime-client";
+import type { RealtimeSubscription, RoomDragMessage } from "@/lib/realtime-client";
 
 type PieceZone = "board" | "mat";
 type Piece = { id: number; x: number; y: number; locked?: boolean; layoutVersion?: number; zone?: PieceZone };
@@ -20,6 +20,22 @@ type RoomPlayer = {
   clientId: string;
   nickname: string;
   lastSeenAt: number;
+};
+
+type RemoteDrag = RoomDragMessage & { expiresAt: number };
+type LocalDrag = {
+  id: number;
+  clientX: number;
+  clientY: number;
+  width: number;
+  height: number;
+  originalStyle: string;
+  element: HTMLDivElement;
+  gestureId: string;
+  liveX: number;
+  liveY: number;
+  lastBroadcastAt: number;
+  subscription: RealtimeSubscription | null;
 };
 
 type ApiPayload<T> = T & { error?: string };
@@ -44,6 +60,9 @@ const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 } as const;
 const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 } as const;
 const PUZZLE_LAYOUT_VERSION = 3;
 const MAX_VISIBLE_LOOSE_PIECES = 120;
+const LIVE_DRAG_INTERVAL_MS = 50;
+const REMOTE_DRAG_TTL_MS = 2_500;
+const MAX_REMOTE_DRAGS = 16;
 const PUZZLE_SIZES = [
   { count: 12, rows: 3, cols: 4, label: "RAHAT" },
   { count: 20, rows: 4, cols: 5, label: "KOLAY" },
@@ -650,6 +669,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   pieceCount,
   isRecent,
   isKeyboardPiece,
+  isRemoteHeld,
   sidePosition,
   bandPosition,
   onStart,
@@ -666,6 +686,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   pieceCount: number;
   isRecent: boolean;
   isKeyboardPiece: boolean;
+  isRemoteHeld: boolean;
   sidePosition?: PieceRailPosition;
   bandPosition?: PieceRailPosition;
   onStart: (event: PointerEvent<HTMLDivElement>, piece: Piece) => void;
@@ -689,7 +710,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   const densityClass = pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : "";
   return (
     <div
-      className={`puzzle-piece ${isBoardPiece ? "board-piece" : "side-piece"} ${piece.locked ? "locked" : ""} ${isRecent ? "recent" : ""} ${densityClass}`}
+      className={`puzzle-piece ${isBoardPiece ? "board-piece" : "side-piece"} ${piece.locked ? "locked" : ""} ${isRecent ? "recent" : ""} ${isRemoteHeld ? "remote-held" : ""} ${densityClass}`}
       style={style}
       onPointerDown={(event) => onStart(event, piece)}
       onLostPointerCapture={() => onLostCapture(piece.id)}
@@ -706,6 +727,38 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
       aria-label={`${piece.id + 1}. puzzle parçası${piece.locked ? ", yerleştirildi" : ". Enter ile doğru yerine yerleştir"}`}
     >
       <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} />
+    </div>
+  );
+});
+
+const RemotePuzzlePiece = memo(function RemotePuzzlePiece({
+  drag,
+  rows,
+  cols,
+  seed,
+  imageUrl,
+  pieceCount,
+}: {
+  drag: RemoteDrag;
+  rows: number;
+  cols: number;
+  seed: string;
+  imageUrl: string;
+  pieceCount: number;
+}) {
+  const densityClass = pieceCount > 120 ? "dense-piece" : pieceCount > 20 ? "compact-piece" : "";
+  return (
+    <div
+      className={`puzzle-piece remote-drag-piece ${densityClass}`}
+      style={{
+        width: `${100 / cols}%`,
+        height: `${100 / rows}%`,
+        left: `${(drag.x - 1 / (2 * cols)) * 100}%`,
+        top: `${(drag.y - 1 / (2 * rows)) * 100}%`,
+      }}
+      aria-hidden="true"
+    >
+      <JigsawPiece id={drag.pieceId} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} />
     </div>
   );
 });
@@ -859,6 +912,7 @@ export default function Home() {
   const [playerName, setPlayerName] = useState(() => getStoredNickname() || "Sen");
   const [nicknameInput, setNicknameInput] = useState(() => getStoredNickname());
   const [roomPlayers, setRoomPlayers] = useState<RoomPlayer[]>([]);
+  const [remoteDrags, setRemoteDrags] = useState<RemoteDrag[]>([]);
   const clientId = "self";
   const boardAreaRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -868,24 +922,32 @@ export default function Home() {
   const lastLocalMove = useRef(0);
   const remoteUpdatedAt = useRef(0);
   const realtimeConnected = useRef(false);
+  const realtimeSubscriptionRef = useRef<RealtimeSubscription | null>(null);
+  const realtimeSenderId = useRef("");
+  const realtimeSequence = useRef(0);
+  const remoteDragSequence = useRef(new Map<string, number>());
   const presenceRevoked = useRef(false);
   const hintTimer = useRef<number | null>(null);
   const roomSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const pendingRoomSaves = useRef(0);
   const rafRef = useRef<number | null>(null);
-  const dragRef = useRef<{
-    id: number;
-    clientX: number;
-    clientY: number;
-    width: number;
-    height: number;
-    originalStyle: string;
-    element: HTMLDivElement;
-  } | null>(null);
+  const dragRef = useRef<LocalDrag | null>(null);
 
   useEffect(() => {
     piecesRef.current = pieces;
   }, [pieces]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setRemoteDrags((current) => {
+        if (current.length === 0) return current;
+        const active = current.filter((drag) => drag.expiresAt > now);
+        return active.length === current.length ? current : active;
+      });
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1083,7 +1145,11 @@ export default function Home() {
     let refreshInFlight = false;
     let lastRefreshAt = 0;
     let subscription: RealtimeSubscription | null = null;
+    const dragSequences = remoteDragSequence.current;
     realtimeConnected.current = false;
+    realtimeSubscriptionRef.current = null;
+    dragSequences.clear();
+    if (!realtimeSenderId.current) realtimeSenderId.current = crypto.randomUUID();
 
     const refreshAuthoritativeRoom = async () => {
       const now = Date.now();
@@ -1103,9 +1169,32 @@ export default function Home() {
       finally { refreshInFlight = false; }
     };
 
-    // Public Realtime payloads are only wake-up hints. The REST room record is
-    // authoritative, so forged broadcasts cannot move pieces or poison clocks.
+    // Persistent changes remain REST-authoritative. Public drag broadcasts are
+    // validated, short-lived visual ghosts and never mutate pieces or clocks.
     const applyRealtimeUpdate = () => { void refreshAuthoritativeRoom(); };
+    const applyRemoteDrag = (message: RoomDragMessage) => {
+      if (message.senderId === realtimeSenderId.current || message.pieceId >= roomRows * roomCols) return;
+      const lastSequence = dragSequences.get(message.senderId) ?? -1;
+      if (message.seq <= lastSequence) return;
+      dragSequences.delete(message.senderId);
+      dragSequences.set(message.senderId, message.seq);
+      if (dragSequences.size > 64) {
+        const oldestSender = dragSequences.keys().next().value;
+        if (typeof oldestSender === "string") dragSequences.delete(oldestSender);
+      }
+      if (message.phase === "end") {
+        setRemoteDrags((current) => current.filter((drag) => drag.senderId !== message.senderId));
+        void refreshAuthoritativeRoom();
+        return;
+      }
+      const piece = piecesRef.current.find((candidate) => candidate.id === message.pieceId);
+      if (!piece || piece.locked || dragRef.current?.id === message.pieceId) return;
+      const nextDrag: RemoteDrag = { ...message, expiresAt: Date.now() + REMOTE_DRAG_TTL_MS };
+      setRemoteDrags((current) => {
+        const active = current.filter((drag) => drag.senderId !== message.senderId && drag.expiresAt > Date.now());
+        return [...active, nextDrag].slice(-MAX_REMOTE_DRAGS);
+      });
+    };
 
     void fetch("/api/realtime").then(async (response) => {
       if (!response.ok) return null;
@@ -1118,8 +1207,13 @@ export default function Home() {
         { url: config.url, key: config.key },
         roomCode,
         applyRealtimeUpdate,
-        (status) => { realtimeConnected.current = status === "connected"; },
+        (status) => {
+          realtimeConnected.current = status === "connected";
+          if (status === "disconnected") setRemoteDrags([]);
+        },
+        applyRemoteDrag,
       );
+      realtimeSubscriptionRef.current = subscription;
     }).catch(() => {
       // The since-polling fallback keeps rooms usable before Realtime is configured.
     });
@@ -1128,6 +1222,9 @@ export default function Home() {
       cancelled = true;
       realtimeConnected.current = false;
       subscription?.unsubscribe();
+      if (realtimeSubscriptionRef.current === subscription) realtimeSubscriptionRef.current = null;
+      dragSequences.clear();
+      setRemoteDrags([]);
     };
   }, [room?.code, room?.rows, room?.cols]);
 
@@ -1155,6 +1252,7 @@ export default function Home() {
   const keyboardPieceId = pieces.find((piece) => piece.id === lastHeldPieceId && !piece.locked)?.id
     ?? pieces.find((piece) => !piece.locked)?.id
     ?? -1;
+  const remoteHeldIds = useMemo(() => new Set(remoteDrags.map((drag) => drag.pieceId)), [remoteDrags]);
   const boardPieces = useMemo(() => pieces.filter((piece) => piece.zone === "board" || piece.locked), [pieces]);
   const interactiveBoardPieces = useMemo(() => pieceCount > 120
     ? boardPieces.filter((piece) => !piece.locked)
@@ -1465,11 +1563,42 @@ export default function Home() {
     }
   };
 
+  const createLiveDragMessage = useCallback((drag: LocalDrag, phase: RoomDragMessage["phase"]) => {
+    if (!drag.subscription || !realtimeSenderId.current) return null;
+    if (phase === "move") {
+      const rect = boardRef.current?.getBoundingClientRect();
+      if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+      drag.liveX = Math.max(-2, Math.min(3, (drag.clientX - rect.left) / rect.width));
+      drag.liveY = Math.max(-2, Math.min(3, (drag.clientY - rect.top) / rect.height));
+    }
+    const message: RoomDragMessage = {
+      senderId: realtimeSenderId.current,
+      gestureId: drag.gestureId,
+      pieceId: drag.id,
+      x: drag.liveX,
+      y: drag.liveY,
+      seq: ++realtimeSequence.current,
+      phase,
+    };
+    return message;
+  }, []);
+
+  const publishLiveDrag = useCallback((drag: LocalDrag, phase: RoomDragMessage["phase"]) => {
+    const message = createLiveDragMessage(drag, phase);
+    if (message) drag.subscription?.sendDrag(message);
+    return message;
+  }, [createLiveDragMessage]);
+
   const movePiece = useCallback((event: PointerEvent<HTMLDivElement>) => {
     if (!dragRef.current) return;
     const drag = dragRef.current;
     drag.clientX = event.clientX;
     drag.clientY = event.clientY;
+    const now = performance.now();
+    if (now - drag.lastBroadcastAt >= LIVE_DRAG_INTERVAL_MS) {
+      drag.lastBroadcastAt = now;
+      publishLiveDrag(drag, "move");
+    }
     if (!rafRef.current) {
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null;
@@ -1479,11 +1608,12 @@ export default function Home() {
         }
       });
     }
-  }, []);
+  }, [publishLiveDrag]);
 
   const cancelMove = useCallback(() => {
     const drag = dragRef.current;
     if (!drag) return;
+    publishLiveDrag(drag, "end");
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -1492,20 +1622,20 @@ export default function Home() {
     drag.element.setAttribute("style", drag.originalStyle);
     boardAreaRef.current?.classList.remove("drag-active");
     dragRef.current = null;
-  }, []);
+  }, [publishLiveDrag]);
 
-  const endMove = useCallback(() => {
+  const endMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
     if (!dragRef.current) return;
     const drag = dragRef.current;
     const movingId = drag.id;
+    drag.clientX = event.clientX;
+    drag.clientY = event.clientY;
+    publishLiveDrag(drag, "move");
+    const liveEndMessage = createLiveDragMessage(drag, "end");
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
-    drag.element.classList.remove("dragging");
-    drag.element.setAttribute("style", drag.originalStyle);
-    boardAreaRef.current?.classList.remove("drag-active");
-    dragRef.current = null;
     const rect = boardRef.current?.getBoundingClientRect();
     const droppedOnBoard = Boolean(rect
       && drag.clientX >= rect.left && drag.clientX <= rect.right
@@ -1528,13 +1658,19 @@ export default function Home() {
         layoutVersion: PUZZLE_LAYOUT_VERSION,
       }
       : piece);
+    drag.element.classList.remove("dragging");
+    drag.element.setAttribute("style", drag.originalStyle);
+    boardAreaRef.current?.classList.remove("drag-active");
+    dragRef.current = null;
     setPieces(next);
-    void pushMove(next, movingId);
+    void pushMove(next, movingId).finally(() => {
+      if (liveEndMessage) drag.subscription?.sendDrag(liveEndMessage);
+    });
     if (snaps) setNotice("Tak! Parça doğru yerine oturdu.");
     if (snaps && !room && introCompletion === "idle" && next.every((piece) => piece.locked)) {
       setIntroCompletion("showing");
     }
-  }, [cols, rows, pushMove, room, introCompletion]);
+  }, [cols, rows, pushMove, room, introCompletion, createLiveDragMessage, publishLiveDrag]);
 
   useEffect(() => {
     const cancelOnEscape = (event: KeyboardEvent) => {
@@ -1582,7 +1718,8 @@ export default function Home() {
     element.style.top = `${event.clientY - height / 2}px`;
     element.style.margin = "0";
     element.style.zIndex = "1000";
-    dragRef.current = {
+    if (!realtimeSenderId.current) realtimeSenderId.current = crypto.randomUUID();
+    const drag: LocalDrag = {
       id: piece.id,
       clientX: event.clientX,
       clientY: event.clientY,
@@ -1590,8 +1727,15 @@ export default function Home() {
       height,
       originalStyle,
       element,
+      gestureId: crypto.randomUUID(),
+      liveX: 0,
+      liveY: 0,
+      lastBroadcastAt: performance.now(),
+      subscription: realtimeSubscriptionRef.current,
     };
-  }, [cancelMove, cols, rows]);
+    dragRef.current = drag;
+    publishLiveDrag(drag, "move");
+  }, [cancelMove, cols, rows, publishLiveDrag]);
 
   const handleLostPieceCapture = useCallback((pieceId: number) => {
     if (dragRef.current?.id === pieceId) cancelMove();
@@ -1828,10 +1972,22 @@ export default function Home() {
                         pieceCount={pieceCount}
                         isRecent={piece.id === lastHeldPieceId}
                         isKeyboardPiece={piece.id === keyboardPieceId}
+                        isRemoteHeld={remoteHeldIds.has(piece.id)}
                         onStart={startMove}
                         onLostCapture={handleLostPieceCapture}
                         onFocusPiece={focusPiece}
                         onPlacePiece={placePieceFromKeyboard}
+                      />
+                    ))}
+                    {remoteDrags.map((drag) => (
+                      <RemotePuzzlePiece
+                        key={`${drag.senderId}:${drag.gestureId}`}
+                        drag={drag}
+                        rows={rows}
+                        cols={cols}
+                        seed={puzzleSeed}
+                        imageUrl={imageUrl}
+                        pieceCount={pieceCount}
                       />
                     ))}
                     {room && progress === 100 && (
@@ -1859,6 +2015,7 @@ export default function Home() {
                     pieceCount={pieceCount}
                     isRecent={piece.id === lastHeldPieceId}
                     isKeyboardPiece={piece.id === keyboardPieceId}
+                    isRemoteHeld={remoteHeldIds.has(piece.id)}
                     sidePosition={sideLayout.get(piece.id)}
                     bandPosition={bandLayout.get(piece.id)}
                     onStart={startMove}

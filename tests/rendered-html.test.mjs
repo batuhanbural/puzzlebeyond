@@ -42,6 +42,46 @@ test("contains the puzzle app entry points", async () => {
   assert.match(packageJson, /\"build:vercel\"/);
 });
 
+test("pointer release commits a piece without replaying its movement", async () => {
+  const [page, styles] = await Promise.all([
+    read("app/page.tsx"),
+    read("app/globals.css"),
+  ]);
+  const pieceRule = styles.match(/\.puzzle-piece\s*\{[^}]*\}/)?.[0] || "";
+  assert.doesNotMatch(
+    pieceRule,
+    /transition\s*:[^;}]*(?:\bleft\b|\btop\b)/,
+    "piece coordinates must not animate after pointer release",
+  );
+
+  const start = page.indexOf("const endMove = useCallback");
+  const end = page.indexOf("\n  useEffect", start);
+  assert.ok(start >= 0 && end > start, "endMove must remain inspectable");
+  const endMove = page.slice(start, end);
+  assert.match(endMove, /event: PointerEvent<HTMLDivElement>/);
+  assert.match(endMove, /drag\.clientX = event\.clientX/);
+  assert.match(endMove, /drag\.clientY = event\.clientY/);
+  assert.ok(
+    endMove.indexOf("getBoundingClientRect()") < endMove.indexOf('setAttribute("style", drag.originalStyle)'),
+    "drop geometry must be measured before restoring the pre-drag style",
+  );
+  assert.match(endMove, /setPieces\(next\)/);
+});
+
+test("side panels yield before the puzzle map becomes unusable", async () => {
+  const styles = await read("app/globals.css");
+  const hideRoom = styles.match(/@media \(max-width:1180px\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
+  const hideBoth = styles.match(/@media \(max-width:900px\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
+  const shortLandscape = styles.match(/@media \(max-height:640px\) and \(orientation:landscape\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
+
+  assert.match(hideRoom, /\.room-panel\s*\{\s*display:none/);
+  assert.match(hideRoom, /grid-template-columns:minmax\(0,1fr\) 210px/);
+  assert.match(hideBoth, /\.progress-panel\s*\{\s*display:none/);
+  assert.match(hideBoth, /grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(shortLandscape, /\.room-panel,\s*\.progress-panel\s*\{\s*display:none/);
+  assert.match(shortLandscape, /footer\s*\{\s*display:none/);
+});
+
 test("exposes the production API routes", async () => {
   await Promise.all([
     access(new URL("app/api/room/route.ts", root)),

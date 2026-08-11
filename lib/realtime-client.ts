@@ -1,7 +1,18 @@
 export type RealtimeStatus = "connecting" | "connected" | "disconnected";
 
 export type RealtimeSubscription = {
+  sendDrag: (message: RoomDragMessage) => boolean;
   unsubscribe: () => void;
+};
+
+export type RoomDragMessage = {
+  senderId: string;
+  gestureId: string;
+  pieceId: number;
+  x: number;
+  y: number;
+  seq: number;
+  phase: "move" | "end";
 };
 
 type RealtimeConfig = {
@@ -32,6 +43,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+export function parseRoomDragMessage(value: unknown): RoomDragMessage | null {
+  if (!isRecord(value)) return null;
+  const { senderId, gestureId, pieceId, x, y, seq, phase } = value;
+  if (typeof senderId !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(senderId)) return null;
+  if (typeof gestureId !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(gestureId)) return null;
+  if (!Number.isInteger(pieceId) || Number(pieceId) < 0 || Number(pieceId) >= 48 * 48) return null;
+  if (typeof x !== "number" || !Number.isFinite(x) || x < -2 || x > 3) return null;
+  if (typeof y !== "number" || !Number.isFinite(y) || y < -2 || y > 3) return null;
+  if (!Number.isInteger(seq) || Number(seq) < 0 || Number(seq) > 1_000_000_000) return null;
+  if (phase !== "move" && phase !== "end") return null;
+  return { senderId, gestureId, pieceId: Number(pieceId), x, y, seq: Number(seq), phase };
+}
+
 function realtimeWebSocketUrl(config: RealtimeConfig) {
   const projectUrl = new URL(config.url);
   const protocol = projectUrl.protocol === "http:" ? "ws:" : "wss:";
@@ -49,9 +73,10 @@ export function subscribeToRoomRealtime(
   roomCode: string,
   onUpdate: () => void,
   onStatus?: (status: RealtimeStatus) => void,
+  onDrag?: (message: RoomDragMessage) => void,
 ): RealtimeSubscription {
   if (typeof window === "undefined" || typeof WebSocket === "undefined") {
-    return { unsubscribe: () => {} };
+    return { sendDrag: () => false, unsubscribe: () => {} };
   }
 
   const topic = `realtime:puzzlebeyond-room-${roomCode}`;
@@ -62,6 +87,7 @@ export function subscribeToRoomRealtime(
   let retryDelay = 1000;
   let nextRef = 0;
   let joinRef = "";
+  let joined = false;
 
   const clearHeartbeat = () => {
     if (heartbeatTimer !== null) window.clearInterval(heartbeatTimer);
@@ -69,7 +95,7 @@ export function subscribeToRoomRealtime(
   };
 
   const send = (event: string, payload: unknown, targetTopic = topic, ref?: string, joinReference?: string | null) => {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
     socket.send(JSON.stringify({
       topic: targetTopic,
       event,
@@ -77,6 +103,7 @@ export function subscribeToRoomRealtime(
       ref: ref ?? String(++nextRef),
       join_ref: joinReference ?? (joinRef || null),
     }));
+    return true;
   };
 
   const scheduleReconnect = () => {
@@ -105,6 +132,7 @@ export function subscribeToRoomRealtime(
     nextSocket.onopen = () => {
       if (stopped || socket !== nextSocket) return;
       retryDelay = 1000;
+      joined = false;
       joinRef = String(++nextRef);
       send("phx_join", {
         config: {
@@ -131,14 +159,20 @@ export function subscribeToRoomRealtime(
       if (message.event === "phx_reply") {
         const payload = isRecord(message.payload) ? message.payload : null;
         if (message.ref === joinRef && payload?.status === "ok") {
+          joined = true;
           onStatus?.("connected");
         }
         return;
       }
       if (message.topic !== topic || message.event !== "broadcast" || !isRecord(message.payload)) return;
       const envelope = message.payload;
-      if (envelope.event !== "piece-change") return;
-      onUpdate();
+      if (envelope.event === "piece-change") {
+        onUpdate();
+        return;
+      }
+      if (envelope.event !== "piece-drag") return;
+      const drag = parseRoomDragMessage(envelope.payload);
+      if (drag) onDrag?.(drag);
     };
 
     nextSocket.onerror = () => {
@@ -149,6 +183,7 @@ export function subscribeToRoomRealtime(
     nextSocket.onclose = () => {
       if (socket !== nextSocket) return;
       clearHeartbeat();
+      joined = false;
       socket = null;
       if (stopped) return;
       onStatus?.("disconnected");
@@ -162,6 +197,7 @@ export function subscribeToRoomRealtime(
     retryTimer = null;
     try { socket?.close(1000, "page suspended"); } catch { /* The socket may already be closed. */ }
     socket = null;
+    joined = false;
   };
 
   const resumeSocket = () => {
@@ -184,6 +220,11 @@ export function subscribeToRoomRealtime(
   openSocket();
 
   return {
+    sendDrag: (message) => {
+      if (!joined || !socket || socket.readyState !== WebSocket.OPEN || socket.bufferedAmount > 64 * 1024) return false;
+      const drag = parseRoomDragMessage(message);
+      return drag ? send("broadcast", { type: "broadcast", event: "piece-drag", payload: drag }) : false;
+    },
     unsubscribe: () => {
       stopped = true;
       document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -194,6 +235,7 @@ export function subscribeToRoomRealtime(
       retryTimer = null;
       try { socket?.close(1000, "room left"); } catch { /* The socket may already be closed. */ }
       socket = null;
+      joined = false;
     },
   };
 }
