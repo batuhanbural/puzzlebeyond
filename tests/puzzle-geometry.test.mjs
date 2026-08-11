@@ -344,6 +344,5 @@ test("the rendered puzzle switches horizontal mobile images to top and bottom ra
   assert.match(source, /classList\.remove\("drag-active"\)/);
   assert.match(source, /new ResizeObserver\(updateSize\)/);
   assert.match(source, /observer\.observe\(area\)/);
-  assert.match(source, /Math\.min\(3, zoom \+ \.5\)/, "dense portrait boards keep a bounded local zoom control");
-  assert.match(source, /puzzle-board-area \$\{boardZoom > 1 \? "zoomed" : ""\}/);
+  assert.doesNotMatch(source, /boardZoom|zoom-controls|Yakınlaştır|Uzaklaştır/);
 });

@@ -1035,7 +1035,6 @@ export default function Home() {
   const boardRef = useRef<HTMLDivElement>(null);
   const piecesRef = useRef(pieces);
   const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
-  const [boardZoom, setBoardZoom] = useState(1);
   const lastLocalMove = useRef(0);
   const remoteUpdatedAt = useRef(0);
   const realtimeConnected = useRef(false);
@@ -1113,10 +1112,6 @@ export default function Home() {
     updateSize();
     return () => observer.disconnect();
   }, [imageAspect, galleryOpen, introCompletion, room?.code]);
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => setBoardZoom(1));
-    return () => window.cancelAnimationFrame(frame);
-  }, [room?.code, imageAspect]);
   useEffect(() => {
     return () => {
       if (uploadPreviewUrl) {
@@ -1377,7 +1372,7 @@ export default function Home() {
     "--band-workspace-aspect": bandWorkspaceAspect,
   } as CSSProperties;
   const boardStyle = boardSize.width > 0
-    ? { width: `${boardSize.width * boardZoom}px`, height: `${boardSize.height * boardZoom}px` }
+    ? { width: `${boardSize.width}px`, height: `${boardSize.height}px` }
     : { width: "100%", aspectRatio: imageAspect, maxHeight: "100%" };
   const hintPiece = useMemo(() => pieces.find((piece) => piece.id === lastHeldPieceId && !piece.locked)
     ?? pieces.find((piece) => !piece.locked), [lastHeldPieceId, pieces]);
@@ -2031,13 +2026,6 @@ export default function Home() {
               {room && <button className="sync-button" onClick={() => void forceSyncRoom()} disabled={syncBusy} title="Puzzle durumunu sunucudan yeniden al">{syncBusy ? "EŞİTLENİYOR…" : "↻ EŞİTLE"}</button>}
               {(room || !galleryVisible) && <button className="push-sides-button" onClick={pushToSides} title="Kilitlenmemiş parçaları tahta çevresine topla">↹ KENARA İT</button>}
               {(room || !galleryVisible) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
-              {(room || !galleryVisible) && (
-                <div className="zoom-controls" aria-label="Puzzle tahtası yakınlaştırma">
-                  <button type="button" onClick={() => setBoardZoom((zoom) => Math.max(1, zoom - .5))} disabled={boardZoom <= 1} aria-label="Uzaklaştır">−</button>
-                  <span>{boardZoom.toFixed(1)}×</span>
-                  <button type="button" onClick={() => setBoardZoom((zoom) => Math.min(3, zoom + .5))} disabled={boardZoom >= 3} aria-label="Yakınlaştır">+</button>
-                </div>
-              )}
               <div className="difficulty-pill" title={`${rows}×${cols}`}>{progress}% · {pieceCount} PARÇA</div>
             </div>
           </div>
@@ -2078,7 +2066,7 @@ export default function Home() {
                 onPointerUp={endMove}
                 onPointerCancel={cancelMove}
               >
-                <div className={`puzzle-board-area ${boardZoom > 1 ? "zoomed" : ""}`} ref={boardAreaRef}>
+                <div className="puzzle-board-area" ref={boardAreaRef}>
                   <div className="puzzle-board-guide" ref={boardRef} style={boardStyle} role="group" aria-label={`${rows} satır ve ${cols} sütunluk puzzle tahtası`} aria-describedby="puzzle-keyboard-help">
                     <span className="sr-only" id="puzzle-keyboard-help">Bir parçaya odaklanıp Enter veya Boşluk tuşuyla doğru yerine yerleştirebilirsin.</span>
                     <div

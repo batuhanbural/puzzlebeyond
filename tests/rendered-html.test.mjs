@@ -28,6 +28,8 @@ test("contains the puzzle app entry points", async () => {
   assert.match(page, /KENARA İT/);
   assert.doesNotMatch(page, /CANLI OYUN|live-dot/);
   assert.doesNotMatch(styles, /\.live-dot/);
+  assert.doesNotMatch(page, /boardZoom|zoom-controls|Yakınlaştır|Uzaklaştır/);
+  assert.doesNotMatch(styles, /\.zoom-controls|\.puzzle-board-area\.zoomed/);
   assert.doesNotMatch(page, /className="piece-mat"/);
   assert.doesNotMatch(page, /MATA TOPLA/);
   assert.match(page, /className="code-stamp">6</);
