@@ -728,6 +728,8 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   isRecent,
   isKeyboardPiece,
   isRemoteHeld,
+  localPlayerName,
+  playerColor,
   sidePosition,
   bandPosition,
   onStart,
@@ -745,6 +747,8 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   isRecent: boolean;
   isKeyboardPiece: boolean;
   isRemoteHeld: boolean;
+  localPlayerName: string;
+  playerColor: string;
   sidePosition?: PieceRailPosition;
   bandPosition?: PieceRailPosition;
   onStart: (event: PointerEvent<HTMLDivElement>, piece: Piece) => void;
@@ -754,8 +758,15 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
 }) {
   const isBoardPiece = zone === "board";
   const style = isBoardPiece
-    ? { width: `${100 / cols}%`, height: `${100 / rows}%`, left: `${piece.x * 100}%`, top: `${piece.y * 100}%` }
+    ? {
+      "--player-color": playerColor,
+      width: `${100 / cols}%`,
+      height: `${100 / rows}%`,
+      left: `${piece.x * 100}%`,
+      top: `${piece.y * 100}%`,
+    } as CSSProperties
     : {
+      "--player-color": playerColor,
       "--side-piece-width": `${BOARD.width * 100 / cols}%`,
       "--side-piece-height": `${BOARD.height * 100 / rows}%`,
       "--side-piece-x": `${(sidePosition?.x ?? 0) * 100}%`,
@@ -785,6 +796,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
       aria-label={`${piece.id + 1}. puzzle parçası${piece.locked ? ", yerleştirildi" : ". Enter ile doğru yerine yerleştir"}`}
     >
       <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager={isRecent || isRemoteHeld} />
+      <span className="piece-player-label local-piece-player-label">{localPlayerName}</span>
     </div>
   );
 });
@@ -809,6 +821,7 @@ const RemotePuzzlePiece = memo(function RemotePuzzlePiece({
   seed,
   imageUrl,
   pieceCount,
+  playerColor,
 }: {
   drag: RemoteDrag;
   rows: number;
@@ -816,6 +829,7 @@ const RemotePuzzlePiece = memo(function RemotePuzzlePiece({
   seed: string;
   imageUrl: string;
   pieceCount: number;
+  playerColor: string;
 }) {
   const elementRef = useRef<HTMLDivElement>(null);
   const latestDragRef = useRef(drag);
@@ -844,14 +858,16 @@ const RemotePuzzlePiece = memo(function RemotePuzzlePiece({
       ref={elementRef}
       className={`puzzle-piece remote-drag-piece ${drag.phase === "end" ? "remote-drop-handoff" : ""} ${densityClass}`}
       style={{
+        "--player-color": playerColor,
         width: `${100 / cols}%`,
         height: `${100 / rows}%`,
         left: 0,
         top: 0,
-      }}
+      } as CSSProperties}
       aria-hidden="true"
     >
       <JigsawPiece id={drag.pieceId} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager />
+      {drag.phase === "move" && <span className="piece-player-label">{drag.playerName}</span>}
     </div>
   );
 });
@@ -949,8 +965,15 @@ async function prepareUploadImage(file: File) {
   }
 }
 
-function avatarColor(index: number) {
-  return ["#d3d3ff", "#ff6f61", "#4864ff", "#ffd84d"][index % 4];
+const PLAYER_COLORS = ["#ff7a70", "#88a0ff", "#39c98a", "#f4c84a", "#c18cff", "#42c7cf", "#f58ac3", "#ff9b4a"] as const;
+
+function playerColor(identity: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < identity.length; index += 1) {
+    hash ^= identity.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return PLAYER_COLORS[(hash >>> 0) % PLAYER_COLORS.length];
 }
 
 function hasSameRoomPlayers(current: RoomPlayer[], next: RoomPlayer[]) {
@@ -1006,6 +1029,7 @@ export default function Home() {
   const [nicknameInput, setNicknameInput] = useState(() => getStoredNickname());
   const [roomPlayers, setRoomPlayers] = useState<RoomPlayer[]>([]);
   const [remoteDrags, setRemoteDrags] = useState<RemoteDrag[]>([]);
+  const [localPlayerIdentity, setLocalPlayerIdentity] = useState("self");
   const clientId = "self";
   const boardAreaRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -1030,6 +1054,11 @@ export default function Home() {
   useEffect(() => {
     piecesRef.current = pieces;
   }, [pieces]);
+
+  useEffect(() => {
+    if (!realtimeSenderId.current) realtimeSenderId.current = crypto.randomUUID();
+    setLocalPlayerIdentity(realtimeSenderId.current);
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1392,6 +1421,7 @@ export default function Home() {
     : roomPlayers.some((player) => player.clientId === clientId)
       ? roomPlayers
       : [fallbackPlayer, ...roomPlayers];
+  const localPlayerColor = playerColor(localPlayerIdentity);
 
   useEffect(() => {
     if (room || introCompletion !== "showing") return;
@@ -1676,6 +1706,9 @@ export default function Home() {
     }
     const message: RoomDragMessage = {
       senderId: realtimeSenderId.current,
+      // Public broadcast metadata is cosmetic only; the parser bounds it and
+      // no name or color is ever applied to authoritative room state.
+      playerName: normalizeNickname(playerName) || "Oyuncu",
       gestureId: drag.gestureId,
       pieceId: drag.id,
       x: drag.liveX,
@@ -1684,7 +1717,7 @@ export default function Home() {
       phase,
     };
     return message;
-  }, []);
+  }, [playerName]);
 
   const sendLiveDragMessage = useCallback((drag: LocalDrag, message: RoomDragMessage) => {
     const subscription = realtimeSubscriptionRef.current ?? drag.subscription;
@@ -1838,6 +1871,7 @@ export default function Home() {
     element.style.margin = "0";
     element.style.zIndex = "1000";
     if (!realtimeSenderId.current) realtimeSenderId.current = crypto.randomUUID();
+    element.style.setProperty("--player-color", playerColor(realtimeSenderId.current));
     const drag: LocalDrag = {
       id: piece.id,
       clientX: event.clientX,
@@ -1966,9 +2000,9 @@ export default function Home() {
               </div>
               <div className="room-players" aria-label="Odada çözen kişiler">
                 <div className="room-players-heading"><b>ÇÖZENLER</b><small>{visibleRoomPlayers.length} KİŞİ</small></div>
-                {visibleRoomPlayers.map((player, index) => (
+                {visibleRoomPlayers.map((player) => (
                   <div className="current-player-card" key={player.clientId}>
-                    <span className="avatar" style={{ background: avatarColor(index) }}>{player.nickname.slice(0, 1).toUpperCase()}</span>
+                    <span className="avatar" style={{ background: playerColor(player.clientId === clientId ? localPlayerIdentity : player.clientId) }}>{player.nickname.slice(0, 1).toUpperCase()}</span>
                     <span><b>{player.nickname}</b><small>{player.clientId === clientId ? "BU CİHAZ" : "ÇÖZÜYOR"}</small></span>
                     <i className="online-dot" />
                   </div>
@@ -2092,6 +2126,8 @@ export default function Home() {
                         isRecent={piece.id === lastHeldPieceId}
                         isKeyboardPiece={piece.id === keyboardPieceId}
                         isRemoteHeld={remoteHeldIds.has(piece.id)}
+                        localPlayerName={playerName}
+                        playerColor={localPlayerColor}
                         onStart={startMove}
                         onLostCapture={handleLostPieceCapture}
                         onFocusPiece={focusPiece}
@@ -2107,6 +2143,7 @@ export default function Home() {
                         seed={puzzleSeed}
                         imageUrl={imageUrl}
                         pieceCount={pieceCount}
+                        playerColor={playerColor(drag.senderId)}
                       />
                     ))}
                     {room && progress === 100 && (
@@ -2135,6 +2172,8 @@ export default function Home() {
                     isRecent={piece.id === lastHeldPieceId}
                     isKeyboardPiece={piece.id === keyboardPieceId}
                     isRemoteHeld={remoteHeldIds.has(piece.id)}
+                    localPlayerName={playerName}
+                    playerColor={localPlayerColor}
                     sidePosition={sideLayout.get(piece.id)}
                     bandPosition={bandLayout.get(piece.id)}
                     onStart={startMove}

@@ -120,7 +120,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .puzzle-piece:hover { z-index:30; filter:brightness(1.08); transform:scale(1.04) rotate(1deg); }
 .puzzle-piece:focus-visible { z-index:35; outline:3px solid var(--coral); outline-offset:2px; }
 .puzzle-piece:active { z-index:40; cursor:grabbing; transform:scale(1.07) rotate(-1deg); transition:none; }
-.puzzle-piece.dragging { z-index:1000; cursor:grabbing; transform:scale(1.035) rotate(-1deg); transition:none!important; filter:brightness(1.08); will-change:left,top; }
+.puzzle-piece.dragging { z-index:1000; cursor:grabbing; transform:scale(1.035) rotate(-1deg); transition:none!important; filter:brightness(1.08) drop-shadow(0 0 6px var(--player-color,var(--blue))); will-change:left,top; }
 .puzzle-piece.locked { z-index:4; cursor:default; }
 .puzzle-piece.locked:hover { transform:none; }
 .puzzle-piece.compact-piece .piece-canvas { filter:drop-shadow(1.3px 1.7px .4px rgba(21,21,21,.34)); }
@@ -130,8 +130,11 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .puzzle-piece.recent { z-index:25; }
 .puzzle-piece.side-piece { width:var(--side-piece-width); height:var(--side-piece-height); left:var(--side-piece-x); top:var(--side-piece-y); transform-origin:center; }
 .puzzle-piece.remote-held:not(.dragging) { opacity:0; pointer-events:none; filter:none; }
-.puzzle-piece.remote-drag-piece { z-index:900; opacity:.96; pointer-events:none; filter:drop-shadow(0 0 5px rgba(72,100,255,.72)); will-change:transform; backface-visibility:hidden; }
-.puzzle-piece.remote-drag-piece .piece-canvas { filter:drop-shadow(2px 3px 1px rgba(72,100,255,.68)); transition:filter 120ms ease; }
+.puzzle-piece.remote-drag-piece { z-index:900; opacity:.96; pointer-events:none; filter:drop-shadow(0 0 6px var(--player-color,var(--blue))); will-change:transform; backface-visibility:hidden; }
+.puzzle-piece.remote-drag-piece .piece-canvas { filter:drop-shadow(2px 3px 1px var(--player-color,var(--blue))); transition:filter 120ms ease; }
+.piece-player-label { position:absolute; z-index:4; left:50%; bottom:calc(100% + 5px); max-width:112px; transform:translateX(-50%); overflow:hidden; padding:2px 6px; border:1.5px solid var(--ink); border-radius:4px; background:var(--player-color,var(--blue)); color:var(--ink); box-shadow:2px 2px 0 rgba(21,21,21,.72); font-size:9px; font-weight:950; line-height:1.2; letter-spacing:.2px; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
+.local-piece-player-label { display:none; }
+.puzzle-piece.dragging>.local-piece-player-label { display:block; }
 .puzzle-piece.remote-drop-handoff { opacity:1; filter:none; }
 .puzzle-piece.remote-drop-handoff .piece-canvas { filter:drop-shadow(3px 4px 1px rgba(21,21,21,.4)); }
 .puzzle-piece.remote-drop-handoff.compact-piece .piece-canvas { filter:drop-shadow(1.3px 1.7px .4px rgba(21,21,21,.34)); }

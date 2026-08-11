@@ -7,6 +7,7 @@ export type RealtimeSubscription = {
 
 export type RoomDragMessage = {
   senderId: string;
+  playerName: string;
   gestureId: string;
   pieceId: number;
   x: number;
@@ -45,15 +46,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function parseRoomDragMessage(value: unknown): RoomDragMessage | null {
   if (!isRecord(value)) return null;
-  const { senderId, gestureId, pieceId, x, y, seq, phase } = value;
+  const { senderId, playerName, gestureId, pieceId, x, y, seq, phase } = value;
   if (typeof senderId !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(senderId)) return null;
+  if (typeof playerName !== "string" || playerName.length < 1 || playerName.length > 24) return null;
+  if ([...playerName].some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 32 || code === 127;
+  })) return null;
   if (typeof gestureId !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(gestureId)) return null;
   if (!Number.isInteger(pieceId) || Number(pieceId) < 0 || Number(pieceId) >= 48 * 48) return null;
   if (typeof x !== "number" || !Number.isFinite(x) || x < -2 || x > 3) return null;
   if (typeof y !== "number" || !Number.isFinite(y) || y < -2 || y > 3) return null;
   if (!Number.isInteger(seq) || Number(seq) < 0 || Number(seq) > 1_000_000_000) return null;
   if (phase !== "move" && phase !== "end") return null;
-  return { senderId, gestureId, pieceId: Number(pieceId), x, y, seq: Number(seq), phase };
+  return { senderId, playerName, gestureId, pieceId: Number(pieceId), x, y, seq: Number(seq), phase };
 }
 
 function realtimeWebSocketUrl(config: RealtimeConfig) {
