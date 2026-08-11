@@ -358,7 +358,8 @@ test("the rendered puzzle switches horizontal mobile images to top and bottom ra
   assert.match(source, /function sidePiecePositions/);
   assert.match(source, /function bandPiecePositions/);
   assert.match(source, /function landscapePiecePositions/);
-  assert.match(source, /MAX_VISIBLE_LOOSE_PIECES = 120/);
+  assert.doesNotMatch(source, /MAX_VISIBLE_LOOSE_PIECES|visibleLoosePieces/);
+  assert.match(source, /\{loosePieces\.map\(\(piece\) =>/);
   assert.match(source, /imageAspect > 1 \? "horizontal-puzzle" : ""/);
   assert.match(source, /piece\.zone === "board" \|\| piece\.locked/);
   assert.match(source, /!piece\.locked && piece\.zone !== "board"/);

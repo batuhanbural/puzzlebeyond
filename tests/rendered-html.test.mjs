@@ -22,7 +22,8 @@ test("contains the puzzle app entry points", async () => {
   assert.match(page, /type PieceZone = "board" \| "mat"/);
   assert.match(page, /function sidePiecePositions/);
   assert.match(page, /function bandPiecePositions/);
-  assert.match(page, /MAX_VISIBLE_LOOSE_PIECES = 120/);
+  assert.doesNotMatch(page, /MAX_VISIBLE_LOOSE_PIECES|visibleLoosePieces/);
+  assert.match(page, /\{loosePieces\.map\(\(piece\) =>/);
   assert.match(page, /"horizontal-puzzle"/);
   assert.match(page, /"side-piece"/);
   assert.match(page, /KENARA İT/);
@@ -96,7 +97,8 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
     "the canvas draw, not the visibility observer, must run before paint",
   );
   assert.match(component, /if \(eager\) drawPiece\(\)/);
-  assert.match(page, /imageUrl=\{imageUrl\} eager=\{isRecent \|\| isRemoteHeld\}/);
+  assert.match(page, /imageUrl=\{imageUrl\} eager=\{pieceCount > 120 \|\| isRecent \|\| isRemoteHeld\}/);
+  assert.match(component, /if \(eager\) return;[\s\S]*observePuzzlePiece/);
   assert.match(page, /drag\.phase === "end" \? "remote-drop-handoff"/);
   assert.match(page, /liveEndMessage\.x = finalBoardX \+ 1 \/ \(2 \* cols\)/);
   assert.match(page, /liveEndMessage\.y = finalBoardY \+ 1 \/ \(2 \* rows\)/);

@@ -60,7 +60,6 @@ const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 } as const;
 const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 } as const;
 const MOBILE_LANDSCAPE_BOARD = { left: 0.14, top: 0.04, width: 0.72, height: 0.92 } as const;
 const PUZZLE_LAYOUT_VERSION = 3;
-const MAX_VISIBLE_LOOSE_PIECES = 120;
 const LIVE_DRAG_INTERVAL_MS = 33;
 const REMOTE_MOVE_TRANSITION_MS = 90;
 const REMOTE_SETTLE_TRANSITION_MS = 110;
@@ -529,10 +528,11 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, 
   const [visible, setVisible] = useState(eager);
 
   useEffect(() => {
+    if (eager) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     return observePuzzlePiece(canvas, setVisible);
-  }, []);
+  }, [eager]);
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
@@ -817,7 +817,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
       aria-disabled={isBoardPiece ? piece.locked : undefined}
       aria-label={`${piece.id + 1}. puzzle parçası${piece.locked ? ", yerleştirildi" : ". Enter ile doğru yerine yerleştir"}`}
     >
-      <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager={isRecent || isRemoteHeld} />
+      <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager={pieceCount > 120 || isRecent || isRemoteHeld} />
     </div>
   );
 });
@@ -1450,14 +1450,6 @@ export default function Home() {
   const loosePieces = useMemo(() => pieces
     .filter((piece) => !piece.locked && piece.zone !== "board")
     .sort((left, right) => left.id - right.id), [pieces]);
-  const visibleLoosePieces = useMemo(() => {
-    if (loosePieces.length <= MAX_VISIBLE_LOOSE_PIECES) return loosePieces;
-    const visible = loosePieces.slice(0, MAX_VISIBLE_LOOSE_PIECES);
-    const keyboardPiece = loosePieces.find((piece) => piece.id === keyboardPieceId);
-    return keyboardPiece && !visible.some((piece) => piece.id === keyboardPiece.id)
-      ? [...visible, keyboardPiece]
-      : visible;
-  }, [loosePieces, keyboardPieceId]);
   const commitNickname = () => {
     const name = normalizeNickname(nicknameInput);
     if (!name) {
@@ -2223,7 +2215,7 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-                {visibleLoosePieces.map((piece) => (
+                {loosePieces.map((piece) => (
                   <InteractivePuzzlePiece
                     key={piece.id}
                     piece={piece}
