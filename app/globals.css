@@ -79,7 +79,6 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .panel-text-button:hover { background:var(--ink); color:var(--paper); transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--ink); }
 .board-section { min-width:0; min-height:0; padding:0 18px 10px; display:grid; grid-template-rows:50px minmax(0,1fr) auto; align-items:center; overflow:hidden; background:#e6e0d3; }
 .board-toolbar { width:calc(100% + 36px); height:50px; margin:0 -18px; padding:0 18px; display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid var(--ink); background:var(--paper); font-size:10px; font-weight:950; letter-spacing:1.1px; }
-.live-dot { display:inline-block; width:8px; height:8px; margin-right:6px; border-radius:50%; background:#ff4d41; box-shadow:0 0 0 3px #ffc7c2; }
 .toolbar-right { display:flex; align-items:center; gap:8px; }
 .sync-button { height:28px; padding:0 9px; border:1.5px solid var(--ink); background:var(--white); font-size:8px; font-weight:950; letter-spacing:.7px; cursor:pointer; box-shadow:2px 2px 0 var(--ink); }
 .sync-button:hover { background:var(--blue); color:var(--white); transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--ink); }
