@@ -48,4 +48,8 @@ test("live motion is throttled, bounded and never authoritative", async () => {
 
   assert.match(page, /transform = `translate3d\(\$\{x\}px,\$\{y\}px,0\)`/);
   assert.match(page, /new ResizeObserver\(\(\) => positionRemotePuzzlePiece/);
+  assert.match(page, /realtimeSubscriptionRef\.current \?\? drag\.subscription/);
+  assert.match(page, /pendingLiveDragRef\.current = message/);
+  assert.match(page, /pending && subscription\?\.sendDrag\(pending\)/);
+  assert.doesNotMatch(page, /if \(!drag\.subscription \|\| !realtimeSenderId\.current\) return null/);
 });

@@ -965,6 +965,7 @@ export default function Home() {
   const realtimeSubscriptionRef = useRef<RealtimeSubscription | null>(null);
   const realtimeSenderId = useRef("");
   const realtimeSequence = useRef(0);
+  const pendingLiveDragRef = useRef<RoomDragMessage | null>(null);
   const remoteDragSequence = useRef(new Map<string, number>());
   const presenceRevoked = useRef(false);
   const hintTimer = useRef<number | null>(null);
@@ -1188,6 +1189,7 @@ export default function Home() {
     const dragSequences = remoteDragSequence.current;
     realtimeConnected.current = false;
     realtimeSubscriptionRef.current = null;
+    pendingLiveDragRef.current = null;
     dragSequences.clear();
     if (!realtimeSenderId.current) realtimeSenderId.current = crypto.randomUUID();
 
@@ -1251,6 +1253,10 @@ export default function Home() {
         applyRealtimeUpdate,
         (status) => {
           realtimeConnected.current = status === "connected";
+          if (status === "connected") {
+            const pending = pendingLiveDragRef.current;
+            if (pending && subscription?.sendDrag(pending)) pendingLiveDragRef.current = null;
+          }
           if (status === "disconnected") setRemoteDrags([]);
         },
         applyRemoteDrag,
@@ -1265,6 +1271,7 @@ export default function Home() {
       realtimeConnected.current = false;
       subscription?.unsubscribe();
       if (realtimeSubscriptionRef.current === subscription) realtimeSubscriptionRef.current = null;
+      pendingLiveDragRef.current = null;
       dragSequences.clear();
       setRemoteDrags([]);
     };
@@ -1606,7 +1613,7 @@ export default function Home() {
   };
 
   const createLiveDragMessage = useCallback((drag: LocalDrag, phase: RoomDragMessage["phase"]) => {
-    if (!drag.subscription || !realtimeSenderId.current) return null;
+    if (!realtimeSenderId.current) return null;
     if (phase === "move") {
       const rect = boardRef.current?.getBoundingClientRect();
       if (!rect || rect.width <= 0 || rect.height <= 0) return null;
@@ -1625,11 +1632,22 @@ export default function Home() {
     return message;
   }, []);
 
+  const sendLiveDragMessage = useCallback((drag: LocalDrag, message: RoomDragMessage) => {
+    const subscription = realtimeSubscriptionRef.current ?? drag.subscription;
+    if (subscription) drag.subscription = subscription;
+    if (subscription?.sendDrag(message)) {
+      if ((pendingLiveDragRef.current?.seq ?? -1) <= message.seq) pendingLiveDragRef.current = null;
+      return true;
+    }
+    if (!pendingLiveDragRef.current || pendingLiveDragRef.current.seq <= message.seq) pendingLiveDragRef.current = message;
+    return false;
+  }, []);
+
   const publishLiveDrag = useCallback((drag: LocalDrag, phase: RoomDragMessage["phase"]) => {
     const message = createLiveDragMessage(drag, phase);
-    if (message) drag.subscription?.sendDrag(message);
+    if (message) sendLiveDragMessage(drag, message);
     return message;
-  }, [createLiveDragMessage]);
+  }, [createLiveDragMessage, sendLiveDragMessage]);
 
   const movePiece = useCallback((event: PointerEvent<HTMLDivElement>) => {
     if (!dragRef.current) return;
@@ -1711,13 +1729,13 @@ export default function Home() {
     boardAreaRef.current?.classList.remove("drag-active");
     dragRef.current = null;
     setPieces(next);
-    if (liveEndMessage) drag.subscription?.sendDrag(liveEndMessage);
+    if (liveEndMessage) sendLiveDragMessage(drag, liveEndMessage);
     void pushMove(next, movingId);
     if (snaps) setNotice("Tak! Parça doğru yerine oturdu.");
     if (snaps && !room && introCompletion === "idle" && next.every((piece) => piece.locked)) {
       setIntroCompletion("showing");
     }
-  }, [cols, rows, pushMove, room, introCompletion, createLiveDragMessage, publishLiveDrag]);
+  }, [cols, rows, pushMove, room, introCompletion, createLiveDragMessage, publishLiveDrag, sendLiveDragMessage]);
 
   useEffect(() => {
     const cancelOnEscape = (event: KeyboardEvent) => {

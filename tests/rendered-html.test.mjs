@@ -66,7 +66,7 @@ test("pointer release commits a piece without replaying its movement", async () 
     "drop geometry must be measured before restoring the pre-drag style",
   );
   assert.match(endMove, /setPieces\(next\)/);
-  assert.match(endMove, /drag\.subscription\?\.sendDrag\(liveEndMessage\)/);
+  assert.match(endMove, /sendLiveDragMessage\(drag, liveEndMessage\)/);
   assert.match(endMove, /pushMove\(next, movingId\)/);
   assert.ok(
     endMove.indexOf("sendDrag(liveEndMessage)") < endMove.indexOf("pushMove(next, movingId)"),
