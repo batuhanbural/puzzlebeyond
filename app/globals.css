@@ -8,10 +8,14 @@ body { height:100%; margin:0; overflow:hidden; color:var(--ink); background:var(
 button,input { font:inherit; }
 button { color:inherit; }
 button:focus-visible,input:focus-visible { outline:3px solid var(--blue); outline-offset:3px; }
-.site-shell { height:100dvh; min-height:0; display:grid; grid-template-rows:64px auto minmax(0,1fr) 34px; overflow:hidden; }
-.topbar { position:relative; z-index:80; height:64px; padding:0 4vw; display:flex; align-items:center; justify-content:space-between; border-bottom:2px solid var(--ink); background:rgba(244,240,230,.96); backdrop-filter:blur(10px); }
+.site-shell { height:100dvh; min-height:0; display:grid; grid-template-rows:88px minmax(0,1fr) 34px; overflow:hidden; }
+.topbar { position:relative; z-index:80; height:88px; padding:0 4vw; display:grid; grid-template-columns:auto minmax(180px,.8fr) minmax(220px,1fr) auto; align-items:center; gap:clamp(18px,2.5vw,42px); border-bottom:2px solid var(--ink); background:rgba(244,240,230,.96); backdrop-filter:blur(10px); }
 .brand { display:flex; align-items:center; gap:10px; background:none; border:0; font-size:24px; font-weight:950; letter-spacing:-1.5px; cursor:pointer; }
 .brand-mark { width:34px; height:34px; border:2px solid var(--ink); display:grid; place-items:center; background:var(--lime); font-size:21px; font-style:italic; transform:rotate(-5deg); box-shadow:3px 3px 0 var(--ink); }
+.header-copy { min-width:0; }
+.header-copy .eyebrow { margin-bottom:2px; }
+.header-copy h1 { margin:0; overflow:hidden; font-size:clamp(23px,2.4vw,34px); line-height:.92; letter-spacing:-2px; text-overflow:ellipsis; white-space:nowrap; }
+.header-slogan { max-width:470px; margin:0; font-family:Georgia,serif; font-size:12px; line-height:1.38; }
 .header-actions { display:flex; align-items:center; gap:20px; }
 .text-button { border:0; background:none; font-size:13px; font-weight:800; text-transform:uppercase; cursor:pointer; }
 .primary-button,.outline-button { border:2px solid var(--ink); min-height:48px; padding:0 20px; font-size:12px; font-weight:950; letter-spacing:.7px; cursor:pointer; transition:transform .15s, box-shadow .15s; }
@@ -24,14 +28,9 @@ button:focus-visible,input:focus-visible { outline:3px solid var(--blue); outlin
 .outline-button { background:transparent; }
 .outline-button:hover { background:var(--ink); color:var(--paper); }
 .full { width:100%; }
-.hero-strip { min-height:72px; padding:8px 4vw 9px; display:grid; grid-template-columns:1fr 1fr; gap:36px; align-items:center; overflow:hidden; border-bottom:2px solid var(--ink); }
-.hero-strip.compact { min-height:60px; padding-top:6px; padding-bottom:7px; }
-.hero-strip.compact h1 { font-size:clamp(28px,3vw,40px); letter-spacing:-2.5px; }
-.hero-strip.compact>p { font-size:13px; }
 .eyebrow { margin:0 0 3px; font-size:9px; font-weight:950; letter-spacing:1.3px; text-transform:uppercase; }
 .eyebrow::before { content:""; display:inline-block; width:20px; height:6px; margin-right:8px; background:var(--coral); border:1px solid var(--ink); transform:rotate(-4deg); }
 h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9; letter-spacing:-3px; font-weight:950; text-transform:uppercase; }
-.hero-strip>p { max-width:540px; margin:0 0 2px auto; font-family:Georgia,serif; font-size:14px; line-height:1.38; }
 .game-layout { width:100%; height:100%; min-height:0; display:grid; grid-template-columns:220px minmax(620px,1fr) 220px; max-width:1800px; margin:0 auto; overflow:hidden; border-left:2px solid var(--ink); border-right:2px solid var(--ink); }
 .panel { min-width:0; min-height:0; overflow-y:auto; background:var(--white); }
 .room-panel { border-right:2px solid var(--ink); background:linear-gradient(180deg,#fffdf7 0,#f1ecdf 100%); }
@@ -92,7 +91,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .skip-preview-button:hover { background:var(--coral); box-shadow:2px 2px 0 var(--ink); transform:translate(-1px,-1px); }
 .skip-short { display:none; }
 .difficulty-pill { padding:5px 8px; border:1.5px solid var(--ink); background:var(--white); }
-.puzzle-workspace { --side-workspace-aspect:1.55; --band-workspace-aspect:1; --landscape-workspace-aspect:1.55; --workspace-aspect:var(--side-workspace-aspect); position:relative; width:min(100%,calc((100dvh - 280px) * var(--workspace-aspect))); max-height:100%; min-width:0; min-height:0; aspect-ratio:var(--workspace-aspect); margin:auto; background:#d8d1c3; border:3px solid var(--ink); box-shadow:7px 7px 0 rgba(21,21,21,.22); overflow:hidden; touch-action:none; user-select:none; }
+.puzzle-workspace { --side-workspace-aspect:1.55; --band-workspace-aspect:1; --landscape-workspace-aspect:1.55; --workspace-aspect:var(--side-workspace-aspect); position:relative; width:min(100%,calc((100dvh - 232px) * var(--workspace-aspect))); max-height:100%; min-width:0; min-height:0; aspect-ratio:var(--workspace-aspect); margin:auto; background:#d8d1c3; border:3px solid var(--ink); box-shadow:7px 7px 0 rgba(21,21,21,.22); overflow:hidden; touch-action:none; user-select:none; }
 .puzzle-workspace.preview-replay { animation:previewReplay .7s cubic-bezier(.22,.8,.24,1) both; }
 @keyframes previewReplay { from { opacity:0; transform:translateY(12px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
 .puzzle-workspace::before { content:""; position:absolute; inset:0; z-index:0; opacity:.22; background-image:radial-gradient(#151515 0.8px,transparent 0.8px); background-size:13px 13px; pointer-events:none; }
@@ -233,22 +232,23 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
   .skip-preview-button { display:none; }
 }
 @media (max-width:900px) {
+  .topbar { grid-template-columns:auto minmax(0,1fr) auto; }
+  .header-slogan { display:none; }
   .game-layout { grid-template-columns:minmax(0,1fr); }
   .progress-panel { display:none; }
   .mobile-room-actions { width:100%; margin-top:6px; display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; }
 }
 @media (max-width:760px) {
-  .site-shell { grid-template-rows:60px auto minmax(0,1fr); }
-  .topbar { height:60px; padding:0 14px; }
+  .site-shell { grid-template-rows:76px minmax(0,1fr); }
+  .topbar { height:76px; padding:0 14px; gap:9px; }
   .brand { gap:7px; font-size:18px; letter-spacing:-1.2px; }
   .brand-mark { width:29px; height:29px; font-size:18px; }
+  .header-copy .eyebrow { font-size:7px; letter-spacing:.7px; }
+  .header-copy .eyebrow::before { width:11px; height:4px; margin-right:4px; }
+  .header-copy h1 { font-size:clamp(16px,5vw,21px); letter-spacing:-1.2px; }
   .header-actions { gap:8px; }
   .header-actions .text-button { display:block; padding:8px 2px; font-size:10px; white-space:nowrap; }
   .primary-button.small { min-height:36px; padding:0 11px; font-size:10px; }
-  .hero-strip { min-height:62px; display:block; padding:7px 14px 8px; }
-  .hero-strip.compact { min-height:54px; padding:6px 14px 7px; }
-  .hero-strip>p { display:none; }
-  h1 { font-size:30px; letter-spacing:-2px; }
   .game-layout { height:100%; display:block; }
   .board-section { width:100%; height:100%; padding:0 6px 7px; grid-template-rows:44px minmax(0,1fr) auto; }
   .board-toolbar { width:calc(100% + 12px); height:44px; margin:0 -6px; padding:0 7px; gap:6px; overflow-x:auto; scrollbar-width:none; }
@@ -258,7 +258,7 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
   .sync-button,.hint-button,.push-sides-button { min-width:44px; height:36px; padding:0 6px; font-size:7px; letter-spacing:.35px; }
   .difficulty-pill { padding:4px 5px; font-size:8px; }
   .skip-preview-button { min-height:36px; padding:0 6px; font-size:8px; }
-  .puzzle-workspace { width:min(100%,calc((100dvh - 310px) * var(--workspace-aspect))); min-height:0; box-shadow:4px 4px 0 rgba(21,21,21,.25); }
+  .puzzle-workspace { width:min(100%,calc((100dvh - 264px) * var(--workspace-aspect))); min-height:0; box-shadow:4px 4px 0 rgba(21,21,21,.25); }
   .puzzle-board-guide>p { font-size:7px; letter-spacing:.7px; }
   .mobile-room-actions { width:100%; margin-top:6px; display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; }
   .mobile-room-actions .primary-button,.mobile-room-actions .outline-button { min-height:38px; padding:0 12px; font-size:9px; }
@@ -287,8 +287,8 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
 }
 @media (max-height:640px) and (orientation:landscape) {
   .site-shell { min-height:0; height:100dvh; grid-template-rows:48px minmax(0,1fr); overflow:hidden; }
-  .topbar { height:48px; }
-  .hero-strip { display:none; }
+  .topbar { height:48px; grid-template-columns:auto auto; justify-content:space-between; }
+  .header-copy,.header-slogan { display:none; }
   .game-layout { min-height:0; display:grid; grid-template-columns:minmax(0,1fr); }
   .room-panel,.progress-panel { display:none; }
   .board-section { min-height:0; }
@@ -298,7 +298,6 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
 @media (max-width:1024px) and (orientation:landscape), (orientation:landscape) and (hover:none) and (pointer:coarse) {
   .site-shell.puzzle-active { height:100dvh; grid-template-rows:minmax(0,1fr); background:#e6e0d3; }
   .site-shell.puzzle-active>.topbar,
-  .site-shell.puzzle-active>.hero-strip,
   .site-shell.puzzle-active>footer,
   .site-shell.puzzle-active>.dialog-backdrop,
   .site-shell.puzzle-active .room-panel,

@@ -2090,19 +2090,16 @@ export default function Home() {
         <button className="brand" onClick={resetPreviewPuzzle} aria-label="puzzlebeyond ana sayfa">
           <span className="brand-mark">P</span><span>puzzlebeyond</span>
         </button>
+        <div className="header-copy">
+          <p className="eyebrow">Herkes bir parça koysun</p>
+          <h1>{room ? room.title : "Birlikte daha kolay."}</h1>
+        </div>
+        <p className="header-slogan">{room ? "Aynı oda kodundaki herkes bu tahtayı canlı olarak paylaşır." : "Fotoğrafını seç, odanı kur, kodu paylaş. Puzzle tek ekranda değil, hepinizin ellerinde tamamlansın."}</p>
         <div className="header-actions">
           <button className="text-button" onClick={() => setDialog("join")}>Kodla katıl</button>
           {!room && <button className={`primary-button small ${galleryVisible ? "header-gallery" : "header-new-setup"}`} onClick={() => setDialog("create")}><span>＋</span> Yeni puzzle</button>}
         </div>
       </header>
-
-      <section className={`hero-strip ${room ? "compact" : ""}`}>
-        <div>
-          <p className="eyebrow">Herkes bir parça koysun</p>
-          <h1>{room ? room.title : "Birlikte daha kolay."}</h1>
-        </div>
-        <p>{room ? "Aynı oda kodundaki herkes bu tahtayı canlı olarak paylaşır." : "Fotoğrafını seç, odanı kur, kodu paylaş. Puzzle tek ekranda değil, hepinizin ellerinde tamamlansın."}</p>
-      </section>
 
       <section className="game-layout">
         <aside className="panel room-panel">
