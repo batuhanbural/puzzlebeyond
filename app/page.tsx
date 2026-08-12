@@ -298,8 +298,27 @@ function pieceBoardTarget(id: number, rows: number, cols: number) {
 }
 
 type PieceRailPosition = { x: number; y: number };
-type PieceRailMode = "sides" | "top-bottom";
+type PieceRailMode = "sides" | "top-bottom" | "perimeter";
 type BoardFrame = { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
+
+function fitBoardFrame(imageAspect: number, workspaceAspect: number): BoardFrame {
+  const safeImageAspect = Number.isFinite(imageAspect) && imageAspect > 0 ? imageAspect : DEFAULT_IMAGE_ASPECT;
+  const safeWorkspaceAspect = Number.isFinite(workspaceAspect) && workspaceAspect > 0 ? workspaceAspect : 1.55;
+  const maxWidth = 0.78;
+  const maxHeight = 0.94;
+  let height = maxHeight;
+  let width = safeImageAspect * height / safeWorkspaceAspect;
+  if (width > maxWidth) {
+    width = maxWidth;
+    height = width * safeWorkspaceAspect / safeImageAspect;
+  }
+  return {
+    left: (1 - width) / 2,
+    top: (1 - height) / 2,
+    width,
+    height,
+  };
+}
 
 function pieceRailPositions(rows: number, cols: number, seed: string, board: BoardFrame, mode: PieceRailMode) {
   let state = Array.from(seed).reduce(
@@ -346,28 +365,62 @@ function pieceRailPositions(rows: number, cols: number, seed: string, board: Boa
 
   const firstRailSlots: PieceRailPosition[] = [];
   const secondRailSlots: PieceRailPosition[] = [];
+  const topPerimeterSlots: PieceRailPosition[] = [];
+  const rightPerimeterSlots: PieceRailPosition[] = [];
+  const bottomPerimeterSlots: PieceRailPosition[] = [];
+  const leftPerimeterSlots: PieceRailPosition[] = [];
   const stepX = cellWidth * 0.82;
   const stepY = cellHeight * 0.82;
-  for (let y = 0.012; y <= 0.988 - cellHeight; y += stepY) {
-    for (let x = 0.012; x <= 0.988 - cellWidth; x += stepX) {
+  const axisPositions = (cellSize: number, step: number) => {
+    const maximum = 0.995 - cellSize;
+    const values: number[] = [];
+    for (let value = 0.005; value <= maximum; value += step) values.push(value);
+    if (values.length === 0 || maximum - values[values.length - 1] > 0.001) values.push(maximum);
+    return values;
+  };
+  for (const y of axisPositions(cellHeight, stepY)) {
+    for (const x of axisPositions(cellWidth, stepX)) {
       const fitsFirst = mode === "sides"
         ? x + cellWidth * 0.9 < board.left - 0.006
-        : y + cellHeight * 0.9 < board.top - 0.006;
+        : mode === "top-bottom"
+          ? y + cellHeight * 0.9 < board.top - 0.006
+          : false;
       const fitsSecond = mode === "sides"
         ? x > board.left + board.width + 0.006
-        : y > board.top + board.height + 0.006;
-      if (!fitsFirst && !fitsSecond) continue;
+        : mode === "top-bottom"
+          ? y > board.top + board.height + 0.006
+          : false;
+      const fitsPerimeter = mode === "perimeter" && (
+        x + cellWidth * 0.9 < board.left - 0.003
+        || x > board.left + board.width + 0.003
+        || y + cellHeight * 0.9 < board.top - 0.003
+        || y > board.top + board.height + 0.003
+      );
+      if (!fitsFirst && !fitsSecond && !fitsPerimeter) continue;
       const position = {
-        x: Math.max(0.005, Math.min(0.99 - cellWidth, x + (random() - 0.5) * cellWidth * 0.12)),
-        y: Math.max(0.005, Math.min(0.99 - cellHeight, y + (random() - 0.5) * cellHeight * 0.12)),
+        x: Math.max(0.005, Math.min(0.995 - cellWidth, x + (random() - 0.5) * cellWidth * 0.12)),
+        y: Math.max(0.005, Math.min(0.995 - cellHeight, y + (random() - 0.5) * cellHeight * 0.12)),
       };
-      (fitsFirst ? firstRailSlots : secondRailSlots).push(position);
+      if (fitsPerimeter) {
+        if (y + cellHeight * 0.9 < board.top - 0.003) topPerimeterSlots.push(position);
+        else if (y > board.top + board.height + 0.003) bottomPerimeterSlots.push(position);
+        else if (x + cellWidth * 0.9 < board.left - 0.003) leftPerimeterSlots.push(position);
+        else rightPerimeterSlots.push(position);
+      }
+      else (fitsFirst ? firstRailSlots : secondRailSlots).push(position);
     }
   }
   shuffle(firstRailSlots);
   shuffle(secondRailSlots);
+  const perimeterRegions = [topPerimeterSlots, rightPerimeterSlots, bottomPerimeterSlots, leftPerimeterSlots];
+  perimeterRegions.forEach(shuffle);
   const slots: PieceRailPosition[] = [];
-  for (let index = 0; index < Math.max(firstRailSlots.length, secondRailSlots.length); index++) {
+  if (mode === "perimeter") {
+    for (let index = 0; index < Math.max(...perimeterRegions.map((region) => region.length)); index++) {
+      for (const region of perimeterRegions) if (region[index]) slots.push(region[index]);
+    }
+  }
+  else for (let index = 0; index < Math.max(firstRailSlots.length, secondRailSlots.length); index++) {
     if (firstRailSlots[index]) slots.push(firstRailSlots[index]);
     if (secondRailSlots[index]) slots.push(secondRailSlots[index]);
   }
@@ -378,8 +431,8 @@ function pieceRailPositions(rows: number, cols: number, seed: string, board: Boa
     const rawFallbackY = index % 2 === 0
       ? 0.006 + random() * Math.max(0.006, board.top - cellHeight - 0.018)
       : board.top + board.height + 0.008 + random() * Math.max(0.006, 0.982 - board.top - board.height - cellHeight);
-    const fallbackX = Math.max(0.005, Math.min(0.99 - cellWidth, rawFallbackX));
-    const fallbackY = Math.max(0.005, Math.min(0.99 - cellHeight, rawFallbackY));
+    const fallbackX = Math.max(0.005, Math.min(0.995 - cellWidth, rawFallbackX));
+    const fallbackY = Math.max(0.005, Math.min(0.995 - cellHeight, rawFallbackY));
     positions.set(id, slots[index] ?? {
       x: mode === "sides" ? fallbackX : 0.01 + random() * Math.max(0.01, 0.98 - cellWidth),
       y: mode === "top-bottom" ? fallbackY : 0.01 + random() * Math.max(0.01, 0.98 - cellHeight),
@@ -388,8 +441,8 @@ function pieceRailPositions(rows: number, cols: number, seed: string, board: Boa
   return positions;
 }
 
-function sidePiecePositions(rows: number, cols: number, seed: string) {
-  return pieceRailPositions(rows, cols, seed, BOARD, "sides");
+function sidePiecePositions(rows: number, cols: number, seed: string, board: BoardFrame) {
+  return pieceRailPositions(rows, cols, seed, board, rows * cols > 20 ? "perimeter" : "sides");
 }
 
 function bandPiecePositions(rows: number, cols: number, seed: string) {
@@ -766,6 +819,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   isKeyboardPiece,
   isRemoteHeld,
   playerColor,
+  sideBoard,
   sidePosition,
   bandPosition,
   landscapePosition,
@@ -785,6 +839,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   isKeyboardPiece: boolean;
   isRemoteHeld: boolean;
   playerColor: string;
+  sideBoard: BoardFrame;
   sidePosition?: PieceRailPosition;
   bandPosition?: PieceRailPosition;
   landscapePosition?: PieceRailPosition;
@@ -810,8 +865,8 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
     } as CSSProperties
     : {
       "--player-color": playerColor,
-      "--side-piece-width": `${BOARD.width * 100 / cols}%`,
-      "--side-piece-height": `${BOARD.height * 100 / rows}%`,
+      "--side-piece-width": `${sideBoard.width * 100 / cols}%`,
+      "--side-piece-height": `${sideBoard.height * 100 / rows}%`,
       "--side-piece-x": `${sideX * 100}%`,
       "--side-piece-y": `${sideY * 100}%`,
       "--band-piece-width": `${MOBILE_HORIZONTAL_BOARD.width * 100 / cols}%`,
@@ -1080,6 +1135,7 @@ export default function Home() {
   const boardRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const piecesRef = useRef(pieces);
+  const [workspaceSize, setWorkspaceSize] = useState({ width: 0, height: 0 });
   const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
   const lastLocalMove = useRef(0);
   const remoteUpdatedAt = useRef(0);
@@ -1143,6 +1199,21 @@ export default function Home() {
     }).catch(() => { /* The file validation flow reports unreadable images. */ });
     return () => { cancelled = true; };
   }, [imageUrl]);
+  useEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!workspace || typeof ResizeObserver === "undefined") return;
+    const updateSize = () => {
+      const rect = workspace.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      setWorkspaceSize((current) => Math.abs(current.width - rect.width) < 0.5 && Math.abs(current.height - rect.height) < 0.5
+        ? current
+        : { width: rect.width, height: rect.height });
+    };
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(workspace);
+    updateSize();
+    return () => observer.disconnect();
+  }, [galleryOpen, introCompletion, room?.code]);
   useEffect(() => {
     const area = boardAreaRef.current;
     if (!area || typeof ResizeObserver === "undefined") return;
@@ -1469,11 +1540,21 @@ export default function Home() {
   const remainingCount = pieceCount - solvedCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);
   const galleryVisible = !room && (galleryOpen || introCompletion === "gallery");
-  const sideWorkspaceAspect = imageAspect * BOARD.height / BOARD.width;
+  const desktopWorkspaceAspect = workspaceSize.width > 0 && workspaceSize.height > 0
+    ? workspaceSize.width / workspaceSize.height
+    : 1.55;
+  const desktopBoardFrame = useMemo(
+    () => fitBoardFrame(imageAspect, desktopWorkspaceAspect),
+    [imageAspect, desktopWorkspaceAspect],
+  );
   const bandWorkspaceAspect = imageAspect * MOBILE_HORIZONTAL_BOARD.height / MOBILE_HORIZONTAL_BOARD.width;
   const landscapeWorkspaceAspect = imageAspect * MOBILE_LANDSCAPE_BOARD.height / MOBILE_LANDSCAPE_BOARD.width;
   const workspaceStyle = {
-    "--side-workspace-aspect": sideWorkspaceAspect,
+    "--desktop-board-left": `${desktopBoardFrame.left * 100}%`,
+    "--desktop-board-top": `${desktopBoardFrame.top * 100}%`,
+    "--desktop-board-width": `${desktopBoardFrame.width * 100}%`,
+    "--desktop-board-height": `${desktopBoardFrame.height * 100}%`,
+    "--side-workspace-aspect": imageAspect * BOARD.height / BOARD.width,
     "--band-workspace-aspect": bandWorkspaceAspect,
     "--landscape-workspace-aspect": landscapeWorkspaceAspect,
   } as CSSProperties;
@@ -1493,7 +1574,10 @@ export default function Home() {
   const hasRecentBoardPiece = interactiveBoardPieces.some((piece) => piece.id === lastHeldPieceId && !piece.locked);
   const lockedIds = useMemo(() => pieces.filter((piece) => piece.locked).map((piece) => piece.id), [pieces]);
   const lockedIdsKey = useMemo(() => lockedIds.join(","), [lockedIds]);
-  const sideLayout = useMemo(() => sidePiecePositions(rows, cols, puzzleSeed), [rows, cols, puzzleSeed]);
+  const sideLayout = useMemo(
+    () => sidePiecePositions(rows, cols, puzzleSeed, desktopBoardFrame),
+    [rows, cols, puzzleSeed, desktopBoardFrame],
+  );
   const bandLayout = useMemo(() => bandPiecePositions(rows, cols, puzzleSeed), [rows, cols, puzzleSeed]);
   const landscapeLayout = useMemo(() => landscapePiecePositions(rows, cols, puzzleSeed), [rows, cols, puzzleSeed]);
   const loosePieces = useMemo(() => pieces
@@ -2238,6 +2322,7 @@ export default function Home() {
                         isKeyboardPiece={piece.id === keyboardPieceId}
                         isRemoteHeld={remoteHeldIds.has(piece.id)}
                         playerColor={localPlayerColor}
+                        sideBoard={desktopBoardFrame}
                         onStart={startMove}
                         onLostCapture={handleLostPieceCapture}
                         onFocusPiece={focusPiece}
@@ -2283,6 +2368,7 @@ export default function Home() {
                     isKeyboardPiece={piece.id === keyboardPieceId}
                     isRemoteHeld={remoteHeldIds.has(piece.id)}
                     playerColor={localPlayerColor}
+                    sideBoard={desktopBoardFrame}
                     sidePosition={sideLayout.get(piece.id)}
                     bandPosition={bandLayout.get(piece.id)}
                     landscapePosition={landscapeLayout.get(piece.id)}

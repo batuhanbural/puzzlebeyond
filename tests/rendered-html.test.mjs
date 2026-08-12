@@ -37,9 +37,10 @@ test("contains the puzzle app entry points", async () => {
   assert.match(page, /6 karakterlik oda kodunu/);
   assert.match(page, /layoutVersion/);
   assert.match(styles, /\.puzzle-piece\.side-piece/);
-  assert.match(styles, /\.puzzle-board-area\s*\{[^}]*left:19%;[^}]*top:12%;[^}]*width:62%;[^}]*height:76%/);
+  assert.match(styles, /\.puzzle-workspace\s*\{[^}]*width:100%;[^}]*height:100%/);
+  assert.match(styles, /\.puzzle-board-area\s*\{[^}]*--desktop-board-left[^}]*--desktop-board-top[^}]*--desktop-board-width[^}]*--desktop-board-height/);
   assert.match(styles, /@media \(max-width:760px\) and \(orientation:portrait\)/);
-  assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle\s*\{[^}]*--workspace-aspect:var\(--band-workspace-aspect\)/);
+  assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle\s*\{[^}]*aspect-ratio:var\(--band-workspace-aspect\)/);
   assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle \.puzzle-board-area\s*\{[^}]*left:6%;[^}]*top:26%;[^}]*width:88%;[^}]*height:48%/);
   assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle \.puzzle-piece\.side-piece\s*\{[^}]*--band-piece-width/);
   assert.doesNotMatch(styles, /\.piece-mat/);
@@ -184,8 +185,8 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.match(phoneLandscape, /\.site-shell\.puzzle-active>footer/);
   assert.match(phoneLandscape, /\.site-shell\.puzzle-active \.mobile-room-actions/);
   assert.match(phoneLandscape, /grid-template-rows:minmax\(0,1fr\)/);
-  assert.match(phoneLandscape, /width:min\(100%,calc\(100dvh \* var\(--workspace-aspect\)\)\)/);
-  assert.match(phoneLandscape, /--workspace-aspect:var\(--landscape-workspace-aspect\)/);
+  assert.match(phoneLandscape, /width:min\(100%,calc\(100dvh \* var\(--landscape-workspace-aspect\)\)\)/);
+  assert.match(phoneLandscape, /aspect-ratio:var\(--landscape-workspace-aspect\)/);
   assert.match(phoneLandscape, /\.puzzle-board-area\s*\{[^}]*left:14%;[^}]*top:4%;[^}]*width:72%;[^}]*height:92%/);
   assert.match(phoneLandscape, /\.puzzle-piece\.side-piece\s*\{[^}]*--landscape-piece-width/);
   assert.match(page, /const sideX = piece\.positioned \? piece\.x/);

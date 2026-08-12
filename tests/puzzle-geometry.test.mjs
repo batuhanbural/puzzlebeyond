@@ -51,9 +51,10 @@ function compileInlineLayoutHelpers(source) {
   const layoutVersion = readArithmeticConstant(source, "PUZZLE_LAYOUT_VERSION");
   const helperSpecs = [
     ["fitPuzzleSize", ["size", "aspect"]],
+    ["fitBoardFrame", ["imageAspect", "workspaceAspect"]],
     ["pieceBoardTarget", ["id", "rows", "cols"]],
     ["pieceRailPositions", ["rows", "cols", "seed", "board", "mode"]],
-    ["sidePiecePositions", ["rows", "cols", "seed"]],
+    ["sidePiecePositions", ["rows", "cols", "seed", "board"]],
     ["bandPiecePositions", ["rows", "cols", "seed"]],
     ["landscapePiecePositions", ["rows", "cols", "seed"]],
     ["scatteredPieces", ["rows", "cols", "_seed"]],
@@ -67,7 +68,11 @@ function compileInlineLayoutHelpers(source) {
   )
     .replace(/\s+as const\b/g, "")
     .replace(/const shuffle = <T,>\(values: T\[\]\) =>/, "const shuffle = (values) =>")
+    .replace(/const axisPositions = \(cellSize: number, step: number\) =>/, "const axisPositions = (cellSize, step) =>")
+    .replace(/const values: number\[\]/g, "const values")
+    .replace(/\)\s*:\s*BoardFrame\s*\{/, ") {")
     .replace(/: PieceRailPosition\[\]/g, "")
+    .replace(/: PieceRailPosition\[\]\[\]/g, "")
     .replace(/new Map<number, PieceRailPosition>\(\)/g, "new Map()"));
 
   const factory = Function(`
@@ -78,7 +83,7 @@ function compileInlineLayoutHelpers(source) {
     const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 };
     const MOBILE_LANDSCAPE_BOARD = { left: 0.14, top: 0.04, width: 0.72, height: 0.92 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, pieceBoardTarget, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
+    return { fitPuzzleSize, fitBoardFrame, pieceBoardTarget, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
@@ -181,9 +186,23 @@ test("contained board sizing preserves every supported image aspect", async () =
   }
 });
 
-test("side and mobile band workspaces preserve board and piece ratios", () => {
+test("desktop boards maximize height while preserving every image aspect", async () => {
+  const { fitBoardFrame } = await helpersPromise;
+  for (const workspaceAspect of [1, 1.25, 1.55, 2]) {
+    for (const imageAspect of [1 / 5, 9 / 16, 3 / 4, 1, 16 / 9, 5]) {
+      const board = fitBoardFrame(imageAspect, workspaceAspect);
+      assert.ok(board.width <= 0.78 + Number.EPSILON);
+      assert.ok(board.height <= 0.94 + Number.EPSILON);
+      assert.ok(Math.abs(workspaceAspect * board.width / board.height - imageAspect) < 1e-12);
+      assert.ok(Math.abs(board.left - (1 - board.width) / 2) < 1e-12);
+      assert.ok(Math.abs(board.top - (1 - board.height) / 2) < 1e-12);
+      assert.ok(Math.abs(board.height - 0.94) < 1e-12 || Math.abs(board.width - 0.78) < 1e-12);
+    }
+  }
+});
+
+test("mobile band workspaces preserve board and piece ratios", () => {
   const boards = [
-    { left: 0.19, top: 0.12, width: 0.62, height: 0.76 },
     { left: 0.06, top: 0.26, width: 0.88, height: 0.48 },
     { left: 0.14, top: 0.04, width: 0.72, height: 0.92 },
   ];
@@ -204,14 +223,8 @@ test("side and mobile band workspaces preserve board and piece ratios", () => {
 });
 
 test("side and mobile band projections are deterministic and bounded", async () => {
-  const { bandPiecePositions, fitPuzzleSize, landscapePiecePositions, sidePiecePositions } = await helpersPromise;
+  const { bandPiecePositions, fitPuzzleSize, landscapePiecePositions } = await helpersPromise;
   const modes = [
-    {
-      name: "side",
-      board: { left: 0.19, top: 0.12, width: 0.62, height: 0.76 },
-      positions: sidePiecePositions,
-      outside: (x, y, cellWidth) => x + cellWidth / 2 < 0.19 || x + cellWidth / 2 > 0.81,
-    },
     {
       name: "band",
       board: { left: 0.06, top: 0.26, width: 0.88, height: 0.48 },
@@ -242,8 +255,8 @@ test("side and mobile band projections are deterministic and bounded", async () 
         for (const [id, position] of first) {
           assert.ok(id >= 0 && id < count);
           assert.ok(Number.isFinite(position.x) && Number.isFinite(position.y));
-          assert.ok(position.x >= 0.005 && position.x + cellWidth <= 0.991);
-          assert.ok(position.y >= 0.005 && position.y + cellHeight <= 0.991);
+          assert.ok(position.x >= 0.005 && position.x + cellWidth <= 0.996);
+          assert.ok(position.y >= 0.005 && position.y + cellHeight <= 0.996);
           assert.ok(
             mode.outside(position.x, position.y, cellWidth, cellHeight),
             `${mode.name} piece ${id} for ${rows}x${cols} must stay outside the board`,
@@ -261,6 +274,31 @@ test("side and mobile band projections are deterministic and bounded", async () 
       }
     }
   }
+});
+
+test("large desktop puzzles fill all four sides of the outer workspace", async () => {
+  const { fitBoardFrame, sidePiecePositions } = await helpersPromise;
+  const board = fitBoardFrame(9 / 16, 1.35);
+  const rows = 43;
+  const cols = 24;
+  const positions = sidePiecePositions(rows, cols, "PORTRAIT-1024", board);
+  const cellWidth = board.width / cols;
+  const cellHeight = board.height / rows;
+  const occupied = { left: 0, right: 0, top: 0, bottom: 0 };
+
+  assert.equal(positions.size, rows * cols);
+  for (const position of positions.values()) {
+    const left = position.x + cellWidth * 0.9 < board.left;
+    const right = position.x > board.left + board.width;
+    const top = position.y + cellHeight * 0.9 < board.top;
+    const bottom = position.y > board.top + board.height;
+    assert.ok(left || right || top || bottom, "loose pieces must stay outside the puzzle board");
+    if (left) occupied.left += 1;
+    if (right) occupied.right += 1;
+    if (top) occupied.top += 1;
+    if (bottom) occupied.bottom += 1;
+  }
+  assert.ok(Object.values(occupied).every((count) => count > 0), JSON.stringify(occupied));
 });
 
 test("piece targets stay inside the normalized board for all reviewed grids", async () => {
@@ -362,11 +400,13 @@ test("the rendered puzzle switches horizontal mobile images to top and bottom ra
   assert.match(source, /const BOARD = \{ left: 0\.19, top: 0\.12, width: 0\.62, height: 0\.76 \} as const/);
   assert.match(source, /const MOBILE_HORIZONTAL_BOARD = \{ left: 0\.06, top: 0\.26, width: 0\.88, height: 0\.48 \} as const/);
   assert.match(source, /const MOBILE_LANDSCAPE_BOARD = \{ left: 0\.14, top: 0\.04, width: 0\.72, height: 0\.92 \} as const/);
-  assert.match(source, /const sideWorkspaceAspect = imageAspect \* BOARD\.height \/ BOARD\.width/);
+  assert.match(source, /function fitBoardFrame/);
+  assert.match(source, /const desktopBoardFrame = useMemo/);
   assert.match(source, /const bandWorkspaceAspect = imageAspect \* MOBILE_HORIZONTAL_BOARD\.height \/ MOBILE_HORIZONTAL_BOARD\.width/);
   assert.match(source, /const landscapeWorkspaceAspect = imageAspect \* MOBILE_LANDSCAPE_BOARD\.height \/ MOBILE_LANDSCAPE_BOARD\.width/);
   assert.match(source, /function pieceRailPositions/);
   assert.match(source, /function sidePiecePositions/);
+  assert.match(source, /rows \* cols > 20 \? "perimeter" : "sides"/);
   assert.match(source, /function bandPiecePositions/);
   assert.match(source, /function landscapePiecePositions/);
   assert.doesNotMatch(source, /MAX_VISIBLE_LOOSE_PIECES|visibleLoosePieces/);
