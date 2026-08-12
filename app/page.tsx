@@ -2100,10 +2100,11 @@ export default function Home() {
         <aside className="panel room-panel">
           <div className="panel-heading panel-heading-rich">
             <span className="index">01</span>
-            <span title={room?.title || title.trim() || "Puzzle ön izlemesi"}>
-              <b>{room?.title || title.trim() || "Puzzle ön izlemesi"}</b>
-              <small>ORTAK MASA</small>
-            </span>
+            <span><b>ORTAK MASA</b><small>AYNI KOD, AYNI PUZZLE</small></span>
+          </div>
+          <div className="room-puzzle-title" title={room?.title || title.trim() || "Puzzle ön izlemesi"}>
+            <span>PUZZLE</span>
+            <b>{room?.title || title.trim() || "Puzzle ön izlemesi"}</b>
           </div>
           {room ? (
             <div className="room-panel-content">
