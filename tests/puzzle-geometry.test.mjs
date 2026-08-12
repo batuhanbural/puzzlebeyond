@@ -74,7 +74,7 @@ function compileInlineLayoutHelpers(source) {
     "use strict";
     const DEFAULT_IMAGE_ASPECT = ${JSON.stringify(defaultAspect)};
     const PUZZLE_LAYOUT_VERSION = ${JSON.stringify(layoutVersion)};
-    const BOARD = { left: 0.2, top: 0.15, width: 0.6, height: 0.7 };
+    const BOARD = { left: 0.19, top: 0.12, width: 0.62, height: 0.76 };
     const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 };
     const MOBILE_LANDSCAPE_BOARD = { left: 0.14, top: 0.04, width: 0.72, height: 0.92 };
     ${helpers.join("\n")}
@@ -182,7 +182,7 @@ test("contained board sizing preserves every supported image aspect", async () =
 
 test("side and mobile band workspaces preserve board and piece ratios", () => {
   const boards = [
-    { left: 0.2, top: 0.15, width: 0.6, height: 0.7 },
+    { left: 0.19, top: 0.12, width: 0.62, height: 0.76 },
     { left: 0.06, top: 0.26, width: 0.88, height: 0.48 },
     { left: 0.14, top: 0.04, width: 0.72, height: 0.92 },
   ];
@@ -207,9 +207,9 @@ test("side and mobile band projections are deterministic and bounded", async () 
   const modes = [
     {
       name: "side",
-      board: { left: 0.2, top: 0.15, width: 0.6, height: 0.7 },
+      board: { left: 0.19, top: 0.12, width: 0.62, height: 0.76 },
       positions: sidePiecePositions,
-      outside: (x, y, cellWidth) => x + cellWidth / 2 < 0.2 || x + cellWidth / 2 > 0.8,
+      outside: (x, y, cellWidth) => x + cellWidth / 2 < 0.19 || x + cellWidth / 2 > 0.81,
     },
     {
       name: "band",
@@ -358,7 +358,7 @@ test("piece normalization enforces board bounds and board/mat zones", async () =
 
 test("the rendered puzzle switches horizontal mobile images to top and bottom rails", async () => {
   const source = await pageSourcePromise;
-  assert.match(source, /const BOARD = \{ left: 0\.2, top: 0\.15, width: 0\.6, height: 0\.7 \} as const/);
+  assert.match(source, /const BOARD = \{ left: 0\.19, top: 0\.12, width: 0\.62, height: 0\.76 \} as const/);
   assert.match(source, /const MOBILE_HORIZONTAL_BOARD = \{ left: 0\.06, top: 0\.26, width: 0\.88, height: 0\.48 \} as const/);
   assert.match(source, /const MOBILE_LANDSCAPE_BOARD = \{ left: 0\.14, top: 0\.04, width: 0\.72, height: 0\.92 \} as const/);
   assert.match(source, /const sideWorkspaceAspect = imageAspect \* BOARD\.height \/ BOARD\.width/);

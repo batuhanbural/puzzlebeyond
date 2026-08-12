@@ -94,7 +94,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .puzzle-workspace.preview-replay { animation:previewReplay .7s cubic-bezier(.22,.8,.24,1) both; }
 @keyframes previewReplay { from { opacity:0; transform:translateY(12px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
 .puzzle-workspace::before { content:""; position:absolute; inset:0; z-index:0; opacity:.22; background-image:radial-gradient(#151515 0.8px,transparent 0.8px); background-size:13px 13px; pointer-events:none; }
-.puzzle-board-area { position:absolute; z-index:1; left:20%; top:15%; width:60%; height:70%; min-width:0; min-height:0; display:grid; place-items:center; overflow:visible; }
+.puzzle-board-area { position:absolute; z-index:1; left:19%; top:12%; width:62%; height:76%; min-width:0; min-height:0; display:grid; place-items:center; overflow:visible; }
 .puzzle-board-area.recent-piece-area { z-index:45; }
 .puzzle-board-area.drag-active { z-index:50; overflow:visible; }
 .puzzle-board-guide { position:relative; z-index:2; flex:none; overflow:visible; border:2px solid rgba(21,21,21,.66); background:rgba(244,240,230,.72); box-shadow:inset 0 0 0 6px rgba(21,21,21,.06); }
