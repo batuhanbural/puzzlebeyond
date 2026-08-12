@@ -301,30 +301,6 @@ type PieceRailPosition = { x: number; y: number };
 type PieceRailMode = "sides" | "top-bottom" | "perimeter";
 type BoardFrame = { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
 
-function loosePieceScale(rows: number, cols: number, board: BoardFrame, mode: PieceRailMode) {
-  const count = rows * cols;
-  const cellWidth = board.width / cols;
-  const cellHeight = board.height / rows;
-  const perRail = Math.ceil(count / 2);
-  const visualExtent = 1.68;
-  const railSpan = visualExtent + Math.max(0, perRail - 1) * 0.82;
-  if (mode === "perimeter") {
-    const railWidth = Math.max(0.01, Math.min(board.left, 1 - board.left - board.width) - 0.018);
-    const railHeight = Math.max(0.01, Math.min(board.top, 1 - board.top - board.height) - 0.018);
-    return Math.max(0.12, Math.min(
-      1,
-      railWidth / (cellWidth * visualExtent),
-      railHeight / (cellHeight * visualExtent),
-    ));
-  }
-  if (mode === "top-bottom") {
-    const railHeight = Math.max(0.01, Math.min(board.top, 1 - board.top - board.height) - 0.018);
-    return Math.max(0.12, Math.min(1, railHeight / (cellHeight * visualExtent), 0.988 / (cellWidth * railSpan)));
-  }
-  const railWidth = Math.max(0.01, Math.min(board.left, 1 - board.left - board.width) - 0.018);
-  return Math.max(0.12, Math.min(1, railWidth / (cellWidth * visualExtent), 0.988 / (cellHeight * railSpan)));
-}
-
 function fitBoardFrame(imageAspect: number, workspaceAspect: number): BoardFrame {
   const safeImageAspect = Number.isFinite(imageAspect) && imageAspect > 0 ? imageAspect : DEFAULT_IMAGE_ASPECT;
   const safeWorkspaceAspect = Number.isFinite(workspaceAspect) && workspaceAspect > 0 ? workspaceAspect : 1.55;
@@ -344,6 +320,24 @@ function fitBoardFrame(imageAspect: number, workspaceAspect: number): BoardFrame
   };
 }
 
+function fitRailBoardFrame(board: BoardFrame, rows: number, cols: number, mode: PieceRailMode): BoardFrame {
+  const visualExtent = 1.68;
+  const perRail = Math.ceil(rows * cols / 2);
+  const railSpan = visualExtent + Math.max(0, perRail - 1) * 0.82;
+  let scale = 1;
+  if (mode === "sides" || mode === "perimeter") {
+    scale = Math.min(scale, 0.976 / (board.width * (1 + 2 * visualExtent / cols)));
+    if (mode === "sides") scale = Math.min(scale, 0.976 / (board.height / rows * railSpan));
+  }
+  if (mode === "top-bottom" || mode === "perimeter") {
+    scale = Math.min(scale, 0.976 / (board.height * (1 + 2 * visualExtent / rows)));
+    if (mode === "top-bottom") scale = Math.min(scale, 0.976 / (board.width / cols * railSpan));
+  }
+  const width = board.width * scale;
+  const height = board.height * scale;
+  return { left: (1 - width) / 2, top: (1 - height) / 2, width, height };
+}
+
 function pieceRailPositions(rows: number, cols: number, seed: string, board: BoardFrame, mode: PieceRailMode) {
   let state = Array.from(seed).reduce(
     (total, character) => Math.imul(total ^ character.charCodeAt(0), 2654435761),
@@ -361,9 +355,8 @@ function pieceRailPositions(rows: number, cols: number, seed: string, board: Boa
     return values;
   };
   const count = rows * cols;
-  const pieceScale = loosePieceScale(rows, cols, board, mode);
-  const cellWidth = board.width / cols * pieceScale;
-  const cellHeight = board.height / rows * pieceScale;
+  const cellWidth = board.width / cols;
+  const cellHeight = board.height / rows;
   const ids = shuffle(Array.from({ length: count }, (_, id) => id));
   const positions = new Map<number, PieceRailPosition>();
 
@@ -471,12 +464,12 @@ function sidePiecePositions(rows: number, cols: number, seed: string, board: Boa
   return pieceRailPositions(rows, cols, seed, board, rows * cols > 20 ? "perimeter" : "sides");
 }
 
-function bandPiecePositions(rows: number, cols: number, seed: string) {
-  return pieceRailPositions(rows, cols, seed, MOBILE_HORIZONTAL_BOARD, "top-bottom");
+function bandPiecePositions(rows: number, cols: number, seed: string, board: BoardFrame) {
+  return pieceRailPositions(rows, cols, seed, board, "top-bottom");
 }
 
-function landscapePiecePositions(rows: number, cols: number, seed: string) {
-  return pieceRailPositions(rows, cols, seed, MOBILE_LANDSCAPE_BOARD, "sides");
+function landscapePiecePositions(rows: number, cols: number, seed: string, board: BoardFrame) {
+  return pieceRailPositions(rows, cols, seed, board, "sides");
 }
 
 function redistributePiecePositions(pieceIds: number[], layout: Map<number, PieceRailPosition>) {
@@ -861,6 +854,8 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   isRemoteHeld,
   playerColor,
   sideBoard,
+  bandBoard,
+  landscapeBoard,
   sidePosition,
   bandPosition,
   landscapePosition,
@@ -881,6 +876,8 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   isRemoteHeld: boolean;
   playerColor: string;
   sideBoard: BoardFrame;
+  bandBoard: BoardFrame;
+  landscapeBoard: BoardFrame;
   sidePosition?: PieceRailPosition;
   bandPosition?: PieceRailPosition;
   landscapePosition?: PieceRailPosition;
@@ -896,9 +893,6 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   const bandY = piece.positioned ? piece.y : bandPosition?.y ?? 0;
   const landscapeX = piece.positioned ? piece.x : landscapePosition?.x ?? 0;
   const landscapeY = piece.positioned ? piece.y : landscapePosition?.y ?? 0;
-  const sideScale = loosePieceScale(rows, cols, sideBoard, rows * cols > 20 ? "perimeter" : "sides");
-  const bandScale = loosePieceScale(rows, cols, MOBILE_HORIZONTAL_BOARD, "top-bottom");
-  const landscapeScale = loosePieceScale(rows, cols, MOBILE_LANDSCAPE_BOARD, "sides");
   const style = isBoardPiece
     ? {
       "--player-color": playerColor,
@@ -909,16 +903,16 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
     } as CSSProperties
     : {
       "--player-color": playerColor,
-      "--side-piece-width": `${sideBoard.width * sideScale * 100 / cols}%`,
-      "--side-piece-height": `${sideBoard.height * sideScale * 100 / rows}%`,
+      "--side-piece-width": `${sideBoard.width * 100 / cols}%`,
+      "--side-piece-height": `${sideBoard.height * 100 / rows}%`,
       "--side-piece-x": `${sideX * 100}%`,
       "--side-piece-y": `${sideY * 100}%`,
-      "--band-piece-width": `${MOBILE_HORIZONTAL_BOARD.width * bandScale * 100 / cols}%`,
-      "--band-piece-height": `${MOBILE_HORIZONTAL_BOARD.height * bandScale * 100 / rows}%`,
+      "--band-piece-width": `${bandBoard.width * 100 / cols}%`,
+      "--band-piece-height": `${bandBoard.height * 100 / rows}%`,
       "--band-piece-x": `${bandX * 100}%`,
       "--band-piece-y": `${bandY * 100}%`,
-      "--landscape-piece-width": `${MOBILE_LANDSCAPE_BOARD.width * landscapeScale * 100 / cols}%`,
-      "--landscape-piece-height": `${MOBILE_LANDSCAPE_BOARD.height * landscapeScale * 100 / rows}%`,
+      "--landscape-piece-width": `${landscapeBoard.width * 100 / cols}%`,
+      "--landscape-piece-height": `${landscapeBoard.height * 100 / rows}%`,
       "--landscape-piece-x": `${landscapeX * 100}%`,
       "--landscape-piece-y": `${landscapeY * 100}%`,
     } as CSSProperties;
@@ -1587,9 +1581,19 @@ export default function Home() {
   const desktopWorkspaceAspect = workspaceSize.width > 0 && workspaceSize.height > 0
     ? workspaceSize.width / workspaceSize.height
     : 1.55;
-  const desktopBoardFrame = useMemo(
-    () => fitBoardFrame(imageAspect, desktopWorkspaceAspect),
-    [imageAspect, desktopWorkspaceAspect],
+  const desktopBoardFrame = useMemo(() => fitRailBoardFrame(
+    fitBoardFrame(imageAspect, desktopWorkspaceAspect),
+    rows,
+    cols,
+    pieceCount > 20 ? "perimeter" : "sides",
+  ), [imageAspect, desktopWorkspaceAspect, rows, cols, pieceCount]);
+  const bandBoardFrame = useMemo(
+    () => fitRailBoardFrame(MOBILE_HORIZONTAL_BOARD, rows, cols, "top-bottom"),
+    [rows, cols],
+  );
+  const landscapeBoardFrame = useMemo(
+    () => fitRailBoardFrame(MOBILE_LANDSCAPE_BOARD, rows, cols, "sides"),
+    [rows, cols],
   );
   const bandWorkspaceAspect = imageAspect * MOBILE_HORIZONTAL_BOARD.height / MOBILE_HORIZONTAL_BOARD.width;
   const landscapeWorkspaceAspect = imageAspect * MOBILE_LANDSCAPE_BOARD.height / MOBILE_LANDSCAPE_BOARD.width;
@@ -1598,6 +1602,14 @@ export default function Home() {
     "--desktop-board-top": `${desktopBoardFrame.top * 100}%`,
     "--desktop-board-width": `${desktopBoardFrame.width * 100}%`,
     "--desktop-board-height": `${desktopBoardFrame.height * 100}%`,
+    "--band-board-left": `${bandBoardFrame.left * 100}%`,
+    "--band-board-top": `${bandBoardFrame.top * 100}%`,
+    "--band-board-width": `${bandBoardFrame.width * 100}%`,
+    "--band-board-height": `${bandBoardFrame.height * 100}%`,
+    "--landscape-board-left": `${landscapeBoardFrame.left * 100}%`,
+    "--landscape-board-top": `${landscapeBoardFrame.top * 100}%`,
+    "--landscape-board-width": `${landscapeBoardFrame.width * 100}%`,
+    "--landscape-board-height": `${landscapeBoardFrame.height * 100}%`,
     "--side-workspace-aspect": imageAspect * BOARD.height / BOARD.width,
     "--band-workspace-aspect": bandWorkspaceAspect,
     "--landscape-workspace-aspect": landscapeWorkspaceAspect,
@@ -1622,8 +1634,14 @@ export default function Home() {
     () => sidePiecePositions(rows, cols, puzzleSeed, desktopBoardFrame),
     [rows, cols, puzzleSeed, desktopBoardFrame],
   );
-  const bandLayout = useMemo(() => bandPiecePositions(rows, cols, puzzleSeed), [rows, cols, puzzleSeed]);
-  const landscapeLayout = useMemo(() => landscapePiecePositions(rows, cols, puzzleSeed), [rows, cols, puzzleSeed]);
+  const bandLayout = useMemo(
+    () => bandPiecePositions(rows, cols, puzzleSeed, bandBoardFrame),
+    [rows, cols, puzzleSeed, bandBoardFrame],
+  );
+  const landscapeLayout = useMemo(
+    () => landscapePiecePositions(rows, cols, puzzleSeed, landscapeBoardFrame),
+    [rows, cols, puzzleSeed, landscapeBoardFrame],
+  );
   const loosePieces = useMemo(() => pieces
     .filter((piece) => !piece.locked && piece.zone !== "board")
     .sort((left, right) => left.id - right.id), [pieces]);
@@ -2383,6 +2401,8 @@ export default function Home() {
                         isRemoteHeld={remoteHeldIds.has(piece.id)}
                         playerColor={localPlayerColor}
                         sideBoard={desktopBoardFrame}
+                        bandBoard={bandBoardFrame}
+                        landscapeBoard={landscapeBoardFrame}
                         onStart={startMove}
                         onLostCapture={handleLostPieceCapture}
                         onFocusPiece={focusPiece}
@@ -2429,6 +2449,8 @@ export default function Home() {
                     isRemoteHeld={remoteHeldIds.has(piece.id)}
                     playerColor={localPlayerColor}
                     sideBoard={desktopBoardFrame}
+                    bandBoard={bandBoardFrame}
+                    landscapeBoard={landscapeBoardFrame}
                     sidePosition={sideLayout.get(piece.id)}
                     bandPosition={bandLayout.get(piece.id)}
                     landscapePosition={landscapeLayout.get(piece.id)}
