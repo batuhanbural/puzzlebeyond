@@ -2152,10 +2152,7 @@ export default function Home() {
 
         <section className="board-section">
           <div className="board-toolbar">
-            <div className="toolbar-notice" role="status">
-              <span aria-hidden="true">i</span>
-              <p>{notice}</p>
-            </div>
+            <div className="toolbar-notice" role="status">{notice}</div>
             <div className="toolbar-right">
               {!room && !galleryVisible && <button className="skip-preview-button" onClick={skipPreviewPuzzle}>GALERİYE GEÇ →</button>}
               {room && <button className="sync-button" onClick={() => void forceSyncRoom()} disabled={syncBusy} title="Puzzle durumunu sunucudan yeniden al">{syncBusy ? "EŞİTLENİYOR…" : "↻ EŞİTLE"}</button>}
