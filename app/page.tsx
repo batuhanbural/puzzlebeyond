@@ -301,6 +301,30 @@ type PieceRailPosition = { x: number; y: number };
 type PieceRailMode = "sides" | "top-bottom" | "perimeter";
 type BoardFrame = { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
 
+function loosePieceScale(rows: number, cols: number, board: BoardFrame, mode: PieceRailMode) {
+  const count = rows * cols;
+  const cellWidth = board.width / cols;
+  const cellHeight = board.height / rows;
+  const perRail = Math.ceil(count / 2);
+  const visualExtent = 1.68;
+  const railSpan = visualExtent + Math.max(0, perRail - 1) * 0.82;
+  if (mode === "perimeter") {
+    const railWidth = Math.max(0.01, Math.min(board.left, 1 - board.left - board.width) - 0.018);
+    const railHeight = Math.max(0.01, Math.min(board.top, 1 - board.top - board.height) - 0.018);
+    return Math.max(0.12, Math.min(
+      1,
+      railWidth / (cellWidth * visualExtent),
+      railHeight / (cellHeight * visualExtent),
+    ));
+  }
+  if (mode === "top-bottom") {
+    const railHeight = Math.max(0.01, Math.min(board.top, 1 - board.top - board.height) - 0.018);
+    return Math.max(0.12, Math.min(1, railHeight / (cellHeight * visualExtent), 0.988 / (cellWidth * railSpan)));
+  }
+  const railWidth = Math.max(0.01, Math.min(board.left, 1 - board.left - board.width) - 0.018);
+  return Math.max(0.12, Math.min(1, railWidth / (cellWidth * visualExtent), 0.988 / (cellHeight * railSpan)));
+}
+
 function fitBoardFrame(imageAspect: number, workspaceAspect: number): BoardFrame {
   const safeImageAspect = Number.isFinite(imageAspect) && imageAspect > 0 ? imageAspect : DEFAULT_IMAGE_ASPECT;
   const safeWorkspaceAspect = Number.isFinite(workspaceAspect) && workspaceAspect > 0 ? workspaceAspect : 1.55;
@@ -337,8 +361,9 @@ function pieceRailPositions(rows: number, cols: number, seed: string, board: Boa
     return values;
   };
   const count = rows * cols;
-  const cellWidth = board.width / cols;
-  const cellHeight = board.height / rows;
+  const pieceScale = loosePieceScale(rows, cols, board, mode);
+  const cellWidth = board.width / cols * pieceScale;
+  const cellHeight = board.height / rows * pieceScale;
   const ids = shuffle(Array.from({ length: count }, (_, id) => id));
   const positions = new Map<number, PieceRailPosition>();
 
@@ -348,16 +373,17 @@ function pieceRailPositions(rows: number, cols: number, seed: string, board: Boa
       const rail = index % 2;
       const slot = Math.floor(index / 2);
       const spread = (slot + 0.18 + random() * 0.64) / perRail;
+      const canvasOverhang = 0.34;
       const x = mode === "sides"
         ? (rail === 0
-          ? 0.012 + random() * 0.018
-          : Math.min(0.99 - cellWidth, board.left + board.width + 0.014 + random() * 0.018))
-        : Math.min(0.99 - cellWidth, spread * (0.99 - cellWidth));
+          ? 0.006 + canvasOverhang * cellWidth
+          : board.left + board.width + 0.006 + canvasOverhang * cellWidth)
+        : 0.006 + canvasOverhang * cellWidth + spread * Math.max(0, 0.988 - cellWidth * 1.68);
       const y = mode === "top-bottom"
         ? (rail === 0
-          ? 0.012 + random() * 0.018
-          : Math.min(0.99 - cellHeight, board.top + board.height + 0.014 + random() * 0.018))
-        : Math.min(0.99 - cellHeight, spread * (0.99 - cellHeight));
+          ? 0.006 + canvasOverhang * cellHeight
+          : board.top + board.height + 0.006 + canvasOverhang * cellHeight)
+        : 0.006 + canvasOverhang * cellHeight + spread * Math.max(0, 0.988 - cellHeight * 1.68);
       positions.set(id, { x, y });
     });
     return positions;
@@ -381,20 +407,20 @@ function pieceRailPositions(rows: number, cols: number, seed: string, board: Boa
   for (const y of axisPositions(cellHeight, stepY)) {
     for (const x of axisPositions(cellWidth, stepX)) {
       const fitsFirst = mode === "sides"
-        ? x + cellWidth * 0.9 < board.left - 0.006
+        ? x + cellWidth * 1.28 < board.left - 0.006
         : mode === "top-bottom"
-          ? y + cellHeight * 0.9 < board.top - 0.006
+          ? y + cellHeight * 1.28 < board.top - 0.006
           : false;
       const fitsSecond = mode === "sides"
-        ? x > board.left + board.width + 0.006
+        ? x - cellWidth * 0.28 > board.left + board.width + 0.006
         : mode === "top-bottom"
-          ? y > board.top + board.height + 0.006
+          ? y - cellHeight * 0.28 > board.top + board.height + 0.006
           : false;
       const fitsPerimeter = mode === "perimeter" && (
-        x + cellWidth * 0.9 < board.left - 0.003
-        || x > board.left + board.width + 0.003
-        || y + cellHeight * 0.9 < board.top - 0.003
-        || y > board.top + board.height + 0.003
+        x + cellWidth * 1.28 < board.left - 0.003
+        || x - cellWidth * 0.28 > board.left + board.width + 0.003
+        || y + cellHeight * 1.28 < board.top - 0.003
+        || y - cellHeight * 0.28 > board.top + board.height + 0.003
       );
       if (!fitsFirst && !fitsSecond && !fitsPerimeter) continue;
       const position = {
@@ -402,9 +428,9 @@ function pieceRailPositions(rows: number, cols: number, seed: string, board: Boa
         y: Math.max(0.005, Math.min(0.995 - cellHeight, y + (random() - 0.5) * cellHeight * 0.12)),
       };
       if (fitsPerimeter) {
-        if (y + cellHeight * 0.9 < board.top - 0.003) topPerimeterSlots.push(position);
-        else if (y > board.top + board.height + 0.003) bottomPerimeterSlots.push(position);
-        else if (x + cellWidth * 0.9 < board.left - 0.003) leftPerimeterSlots.push(position);
+        if (y + cellHeight * 1.28 < board.top - 0.003) topPerimeterSlots.push(position);
+        else if (y - cellHeight * 0.28 > board.top + board.height + 0.003) bottomPerimeterSlots.push(position);
+        else if (x + cellWidth * 1.28 < board.left - 0.003) leftPerimeterSlots.push(position);
         else rightPerimeterSlots.push(position);
       }
       else (fitsFirst ? firstRailSlots : secondRailSlots).push(position);
@@ -870,6 +896,9 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   const bandY = piece.positioned ? piece.y : bandPosition?.y ?? 0;
   const landscapeX = piece.positioned ? piece.x : landscapePosition?.x ?? 0;
   const landscapeY = piece.positioned ? piece.y : landscapePosition?.y ?? 0;
+  const sideScale = loosePieceScale(rows, cols, sideBoard, rows * cols > 20 ? "perimeter" : "sides");
+  const bandScale = loosePieceScale(rows, cols, MOBILE_HORIZONTAL_BOARD, "top-bottom");
+  const landscapeScale = loosePieceScale(rows, cols, MOBILE_LANDSCAPE_BOARD, "sides");
   const style = isBoardPiece
     ? {
       "--player-color": playerColor,
@@ -880,16 +909,16 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
     } as CSSProperties
     : {
       "--player-color": playerColor,
-      "--side-piece-width": `${sideBoard.width * 100 / cols}%`,
-      "--side-piece-height": `${sideBoard.height * 100 / rows}%`,
+      "--side-piece-width": `${sideBoard.width * sideScale * 100 / cols}%`,
+      "--side-piece-height": `${sideBoard.height * sideScale * 100 / rows}%`,
       "--side-piece-x": `${sideX * 100}%`,
       "--side-piece-y": `${sideY * 100}%`,
-      "--band-piece-width": `${MOBILE_HORIZONTAL_BOARD.width * 100 / cols}%`,
-      "--band-piece-height": `${MOBILE_HORIZONTAL_BOARD.height * 100 / rows}%`,
+      "--band-piece-width": `${MOBILE_HORIZONTAL_BOARD.width * bandScale * 100 / cols}%`,
+      "--band-piece-height": `${MOBILE_HORIZONTAL_BOARD.height * bandScale * 100 / rows}%`,
       "--band-piece-x": `${bandX * 100}%`,
       "--band-piece-y": `${bandY * 100}%`,
-      "--landscape-piece-width": `${MOBILE_LANDSCAPE_BOARD.width * 100 / cols}%`,
-      "--landscape-piece-height": `${MOBILE_LANDSCAPE_BOARD.height * 100 / rows}%`,
+      "--landscape-piece-width": `${MOBILE_LANDSCAPE_BOARD.width * landscapeScale * 100 / cols}%`,
+      "--landscape-piece-height": `${MOBILE_LANDSCAPE_BOARD.height * landscapeScale * 100 / rows}%`,
       "--landscape-piece-x": `${landscapeX * 100}%`,
       "--landscape-piece-y": `${landscapeY * 100}%`,
     } as CSSProperties;

@@ -52,6 +52,7 @@ function compileInlineLayoutHelpers(source) {
   const helperSpecs = [
     ["fitPuzzleSize", ["size", "aspect"]],
     ["fitBoardFrame", ["imageAspect", "workspaceAspect"]],
+    ["loosePieceScale", ["rows", "cols", "board", "mode"]],
     ["pieceBoardTarget", ["id", "rows", "cols"]],
     ["pieceRailPositions", ["rows", "cols", "seed", "board", "mode"]],
     ["sidePiecePositions", ["rows", "cols", "seed", "board"]],
@@ -84,7 +85,7 @@ function compileInlineLayoutHelpers(source) {
     const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 };
     const MOBILE_LANDSCAPE_BOARD = { left: 0.14, top: 0.04, width: 0.72, height: 0.92 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, fitBoardFrame, pieceBoardTarget, sidePiecePositions, bandPiecePositions, landscapePiecePositions, redistributePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
+    return { fitPuzzleSize, fitBoardFrame, loosePieceScale, pieceBoardTarget, sidePiecePositions, bandPiecePositions, landscapePiecePositions, redistributePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
@@ -238,20 +239,21 @@ test("mobile band workspaces preserve board and piece ratios", () => {
 });
 
 test("side and mobile band projections are deterministic and bounded", async () => {
-  const { bandPiecePositions, fitPuzzleSize, landscapePiecePositions } = await helpersPromise;
+  const { bandPiecePositions, fitPuzzleSize, landscapePiecePositions, loosePieceScale } = await helpersPromise;
   const modes = [
     {
       name: "band",
       board: { left: 0.06, top: 0.26, width: 0.88, height: 0.48 },
       positions: bandPiecePositions,
-      outside: (x, y, cellWidth, cellHeight) => y + cellHeight / 2 < 0.26 || y + cellHeight / 2 > 0.74,
+      mode: "top-bottom",
+      outside: (x, y, cellWidth, cellHeight) => y + cellHeight * 1.28 < 0.26 || y - cellHeight * 0.28 > 0.74,
     },
     {
       name: "landscape",
       board: { left: 0.14, top: 0.04, width: 0.72, height: 0.92 },
       positions: landscapePiecePositions,
-      outside: (x, y, cellWidth) => cellWidth * 0.9 + 0.005 >= 0.14
-        || x + cellWidth / 2 < 0.14 || x + cellWidth / 2 > 0.86,
+      mode: "sides",
+      outside: (x, y, cellWidth) => x + cellWidth * 1.28 < 0.14 || x - cellWidth * 0.28 > 0.86,
       before: (x) => x < 0.5,
     },
   ];
@@ -261,8 +263,9 @@ test("side and mobile band projections are deterministic and bounded", async () 
         const { rows, cols, count } = fitPuzzleSize(size, imageAspect);
         const first = mode.positions(rows, cols, "ROOM42");
         const second = mode.positions(rows, cols, "ROOM42");
-        const cellWidth = mode.board.width / cols;
-        const cellHeight = mode.board.height / rows;
+        const pieceScale = loosePieceScale(rows, cols, mode.board, mode.mode);
+        const cellWidth = mode.board.width / cols * pieceScale;
+        const cellHeight = mode.board.height / rows * pieceScale;
         let firstRailCount = 0;
         let secondRailCount = 0;
         assert.equal(first.size, count);
@@ -291,22 +294,40 @@ test("side and mobile band projections are deterministic and bounded", async () 
   }
 });
 
+test("small desktop loose pieces remain visually outside the inner board", async () => {
+  const { fitBoardFrame, loosePieceScale, sidePiecePositions } = await helpersPromise;
+  const board = fitBoardFrame(4 / 3, 1.45);
+  const rows = 3;
+  const cols = 4;
+  const scale = loosePieceScale(rows, cols, board, "sides");
+  const cellWidth = board.width / cols * scale;
+  const positions = sidePiecePositions(rows, cols, "SMALL-ROOM", board);
+
+  assert.ok(scale < 1);
+  for (const position of positions.values()) {
+    const fullyLeft = position.x + cellWidth * 1.28 < board.left;
+    const fullyRight = position.x - cellWidth * 0.28 > board.left + board.width;
+    assert.ok(fullyLeft || fullyRight, "loose piece artwork must not cover the puzzle board");
+  }
+});
+
 test("large desktop puzzles fill all four sides of the outer workspace", async () => {
-  const { fitBoardFrame, sidePiecePositions } = await helpersPromise;
+  const { fitBoardFrame, loosePieceScale, sidePiecePositions } = await helpersPromise;
   const board = fitBoardFrame(9 / 16, 1.35);
   const rows = 43;
   const cols = 24;
   const positions = sidePiecePositions(rows, cols, "PORTRAIT-1024", board);
-  const cellWidth = board.width / cols;
-  const cellHeight = board.height / rows;
+  const scale = loosePieceScale(rows, cols, board, "perimeter");
+  const cellWidth = board.width / cols * scale;
+  const cellHeight = board.height / rows * scale;
   const occupied = { left: 0, right: 0, top: 0, bottom: 0 };
 
   assert.equal(positions.size, rows * cols);
   for (const position of positions.values()) {
-    const left = position.x + cellWidth * 0.9 < board.left;
-    const right = position.x > board.left + board.width;
-    const top = position.y + cellHeight * 0.9 < board.top;
-    const bottom = position.y > board.top + board.height;
+    const left = position.x + cellWidth * 1.28 < board.left;
+    const right = position.x - cellWidth * 0.28 > board.left + board.width;
+    const top = position.y + cellHeight * 1.28 < board.top;
+    const bottom = position.y - cellHeight * 0.28 > board.top + board.height;
     assert.ok(left || right || top || bottom, "loose pieces must stay outside the puzzle board");
     if (left) occupied.left += 1;
     if (right) occupied.right += 1;
