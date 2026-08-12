@@ -168,10 +168,11 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.match(shortLandscape, /\.room-panel,\s*\.progress-panel\s*\{\s*display:none/);
   assert.match(shortLandscape, /footer\s*\{\s*display:none/);
   assert.match(page, /site-shell \$\{galleryVisible \? "gallery-active" : "puzzle-active"\}/);
-  assert.match(page, /className="header-copy"/);
-  assert.match(page, /className="header-slogan"/);
-  assert.doesNotMatch(page, /className=\{`hero-strip/);
-  assert.match(styles, /\.site-shell\s*\{[^}]*grid-template-rows:88px minmax\(0,1fr\) 34px/);
+  assert.doesNotMatch(page, /className="header-copy"|className="header-slogan"|className=\{`hero-strip/);
+  assert.match(page, /<b>\{room\?\.title \|\| title\.trim\(\) \|\| "Puzzle ön izlemesi"\}<\/b>/);
+  assert.match(page, /<small>ORTAK MASA<\/small>/);
+  assert.doesNotMatch(page, /Aynı oda kodundaki herkes bu tahtayı canlı olarak paylaşır/);
+  assert.match(styles, /\.site-shell\s*\{[^}]*grid-template-rows:52px minmax\(0,1fr\) 34px/);
   assert.match(phoneLandscape, /\.site-shell\.puzzle-active>\.topbar/);
   assert.match(phoneLandscape, /\.site-shell\.puzzle-active \.board-toolbar/);
   assert.doesNotMatch(page, /className="notice"/);
