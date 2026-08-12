@@ -161,7 +161,9 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.match(page, /site-shell \$\{galleryVisible \? "gallery-active" : "puzzle-active"\}/);
   assert.match(phoneLandscape, /\.site-shell\.puzzle-active>\.topbar/);
   assert.match(phoneLandscape, /\.site-shell\.puzzle-active \.board-toolbar/);
-  assert.match(phoneLandscape, /\.site-shell\.puzzle-active>\.notice/);
+  assert.doesNotMatch(page, /className="notice"/);
+  assert.match(page, /className="toolbar-notice" role="status"/);
+  assert.match(styles, /\.toolbar-notice\s*\{[^}]*text-overflow|\.toolbar-notice p\s*\{[^}]*text-overflow:ellipsis/);
   assert.match(phoneLandscape, /\.site-shell\.puzzle-active>footer/);
   assert.match(phoneLandscape, /\.site-shell\.puzzle-active \.mobile-room-actions/);
   assert.match(phoneLandscape, /grid-template-rows:minmax\(0,1fr\)/);

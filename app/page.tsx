@@ -2152,7 +2152,10 @@ export default function Home() {
 
         <section className="board-section">
           <div className="board-toolbar">
-            <div>{galleryVisible ? "PUZZLE GALERİSİ" : ""}</div>
+            <div className="toolbar-notice" role="status">
+              <span aria-hidden="true">i</span>
+              <p>{notice}</p>
+            </div>
             <div className="toolbar-right">
               {!room && !galleryVisible && <button className="skip-preview-button" onClick={skipPreviewPuzzle}>GALERİYE GEÇ →</button>}
               {room && <button className="sync-button" onClick={() => void forceSyncRoom()} disabled={syncBusy} title="Puzzle durumunu sunucudan yeniden al">{syncBusy ? "EŞİTLENİYOR…" : "↻ EŞİTLE"}</button>}
@@ -2334,8 +2337,6 @@ export default function Home() {
           <button className="primary-button full progress-create" onClick={() => setDialog("create")}>{room ? "YENİ PUZZLE KUR →" : "FOTOĞRAFINLA BAŞLA →"}</button>
         </aside>
       </section>
-
-      <div className="notice" role="status"><span>i</span>{notice}</div>
 
       <footer><span>PUZZLEBEYOND / 2026</span><p>Uzakta olsanız da aynı masadasınız.</p><span>MADE FOR TOGETHERNESS</span></footer>
 
