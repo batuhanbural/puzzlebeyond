@@ -58,7 +58,7 @@ function compileInlineLayoutHelpers(source) {
     ["landscapePiecePositions", ["rows", "cols", "seed"]],
     ["scatteredPieces", ["rows", "cols", "_seed"]],
     ["normalizePieceLayout", ["pieces", "rows", "cols", "seed"]],
-    ["isWithinDropBounds", ["clientX", "clientY", "bounds", "toleranceX", "toleranceY"]],
+    ["isWithinDropBounds", ["clientX", "clientY", "bounds"]],
   ];
   const helpers = helperSpecs.map(([name, parameters]) => replaceTypedSignature(
     extractFunction(source, name),
@@ -85,13 +85,14 @@ function compileInlineLayoutHelpers(source) {
 
 const helpersPromise = pageSourcePromise.then(compileInlineLayoutHelpers);
 
-test("board drops stay stable on exact and near pixel boundaries", async () => {
+test("board drops require the pointer to be strictly inside the inner boundary", async () => {
   const { isWithinDropBounds } = await helpersPromise;
   const bounds = { left: 100.5, right: 500.5, top: 80.25, bottom: 380.25 };
 
-  assert.equal(isWithinDropBounds(100.5, 80.25, bounds, 8, 8), true);
-  assert.equal(isWithinDropBounds(94, 386, bounds, 8, 8), true);
-  assert.equal(isWithinDropBounds(91, 389, bounds, 8, 8), false);
+  assert.equal(isWithinDropBounds(100.5, 200, bounds), false);
+  assert.equal(isWithinDropBounds(300, 80.25, bounds), false);
+  assert.equal(isWithinDropBounds(100.51, 80.26, bounds), true);
+  assert.equal(isWithinDropBounds(99, 200, bounds), false);
 });
 
 test("fitPuzzleSize chooses stable portrait, square, and landscape grids", async () => {

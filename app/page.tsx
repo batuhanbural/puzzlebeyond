@@ -103,13 +103,11 @@ function isWithinDropBounds(
   clientX: number,
   clientY: number,
   bounds: DropBounds,
-  toleranceX: number,
-  toleranceY: number,
 ) {
-  return clientX >= bounds.left - toleranceX
-    && clientX <= bounds.right + toleranceX
-    && clientY >= bounds.top - toleranceY
-    && clientY <= bounds.bottom + toleranceY;
+  return clientX > bounds.left
+    && clientX < bounds.right
+    && clientY > bounds.top
+    && clientY < bounds.bottom;
 }
 
 function puzzlePieceCanvasKey(id: number, rows: number, cols: number, seed: string, imageUrl: string) {
@@ -1881,14 +1879,10 @@ export default function Home() {
     }
     const rect = boardRef.current?.getBoundingClientRect();
     const workspaceRect = workspaceRef.current?.getBoundingClientRect();
-    const dropToleranceX = Math.min(12, drag.width * 0.2);
-    const dropToleranceY = Math.min(12, drag.height * 0.2);
     const droppedOnBoard = Boolean(rect && isWithinDropBounds(
       drag.clientX,
       drag.clientY,
       rect,
-      dropToleranceX,
-      dropToleranceY,
     ));
     const maxX = Math.max(0, 1 - 1 / cols);
     const maxY = Math.max(0, 1 - 1 / rows);

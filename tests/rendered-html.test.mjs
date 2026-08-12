@@ -78,7 +78,7 @@ test("pointer release commits a piece without replaying its movement", async () 
   assert.match(endMove, /const matX = workspaceRect/);
   assert.match(endMove, /const matY = workspaceRect/);
   assert.match(endMove, /isWithinDropBounds/);
-  assert.match(endMove, /Math\.min\(12, drag\.width \* 0\.2\)/);
+  assert.doesNotMatch(endMove, /dropTolerance|drag\.width \* 0\.2|drag\.height \* 0\.2/);
   assert.match(endMove, /positioned: droppedOnBoard \? undefined : \(true as const\)/);
   assert.ok(
     endMove.indexOf("getBoundingClientRect()") < endMove.indexOf('setAttribute("style", drag.originalStyle)'),
