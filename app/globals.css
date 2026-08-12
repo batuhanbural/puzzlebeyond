@@ -4,7 +4,7 @@
 * { box-sizing:border-box; }
 .sr-only { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important; }
 html { height:100%; overflow:hidden; background:var(--paper); }
-body { height:100%; margin:0; overflow:hidden; color:var(--ink); background:var(--paper); font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+body { height:100%; margin:0; overflow:hidden; color:var(--ink); background:var(--paper); font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-user-select:none; user-select:none; }
 button,input { font:inherit; }
 button { color:inherit; }
 button:focus-visible,input:focus-visible { outline:3px solid var(--blue); outline-offset:3px; }

@@ -2085,7 +2085,7 @@ export default function Home() {
   };
 
   return (
-    <main className={`site-shell ${galleryVisible ? "gallery-active" : "puzzle-active"}`}>
+    <main className={`site-shell ${galleryVisible ? "gallery-active" : "puzzle-active"}`} onContextMenu={(event) => event.preventDefault()}>
       <header className="topbar">
         <button className="brand" onClick={resetPreviewPuzzle} aria-label="puzzlebeyond ana sayfa">
           <span className="brand-mark">P</span><span>puzzlebeyond</span>

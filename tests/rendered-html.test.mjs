@@ -47,6 +47,15 @@ test("contains the puzzle app entry points", async () => {
   assert.match(packageJson, /\"build:vercel\"/);
 });
 
+test("the puzzle surface disables text selection and the context menu", async () => {
+  const [page, styles] = await Promise.all([read("app/page.tsx"), read("app/globals.css")]);
+  const bodyRule = styles.match(/body\s*\{[^}]*\}/)?.[0] || "";
+
+  assert.match(bodyRule, /-webkit-user-select:none/);
+  assert.match(bodyRule, /user-select:none/);
+  assert.match(page, /onContextMenu=\{\(event\) => event\.preventDefault\(\)\}/);
+});
+
 test("pointer release commits a piece without replaying its movement", async () => {
   const [page, styles] = await Promise.all([
     read("app/page.tsx"),
