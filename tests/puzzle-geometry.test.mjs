@@ -58,6 +58,7 @@ function compileInlineLayoutHelpers(source) {
     ["landscapePiecePositions", ["rows", "cols", "seed"]],
     ["scatteredPieces", ["rows", "cols", "_seed"]],
     ["normalizePieceLayout", ["pieces", "rows", "cols", "seed"]],
+    ["isWithinDropBounds", ["clientX", "clientY", "bounds", "toleranceX", "toleranceY"]],
   ];
   const helpers = helperSpecs.map(([name, parameters]) => replaceTypedSignature(
     extractFunction(source, name),
@@ -77,12 +78,21 @@ function compileInlineLayoutHelpers(source) {
     const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 };
     const MOBILE_LANDSCAPE_BOARD = { left: 0.14, top: 0.04, width: 0.72, height: 0.92 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, pieceBoardTarget, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout };
+    return { fitPuzzleSize, pieceBoardTarget, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
 
 const helpersPromise = pageSourcePromise.then(compileInlineLayoutHelpers);
+
+test("board drops stay stable on exact and near pixel boundaries", async () => {
+  const { isWithinDropBounds } = await helpersPromise;
+  const bounds = { left: 100.5, right: 500.5, top: 80.25, bottom: 380.25 };
+
+  assert.equal(isWithinDropBounds(100.5, 80.25, bounds, 8, 8), true);
+  assert.equal(isWithinDropBounds(94, 386, bounds, 8, 8), true);
+  assert.equal(isWithinDropBounds(91, 389, bounds, 8, 8), false);
+});
 
 test("fitPuzzleSize chooses stable portrait, square, and landscape grids", async () => {
   const { fitPuzzleSize } = await helpersPromise;

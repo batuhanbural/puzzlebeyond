@@ -23,6 +23,7 @@ type RoomPlayer = {
 };
 
 type RemoteDrag = RoomDragMessage & { expiresAt: number };
+type DropBounds = { left: number; right: number; top: number; bottom: number };
 type LocalDrag = {
   id: number;
   clientX: number;
@@ -96,6 +97,19 @@ function removeCommittedRemoteDrops(current: RemoteDrag[], nextPieces: Piece[]) 
     return Math.abs(piece.x - drag.dropX) > 0.000_001 || Math.abs(piece.y - drag.dropY) > 0.000_001;
   });
   return next.length === current.length ? current : next;
+}
+
+function isWithinDropBounds(
+  clientX: number,
+  clientY: number,
+  bounds: DropBounds,
+  toleranceX: number,
+  toleranceY: number,
+) {
+  return clientX >= bounds.left - toleranceX
+    && clientX <= bounds.right + toleranceX
+    && clientY >= bounds.top - toleranceY
+    && clientY <= bounds.bottom + toleranceY;
 }
 
 function puzzlePieceCanvasKey(id: number, rows: number, cols: number, seed: string, imageUrl: string) {
@@ -1478,6 +1492,7 @@ export default function Home() {
   const interactiveBoardPieces = useMemo(() => pieceCount >= LARGE_PUZZLE_THRESHOLD
     ? boardPieces.filter((piece) => !piece.locked)
     : boardPieces, [boardPieces, pieceCount]);
+  const hasRecentBoardPiece = interactiveBoardPieces.some((piece) => piece.id === lastHeldPieceId && !piece.locked);
   const lockedIds = useMemo(() => pieces.filter((piece) => piece.locked).map((piece) => piece.id), [pieces]);
   const lockedIdsKey = useMemo(() => lockedIds.join(","), [lockedIds]);
   const sideLayout = useMemo(() => sidePiecePositions(rows, cols, puzzleSeed), [rows, cols, puzzleSeed]);
@@ -1866,9 +1881,15 @@ export default function Home() {
     }
     const rect = boardRef.current?.getBoundingClientRect();
     const workspaceRect = workspaceRef.current?.getBoundingClientRect();
-    const droppedOnBoard = Boolean(rect
-      && drag.clientX >= rect.left && drag.clientX <= rect.right
-      && drag.clientY >= rect.top && drag.clientY <= rect.bottom);
+    const dropToleranceX = Math.min(12, drag.width * 0.2);
+    const dropToleranceY = Math.min(12, drag.height * 0.2);
+    const droppedOnBoard = Boolean(rect && isWithinDropBounds(
+      drag.clientX,
+      drag.clientY,
+      rect,
+      dropToleranceX,
+      dropToleranceY,
+    ));
     const maxX = Math.max(0, 1 - 1 / cols);
     const maxY = Math.max(0, 1 - 1 / rows);
     const boardX = rect ? Math.max(0, Math.min(maxX, (drag.clientX - rect.left) / rect.width - 1 / (2 * cols))) : 0;
@@ -2178,7 +2199,7 @@ export default function Home() {
                 onPointerUp={endMove}
                 onPointerCancel={cancelMove}
               >
-                <div className="puzzle-board-area" ref={boardAreaRef}>
+                <div className={`puzzle-board-area ${hasRecentBoardPiece ? "recent-piece-area" : ""}`} ref={boardAreaRef}>
                   <div className="puzzle-board-guide" ref={boardRef} style={boardStyle} role="group" aria-label={`${rows} satır ve ${cols} sütunluk puzzle tahtası`} aria-describedby="puzzle-keyboard-help">
                     <span className="sr-only" id="puzzle-keyboard-help">Bir parçaya odaklanıp Enter veya Boşluk tuşuyla doğru yerine yerleştirebilirsin.</span>
                     <div

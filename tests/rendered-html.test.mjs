@@ -68,6 +68,8 @@ test("pointer release commits a piece without replaying its movement", async () 
   assert.match(endMove, /drag\.clientY = event\.clientY/);
   assert.match(endMove, /const matX = workspaceRect/);
   assert.match(endMove, /const matY = workspaceRect/);
+  assert.match(endMove, /isWithinDropBounds/);
+  assert.match(endMove, /Math\.min\(12, drag\.width \* 0\.2\)/);
   assert.match(endMove, /positioned: droppedOnBoard \? undefined : \(true as const\)/);
   assert.ok(
     endMove.indexOf("getBoundingClientRect()") < endMove.indexOf('setAttribute("style", drag.originalStyle)'),
@@ -81,6 +83,16 @@ test("pointer release commits a piece without replaying its movement", async () 
     "the visual snap must be broadcast before the persistence round trip",
   );
   assert.doesNotMatch(endMove, /pushMove\(next, movingId\)\.finally/);
+});
+
+test("the most recently held piece stays above both board and mat pieces", async () => {
+  const [page, styles] = await Promise.all([read("app/page.tsx"), read("app/globals.css")]);
+
+  assert.match(page, /hasRecentBoardPiece/);
+  assert.match(page, /recent-piece-area/);
+  assert.match(styles, /\.puzzle-board-area\.recent-piece-area\s*\{[^}]*z-index:45/);
+  assert.match(styles, /\.puzzle-piece\.recent\s*\{[^}]*z-index:45/);
+  assert.match(styles, /\.puzzle-piece\.dragging\s*\{[^}]*z-index:1000/);
 });
 
 test("a piece moved onto the board paints before the handoff frame", async () => {
