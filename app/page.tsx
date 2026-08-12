@@ -322,16 +322,17 @@ function fitBoardFrame(imageAspect: number, workspaceAspect: number): BoardFrame
 
 function fitRailBoardFrame(board: BoardFrame, rows: number, cols: number, mode: PieceRailMode): BoardFrame {
   const visualExtent = 1.68;
+  const safeSpan = rows * cols <= 20 ? 0.94 : 0.976;
   const perRail = Math.ceil(rows * cols / 2);
   const railSpan = visualExtent + Math.max(0, perRail - 1) * 0.82;
   let scale = 1;
   if (mode === "sides" || mode === "perimeter") {
-    scale = Math.min(scale, 0.976 / (board.width * (1 + 2 * visualExtent / cols)));
-    if (mode === "sides") scale = Math.min(scale, 0.976 / (board.height / rows * railSpan));
+    scale = Math.min(scale, safeSpan / (board.width * (1 + 2 * visualExtent / cols)));
+    if (mode === "sides") scale = Math.min(scale, safeSpan / (board.height / rows * railSpan));
   }
   if (mode === "top-bottom" || mode === "perimeter") {
-    scale = Math.min(scale, 0.976 / (board.height * (1 + 2 * visualExtent / rows)));
-    if (mode === "top-bottom") scale = Math.min(scale, 0.976 / (board.width / cols * railSpan));
+    scale = Math.min(scale, safeSpan / (board.height * (1 + 2 * visualExtent / rows)));
+    if (mode === "top-bottom") scale = Math.min(scale, safeSpan / (board.width / cols * railSpan));
   }
   const width = board.width * scale;
   const height = board.height * scale;
@@ -362,20 +363,25 @@ function pieceRailPositions(rows: number, cols: number, seed: string, board: Boa
 
   if (count <= 20) {
     const perRail = Math.ceil(count / 2);
+    const randomBetween = (minimum: number, maximum: number) => minimum + random() * Math.max(0, maximum - minimum);
     ids.forEach((id, index) => {
       const rail = index % 2;
       const slot = Math.floor(index / 2);
-      const spread = (slot + 0.18 + random() * 0.64) / perRail;
+      const spread = (slot + 0.06 + random() * 0.88) / perRail;
       const canvasOverhang = 0.34;
+      const leftMin = 0.006 + canvasOverhang * cellWidth;
+      const leftMax = board.left - 0.008 - cellWidth * 1.34;
+      const rightMin = board.left + board.width + 0.008 + canvasOverhang * cellWidth;
+      const rightMax = 0.994 - cellWidth * 1.34;
+      const topMin = 0.006 + canvasOverhang * cellHeight;
+      const topMax = board.top - 0.008 - cellHeight * 1.34;
+      const bottomMin = board.top + board.height + 0.008 + canvasOverhang * cellHeight;
+      const bottomMax = 0.994 - cellHeight * 1.34;
       const x = mode === "sides"
-        ? (rail === 0
-          ? 0.006 + canvasOverhang * cellWidth
-          : board.left + board.width + 0.006 + canvasOverhang * cellWidth)
+        ? (rail === 0 ? randomBetween(leftMin, leftMax) : randomBetween(rightMin, rightMax))
         : 0.006 + canvasOverhang * cellWidth + spread * Math.max(0, 0.988 - cellWidth * 1.68);
       const y = mode === "top-bottom"
-        ? (rail === 0
-          ? 0.006 + canvasOverhang * cellHeight
-          : board.top + board.height + 0.006 + canvasOverhang * cellHeight)
+        ? (rail === 0 ? randomBetween(topMin, topMax) : randomBetween(bottomMin, bottomMax))
         : 0.006 + canvasOverhang * cellHeight + spread * Math.max(0, 0.988 - cellHeight * 1.68);
       positions.set(id, { x, y });
     });
@@ -417,14 +423,30 @@ function pieceRailPositions(rows: number, cols: number, seed: string, board: Boa
       );
       if (!fitsFirst && !fitsSecond && !fitsPerimeter) continue;
       const position = {
-        x: Math.max(0.005, Math.min(0.995 - cellWidth, x + (random() - 0.5) * cellWidth * 0.12)),
-        y: Math.max(0.005, Math.min(0.995 - cellHeight, y + (random() - 0.5) * cellHeight * 0.12)),
+        x: Math.max(0.005, Math.min(0.995 - cellWidth, x + (random() - 0.5) * cellWidth * 0.56)),
+        y: Math.max(0.005, Math.min(0.995 - cellHeight, y + (random() - 0.5) * cellHeight * 0.56)),
       };
+      if (fitsFirst && mode === "sides") position.x = Math.min(position.x, board.left - 0.006 - cellWidth * 1.28);
+      if (fitsFirst && mode === "top-bottom") position.y = Math.min(position.y, board.top - 0.006 - cellHeight * 1.28);
+      if (fitsSecond && mode === "sides") position.x = Math.max(position.x, board.left + board.width + 0.006 + cellWidth * 0.28);
+      if (fitsSecond && mode === "top-bottom") position.y = Math.max(position.y, board.top + board.height + 0.006 + cellHeight * 0.28);
       if (fitsPerimeter) {
-        if (y + cellHeight * 1.28 < board.top - 0.003) topPerimeterSlots.push(position);
-        else if (y - cellHeight * 0.28 > board.top + board.height + 0.003) bottomPerimeterSlots.push(position);
-        else if (x + cellWidth * 1.28 < board.left - 0.003) leftPerimeterSlots.push(position);
-        else rightPerimeterSlots.push(position);
+        if (y + cellHeight * 1.28 < board.top - 0.003) {
+          position.y = Math.min(position.y, board.top - 0.003 - cellHeight * 1.28);
+          topPerimeterSlots.push(position);
+        }
+        else if (y - cellHeight * 0.28 > board.top + board.height + 0.003) {
+          position.y = Math.max(position.y, board.top + board.height + 0.003 + cellHeight * 0.28);
+          bottomPerimeterSlots.push(position);
+        }
+        else if (x + cellWidth * 1.28 < board.left - 0.003) {
+          position.x = Math.min(position.x, board.left - 0.003 - cellWidth * 1.28);
+          leftPerimeterSlots.push(position);
+        }
+        else {
+          position.x = Math.max(position.x, board.left + board.width + 0.003 + cellWidth * 0.28);
+          rightPerimeterSlots.push(position);
+        }
       }
       else (fitsFirst ? firstRailSlots : secondRailSlots).push(position);
     }

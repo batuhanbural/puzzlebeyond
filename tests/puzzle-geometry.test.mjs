@@ -71,6 +71,7 @@ function compileInlineLayoutHelpers(source) {
     .replace(/\s+as const\b/g, "")
     .replace(/const shuffle = <T,>\(values: T\[\]\) =>/, "const shuffle = (values) =>")
     .replace(/const axisPositions = \(cellSize: number, step: number\) =>/, "const axisPositions = (cellSize, step) =>")
+    .replace(/const randomBetween = \(minimum: number, maximum: number\) =>/, "const randomBetween = (minimum, maximum) =>")
     .replace(/const values: number\[\]/g, "const values")
     .replace(/\)\s*:\s*BoardFrame\s*\{/, ") {")
     .replace(/: PieceRailPosition\[\]/g, "")
@@ -302,8 +303,10 @@ test("small desktop loose pieces remain visually outside the inner board", async
   const board = fitRailBoardFrame(baseBoard, rows, cols, "sides");
   const cellWidth = board.width / cols;
   const positions = sidePiecePositions(rows, cols, "SMALL-ROOM", board);
+  const railDepths = new Set([...positions.values()].map(({ x }) => x.toFixed(4)));
 
   assert.ok(board.width < baseBoard.width);
+  assert.ok(railDepths.size >= 6, "small loose pieces should not form two perfectly straight columns");
   for (const position of positions.values()) {
     const fullyLeft = position.x + cellWidth * 1.28 < board.left;
     const fullyRight = position.x - cellWidth * 0.28 > board.left + board.width;
