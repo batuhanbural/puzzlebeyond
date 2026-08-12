@@ -88,6 +88,6 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   const actionHandler = page.slice(actionStart, actionEnd);
   assert.match(actionHandler, /message\.action !== "push-edges"/);
   assert.match(actionHandler, /setPieces\(\(current\) =>/);
-  assert.match(actionHandler, /piece\.locked \|\| piece\.zone !== "board"/);
+  assert.match(actionHandler, /current\.map\(\(piece\) => piece\.locked/);
   assert.match(page, /pendingRoomActionRef\.current = \{ message, expiresAt: Date\.now\(\) \+ 2_500 \}/);
 });

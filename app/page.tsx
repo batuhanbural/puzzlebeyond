@@ -453,6 +453,21 @@ function landscapePiecePositions(rows: number, cols: number, seed: string) {
   return pieceRailPositions(rows, cols, seed, MOBILE_LANDSCAPE_BOARD, "sides");
 }
 
+function redistributePiecePositions(pieceIds: number[], layout: Map<number, PieceRailPosition>) {
+  const positions = [...layout.values()];
+  const ids = [...pieceIds].sort((left, right) => left - right);
+  const distributed = new Map<number, PieceRailPosition>();
+  ids.forEach((id, index) => {
+    const positionIndex = Math.min(
+      positions.length - 1,
+      Math.floor((index + 0.5) * positions.length / ids.length),
+    );
+    const position = positions[positionIndex];
+    if (position) distributed.set(id, position);
+  });
+  return distributed;
+}
+
 function scatteredPieces(rows: number, cols: number, _seed?: string) {
   void _seed;
   return Array.from({ length: rows * cols }, (_, id) => ({
@@ -482,8 +497,8 @@ function normalizePieceLayout(pieces: Piece[], rows: number, cols: number, seed:
     const usesPositionedMat = piece.layoutVersion === PUZZLE_LAYOUT_VERSION
       && piece.zone === "mat" && piece.positioned === true
       && Number.isFinite(piece.x) && Number.isFinite(piece.y)
-      && piece.x >= 0 && piece.x <= 1 - 0.6 / cols
-      && piece.y >= 0 && piece.y <= 1 - 0.48 / rows;
+      && piece.x >= 0 && piece.x <= 0.98
+      && piece.y >= 0 && piece.y <= 0.98;
     return usesCurrentLayout
       ? { ...piece, id, zone: "board" as const, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION }
       : usesPositionedMat
@@ -1474,7 +1489,7 @@ export default function Home() {
       setHintVisible(false);
       setRemoteDrags([]);
       setPieces((current) => {
-        const next = current.map((piece) => piece.locked || piece.zone !== "board"
+        const next = current.map((piece) => piece.locked
           ? piece
           : { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, positioned: undefined, layoutVersion: PUZZLE_LAYOUT_VERSION });
         piecesRef.current = next;
@@ -2111,16 +2126,32 @@ export default function Home() {
   }, [hintPiece, lastHeldPieceId]);
 
   const pushToSides = useCallback(() => {
-    const boardLoosePieces = pieces.filter((piece) => !piece.locked && piece.zone === "board");
-    if (boardLoosePieces.length === 0) {
-      setNotice("Tahta üzerinde kenara alınacak parça yok!");
+    const loosePieces = piecesRef.current.filter((piece) => !piece.locked);
+    if (loosePieces.length === 0) {
+      setNotice("Kenara alınacak serbest parça yok!");
       return;
     }
     setHintVisible(false);
-    const next = pieces.map((piece) => {
-      if (piece.locked || piece.zone !== "board") return piece;
-      return { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, positioned: undefined, layoutVersion: PUZZLE_LAYOUT_VERSION };
+    const useLandscapeLayout = window.matchMedia("(max-width: 1024px) and (orientation: landscape), (orientation: landscape) and (hover: none) and (pointer: coarse)").matches;
+    const useBandLayout = !useLandscapeLayout
+      && imageAspect > 1
+      && window.matchMedia("(max-width: 760px) and (orientation: portrait)").matches;
+    const activeLayout = useLandscapeLayout ? landscapeLayout : useBandLayout ? bandLayout : sideLayout;
+    const distributed = redistributePiecePositions(loosePieces.map((piece) => piece.id), activeLayout);
+    const next = piecesRef.current.map((piece) => {
+      if (piece.locked) return piece;
+      const position = distributed.get(piece.id);
+      return {
+        ...piece,
+        x: position ? Math.min(0.98, position.x) : 0,
+        y: position ? Math.min(0.98, position.y) : 0,
+        zone: "mat" as const,
+        locked: false,
+        positioned: position ? (true as const) : undefined,
+        layoutVersion: PUZZLE_LAYOUT_VERSION,
+      };
     });
+    piecesRef.current = next;
     setPieces(next);
     if (room) {
       if (!realtimeSenderId.current) realtimeSenderId.current = crypto.randomUUID();
@@ -2136,7 +2167,7 @@ export default function Home() {
       void pushPieces(next);
     }
     setNotice("Serbest parçalar tahta çevresine toplandı.");
-  }, [pieces, room, pushPieces]);
+  }, [bandLayout, imageAspect, landscapeLayout, room, sideLayout, pushPieces]);
 
   const downloadCompletedImage = async () => {
     if (!room || progress !== 100 || downloadBusy) return;

@@ -59,9 +59,7 @@ export function normalizePuzzlePiece(value: unknown, rows: number, cols: number)
   const zone: PieceZone = value.zone === "board" ? "board" : "mat";
   if (zone === "mat") {
     if (value.positioned === true) {
-      const maxX = Math.max(0, 1 - 0.6 / cols);
-      const maxY = Math.max(0, 1 - 0.48 / rows);
-      if (x < 0 || x > maxX || y < 0 || y > maxY) return null;
+      if (x < 0 || x > 0.98 || y < 0 || y > 0.98) return null;
       return { id, x, y, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION, zone, positioned: true };
     }
     return { id, x: 0, y: 0, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION, zone };
