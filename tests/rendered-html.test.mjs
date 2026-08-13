@@ -21,6 +21,25 @@ test("admin login stays available while configuration is verified by the server"
   assert.match(authRoute, /status: 503/);
 });
 
+test("returning browsers get an explicit continue button for their saved room", async () => {
+  const [page, styles] = await Promise.all([
+    read("app/page.tsx"),
+    read("app/globals.css"),
+  ]);
+
+  assert.match(page, /window\.localStorage\.getItem\(ROOM_STORAGE_KEY\)/);
+  assert.match(page, /window\.sessionStorage\.getItem\(ROOM_STORAGE_KEY\)/);
+  assert.match(page, /window\.localStorage\.setItem\(ROOM_STORAGE_KEY, storedCode\)/);
+  assert.match(page, /const \[resumeRoomCode, setResumeRoomCode\] = useState\(""\)/);
+  assert.match(page, /setResumeRoomCode\(getStoredRoomCode\(\)\)/);
+  assert.match(page, /const resumeRoom = async \(\) =>/);
+  assert.match(page, /fetch\(`\/api\/room\?code=\$\{encodeURIComponent\(resumeRoomCode\)\}`/);
+  assert.match(page, /response\.status === 404[\s\S]*storeRoomCode\(null\)[\s\S]*setResumeRoomCode\(""\)/);
+  assert.equal((page.match(/KALDIĞIN YERDEN DEVAM ET/g) || []).length, 2);
+  assert.match(styles, /\.resume-room-button\s*\{[^}]*background:var\(--lime\)[^}]*box-shadow:4px 4px 0 var\(--ink\)/);
+  assert.match(styles, /\.mobile-room-actions \.resume-room-button\s*\{[^}]*min-height:38px/);
+});
+
 test("contains the puzzle app entry points", async () => {
   const [page, layout, styles, packageJson] = await Promise.all([
     read("app/page.tsx"),

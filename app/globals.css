@@ -73,6 +73,10 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .room-start-card h3 { margin:0; font-size:21px; line-height:1; letter-spacing:-1px; text-transform:uppercase; }
 .room-start-card>p:not(.room-start-kicker) { margin:14px 0 20px; color:#65615a; font-family:Georgia,serif; font-size:11px; line-height:1.5; }
 .room-start-card .primary-button { min-height:50px; padding:7px 9px; font-size:11px; letter-spacing:.45px; line-height:1.15; white-space:normal; }
+.resume-room-button { width:100%; min-height:54px; margin-bottom:10px; padding:8px 10px; display:grid; place-items:center; gap:3px; border:2px solid var(--ink); background:var(--lime); color:var(--ink); font-size:10px; font-weight:950; letter-spacing:.35px; line-height:1.15; cursor:pointer; box-shadow:4px 4px 0 var(--ink); }
+.resume-room-button small { font-size:8px; font-weight:950; letter-spacing:2px; }
+.resume-room-button:hover { transform:translate(-2px,-2px); box-shadow:6px 6px 0 var(--ink); }
+.resume-room-button:disabled { opacity:.62; cursor:wait; transform:none; box-shadow:2px 2px 0 var(--ink); }
 .panel-text-button { width:100%; min-height:36px; margin-top:9px; padding:7px 5px; border:1.5px solid var(--ink); background:var(--white); box-shadow:2px 2px 0 var(--ink); font-size:10px; font-weight:950; letter-spacing:.35px; line-height:1.2; text-decoration:none; cursor:pointer; }
 .panel-text-button:hover { background:var(--ink); color:var(--paper); transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--ink); }
 .board-section { min-width:0; min-height:0; padding:0 18px 10px; display:grid; grid-template-rows:50px minmax(0,1fr) auto; align-items:center; overflow:hidden; background:#e6e0d3; }
@@ -260,6 +264,7 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
   .mobile-inspector-trigger { display:inline-flex; height:28px; padding:0 7px; }
   .mobile-piece-inspector-backdrop { display:grid; }
   .mobile-room-actions { width:100%; margin-top:6px; display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; }
+  .mobile-room-actions .resume-room-button { min-height:38px; margin:0; padding:0 10px; font-size:9px; box-shadow:2px 2px 0 var(--ink); }
 }
 @media (max-width:760px) {
   .site-shell { grid-template-rows:48px minmax(0,1fr); }

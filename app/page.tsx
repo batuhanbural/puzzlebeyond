@@ -1332,7 +1332,14 @@ function hasSameRoomPlayers(current: RoomPlayer[], next: RoomPlayer[]) {
 function getStoredRoomCode() {
   if (typeof window === "undefined") return "";
   try {
-    return window.sessionStorage.getItem(ROOM_STORAGE_KEY)?.trim().toUpperCase() || "";
+    const storedCode = window.localStorage.getItem(ROOM_STORAGE_KEY)?.trim().toUpperCase()
+      || window.sessionStorage.getItem(ROOM_STORAGE_KEY)?.trim().toUpperCase()
+      || "";
+    if (storedCode) {
+      window.localStorage.setItem(ROOM_STORAGE_KEY, storedCode);
+      window.sessionStorage.removeItem(ROOM_STORAGE_KEY);
+    }
+    return storedCode;
   } catch {
     return "";
   }
@@ -1341,8 +1348,9 @@ function getStoredRoomCode() {
 function storeRoomCode(code: string | null) {
   if (typeof window === "undefined") return;
   try {
-    if (code) window.sessionStorage.setItem(ROOM_STORAGE_KEY, code);
-    else window.sessionStorage.removeItem(ROOM_STORAGE_KEY);
+    if (code) window.localStorage.setItem(ROOM_STORAGE_KEY, code);
+    else window.localStorage.removeItem(ROOM_STORAGE_KEY);
+    window.sessionStorage.removeItem(ROOM_STORAGE_KEY);
   } catch { /* Storage can be unavailable in private browsing contexts. */ }
 }
 
@@ -1356,6 +1364,7 @@ export default function Home() {
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [galleryLoading, setGalleryLoading] = useState(true);
   const [previewSeed, setPreviewSeed] = useState("PREVIEW");
+  const [resumeRoomCode, setResumeRoomCode] = useState("");
   const [codeInput, setCodeInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState("");
@@ -1533,30 +1542,8 @@ export default function Home() {
     return () => { cancelled = true; };
   }, [room, galleryOpen, introCompletion, galleryItems.length]);
   useEffect(() => {
-    const storedCode = getStoredRoomCode();
-    if (!storedCode) return;
-    let cancelled = false;
-    void fetch(`/api/room?code=${encodeURIComponent(storedCode)}`, { cache: "no-store" }).then(async (response) => {
-      const data = await readApiPayload<{ room?: Room }>(response);
-      if (!response.ok || !data.room) {
-        if (response.status === 404) storeRoomCode(null);
-        throw new Error(data.error || "Oda yeniden yüklenemedi.");
-      }
-      if (cancelled) return;
-      remoteUpdatedAt.current = data.room.updatedAt;
-      const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
-      setRoom(nextRoom);
-      setPieces(nextRoom.pieces);
-      setRemoteDrags((current) => removeCommittedRemoteDrops(current, nextRoom.pieces));
-      setRoomPlayers([]);
-      setImageUrl(data.room.imageUrl);
-      setGalleryOpen(false);
-      setIntroCompletion("idle");
-      setNotice(`${data.room.code} odasına yeniden bağlandın.`);
-    }).catch((error) => {
-      if (!cancelled) setNotice(error instanceof Error ? error.message : "Oda yeniden yüklenemedi.");
-    });
-    return () => { cancelled = true; };
+    const frame = window.requestAnimationFrame(() => setResumeRoomCode(getStoredRoomCode()));
+    return () => window.cancelAnimationFrame(frame);
   }, []);
   useEffect(() => {
     const sendHeartbeat = async () => {
@@ -2085,6 +2072,7 @@ export default function Home() {
       if (!response.ok || !data.room) throw new Error(data.error || "Oda oluşturulamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
       storeRoomCode(data.room.code);
+      setResumeRoomCode(data.room.code);
       setPendingImageAspect(null);
       const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
       setRoom(nextRoom); setPieces(nextRoom.pieces); setRoomPlayers([]); setImageUrl(data.room.imageUrl); setUploadPreviewUrl("");
@@ -2107,6 +2095,7 @@ export default function Home() {
       if (!response.ok || !data.room) throw new Error(data.error || "Oda bulunamadı");
       remoteUpdatedAt.current = data.room.updatedAt;
       storeRoomCode(data.room.code);
+      setResumeRoomCode(data.room.code);
       setPendingImageAspect(null);
       const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
       setRoom(nextRoom); setPieces(nextRoom.pieces); setRoomPlayers([]); setImageUrl(data.room.imageUrl);
@@ -2117,6 +2106,42 @@ export default function Home() {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Odaya katılınamadı.");
     } finally { setBusy(false); }
+  };
+
+  const resumeRoom = async () => {
+    if (!resumeRoomCode || busy) return;
+    setBusy(true);
+    setNotice("Son odan açılıyor…");
+    try {
+      const response = await fetch(`/api/room?code=${encodeURIComponent(resumeRoomCode)}`, { cache: "no-store" });
+      const data = await readApiPayload<{ room?: Room }>(response);
+      if (!response.ok || !data.room) {
+        if (response.status === 404) {
+          storeRoomCode(null);
+          setResumeRoomCode("");
+        }
+        throw new Error(data.error || "Son oda yeniden açılamadı.");
+      }
+      remoteUpdatedAt.current = data.room.updatedAt;
+      storeRoomCode(data.room.code);
+      setResumeRoomCode(data.room.code);
+      const nextRoom = { ...data.room, pieces: normalizePieces(data.room) };
+      setRoom(nextRoom);
+      setPieces(nextRoom.pieces);
+      setRemoteDrags((current) => removeCommittedRemoteDrops(current, nextRoom.pieces));
+      setRoomPlayers([]);
+      setImageUrl(data.room.imageUrl);
+      setPendingImageAspect(null);
+      setGalleryOpen(false);
+      setIntroCompletion("idle");
+      setLastHeldPieceId(null);
+      setDialog(null);
+      setNotice(`${data.room.code} odasına kaldığın yerden devam ediyorsun.`);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Son oda yeniden açılamadı.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const selectGalleryPuzzle = (item: GalleryItem) => {
@@ -2143,6 +2168,7 @@ export default function Home() {
     setPreviewReplay(true);
     window.setTimeout(() => setPreviewReplay(false), 700);
     storeRoomCode(null);
+    setResumeRoomCode("");
     setPendingImageAspect(null);
     setRoom(null);
     setRoomPlayers([]);
@@ -2617,6 +2643,12 @@ export default function Home() {
               <p className="room-start-kicker">KARAKTER · TEK MASA</p>
               <h3>Arkadaşlarının puzzle&apos;ına katıl.</h3>
               <p>Sana gönderilen oda kodu herkesi aynı canlı tahtada buluşturur.</p>
+              {resumeRoomCode && (
+                <button className="resume-room-button" onClick={() => void resumeRoom()} disabled={busy}>
+                  <span>{busy ? "ODA AÇILIYOR…" : "KALDIĞIN YERDEN DEVAM ET"}</span>
+                  <small>{resumeRoomCode}</small>
+                </button>
+              )}
               <button className="primary-button full" onClick={() => setDialog("join")}>KODLA KATIL →</button>
               <button className="panel-text-button" onClick={() => setDialog("create")}>YENİ ODA KUR</button>
               <button className="panel-text-button" onClick={skipPreviewPuzzle}>GALERİYE GEÇ</button>
@@ -2739,6 +2771,7 @@ export default function Home() {
                 {loosePieceNodes}
               </div>
               <div className="mobile-room-actions">
+                {!room && resumeRoomCode && <button className="resume-room-button" onClick={() => void resumeRoom()} disabled={busy}>{busy ? "ODA AÇILIYOR…" : "KALDIĞIN YERDEN DEVAM ET"}</button>}
                 {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
                 {room && <button className="primary-button" onClick={() => setDialog("create")}>YENİ PUZZLE KUR</button>}
               </div>
