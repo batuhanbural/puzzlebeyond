@@ -63,6 +63,8 @@ test("desktop side panel previews the selected puzzle piece", async () => {
   assert.match(page, /PARÇA İNCELEME/);
   assert.match(page, /OYUN DURUMU/);
   assert.match(page, /ANLIK İLERLEME/);
+  assert.doesNotMatch(page, /KÜÇÜK İPUCU|className="panel-help"/);
+  assert.doesNotMatch(styles, /\.panel-help/);
   assert.ok(page.indexOf("OYUN DURUMU") < page.indexOf("PARÇA İNCELEME"));
   assert.match(page, /<span className="index coral">02<\/span>/);
   assert.match(page, /<span className="index">03<\/span>/);

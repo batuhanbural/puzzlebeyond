@@ -2621,10 +2621,6 @@ export default function Home() {
             <div><span>BEKLİYOR</span><strong>{remainingCount}</strong><i>PARÇA</i></div>
           </div>
           <div className="progress-rail"><i style={{ width: `${progress}%` }} /></div>
-          <div className="panel-help">
-            <span>✦ KÜÇÜK İPUCU</span>
-            <p>Parçayı doğru yere yaklaştırıp bırak; yerine kendiliğinden oturur.</p>
-          </div>
           <button className="primary-button full progress-create" onClick={() => setDialog("create")}>{room ? "YENİ PUZZLE KUR →" : "FOTOĞRAFINLA BAŞLA →"}</button>
 
           <section className="piece-inspector-section">

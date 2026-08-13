@@ -198,9 +198,6 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .progress-counts i { color:#77736b; font-size:6px; font-style:normal; font-weight:900; letter-spacing:.8px; }
 .progress-rail { height:12px; margin:14px 14px 0; overflow:hidden; border:2px solid var(--ink); background:#ded8cb; }
 .progress-rail i { display:block; height:100%; background:var(--coral); border-right:2px solid var(--ink); transition:width .25s; }
-.panel-help { margin:18px 14px 0; padding:13px; border:2px solid var(--ink); background:var(--lime); box-shadow:3px 3px 0 var(--ink); transform:rotate(1deg); }
-.panel-help span { font-size:8px; font-weight:950; letter-spacing:.9px; }
-.panel-help p { margin:7px 0 0; font-family:Georgia,serif; font-size:10px; line-height:1.45; }
 .progress-create { width:calc(100% - 28px); min-height:43px; margin:20px 14px 0; padding:0 9px; font-size:9px; }
 .piece-inspector-section { margin-top:20px; border-top:2px solid var(--ink); }
 .piece-inspector { padding:14px; display:grid; gap:15px; }
