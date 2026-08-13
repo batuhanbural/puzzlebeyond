@@ -103,11 +103,13 @@ function isWithinDropBounds(
   clientX: number,
   clientY: number,
   bounds: DropBounds,
+  insetX = 0,
+  insetY = 0,
 ) {
-  return clientX > bounds.left
-    && clientX < bounds.right
-    && clientY > bounds.top
-    && clientY < bounds.bottom;
+  return clientX > bounds.left + insetX
+    && clientX < bounds.right - insetX
+    && clientY > bounds.top + insetY
+    && clientY < bounds.bottom - insetY;
 }
 
 function puzzlePieceCanvasKey(id: number, rows: number, cols: number, seed: string, imageUrl: string) {
@@ -2087,6 +2089,8 @@ export default function Home() {
       drag.clientX,
       drag.clientY,
       rect,
+      drag.width / 2,
+      drag.height / 2,
     ));
     const maxX = Math.max(0, 1 - 1 / cols);
     const maxY = Math.max(0, 1 - 1 / rows);

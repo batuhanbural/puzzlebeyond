@@ -61,7 +61,7 @@ function compileInlineLayoutHelpers(source) {
     ["redistributePiecePositions", ["pieceIds", "layout"]],
     ["scatteredPieces", ["rows", "cols", "_seed"]],
     ["normalizePieceLayout", ["pieces", "rows", "cols", "seed"]],
-    ["isWithinDropBounds", ["clientX", "clientY", "bounds"]],
+    ["isWithinDropBounds", ["clientX", "clientY", "bounds", "insetX = 0", "insetY = 0"]],
   ];
   const helpers = helperSpecs.map(([name, parameters]) => replaceTypedSignature(
     extractFunction(source, name),
@@ -101,6 +101,10 @@ test("board drops require the pointer to be strictly inside the inner boundary",
   assert.equal(isWithinDropBounds(300, 80.25, bounds), false);
   assert.equal(isWithinDropBounds(100.51, 80.26, bounds), true);
   assert.equal(isWithinDropBounds(99, 200, bounds), false);
+  assert.equal(isWithinDropBounds(125.5, 200, bounds, 25, 20), false);
+  assert.equal(isWithinDropBounds(125.51, 200, bounds, 25, 20), true);
+  assert.equal(isWithinDropBounds(475.5, 200, bounds, 25, 20), false);
+  assert.equal(isWithinDropBounds(300, 100.25, bounds, 25, 20), false);
 });
 
 test("edge redistribution samples the full available layout", async () => {
