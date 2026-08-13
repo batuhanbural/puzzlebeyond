@@ -58,6 +58,19 @@ test("the puzzle surface disables text selection and the context menu", async ()
   assert.match(page, /onContextMenu=\{\(event\) => event\.preventDefault\(\)\}/);
 });
 
+test("desktop side panel previews the selected puzzle piece", async () => {
+  const [page, styles] = await Promise.all([read("app/page.tsx"), read("app/globals.css")]);
+  assert.match(page, /PARÇA İNCELEME/);
+  assert.doesNotMatch(page, /OYUN DURUMU|ANLIK İLERLEME/);
+  assert.match(page, /const selectedPiece = useMemo/);
+  assert.match(page, /className="piece-inspector-piece"/);
+  assert.match(page, /id=\{selectedPiece\.id\}/);
+  assert.match(page, /<JigsawPiece[\s\S]*?eager/);
+  assert.match(styles, /\.piece-inspector-card\s*\{[^}]*border:2px solid var\(--ink\)/);
+  assert.match(styles, /\.piece-inspector-stage\s*\{[^}]*place-items:center[^}]*overflow:hidden/);
+  assert.match(styles, /\.piece-inspector-piece \.piece-canvas/);
+});
+
 test("pointer release commits a piece without replaying its movement", async () => {
   const [page, styles] = await Promise.all([
     read("app/page.tsx"),

@@ -1687,7 +1687,6 @@ export default function Home() {
   const puzzleSeed = room?.code ?? previewSeed;
   useEffect(() => () => clearPuzzlePieceCanvasCache(), [imageUrl, rows, cols, puzzleSeed]);
   const solvedCount = useMemo(() => pieces.filter((piece) => piece.locked).length, [pieces]);
-  const remainingCount = pieceCount - solvedCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);
   const galleryVisible = !room && (galleryOpen || introCompletion === "gallery");
   const desktopWorkspaceAspect = workspaceSize.width > 0 && workspaceSize.height > 0
@@ -1734,6 +1733,10 @@ export default function Home() {
     : { width: "100%", aspectRatio: imageAspect, maxHeight: "100%" };
   const hintPiece = useMemo(() => pieces.find((piece) => piece.id === lastHeldPieceId && !piece.locked)
     ?? pieces.find((piece) => !piece.locked), [lastHeldPieceId, pieces]);
+  const selectedPiece = useMemo(
+    () => lastHeldPieceId === null ? null : pieces.find((piece) => piece.id === lastHeldPieceId) ?? null,
+    [lastHeldPieceId, pieces],
+  );
   const keyboardPieceId = pieces.find((piece) => piece.id === lastHeldPieceId && !piece.locked)?.id
     ?? pieces.find((piece) => !piece.locked)?.id
     ?? -1;
@@ -2585,24 +2588,44 @@ export default function Home() {
         <aside className="panel progress-panel">
           <div className="panel-heading panel-heading-rich">
             <span className="index coral">02</span>
-            <span><b>OYUN DURUMU</b><small>ANLIK İLERLEME</small></span>
+            <span><b>PARÇA İNCELEME</b><small>SEÇİLİ PARÇA</small></span>
           </div>
-          <div className="progress-overview">
-            <div className="progress-dial" style={{ background: `conic-gradient(var(--coral) 0 ${progress}%, #ded8cb ${progress}% 100%)` }}>
-              <div><strong>{progress}</strong><span>%</span></div>
+          <div className="piece-inspector" aria-live="polite">
+            <div className={`piece-inspector-card ${selectedPiece ? "has-piece" : "is-empty"}`}>
+              <div className="piece-inspector-stage">
+                {selectedPiece ? (
+                  <div className="piece-inspector-piece">
+                    <JigsawPiece
+                      id={selectedPiece.id}
+                      rows={rows}
+                      cols={cols}
+                      seed={puzzleSeed}
+                      imageUrl={imageUrl}
+                      eager
+                    />
+                  </div>
+                ) : (
+                  <div className="piece-inspector-placeholder" aria-hidden="true"><span>?</span></div>
+                )}
+              </div>
+              <div className="piece-inspector-meta">
+                {selectedPiece ? (
+                  <>
+                    <span>PARÇA</span>
+                    <strong>#{selectedPiece.id + 1}</strong>
+                    <small>{selectedPiece.locked ? "YERİNE OTURDU" : selectedPiece.zone === "board" ? "TAHTADA" : "DIŞ ALANDA"}</small>
+                  </>
+                ) : (
+                  <>
+                    <strong>PARÇA SEÇİLMEDİ</strong>
+                    <small>İNCELEMEK İÇİN BİR PARÇAYA DOKUN</small>
+                  </>
+                )}
+              </div>
             </div>
-            <p>{progress === 100 ? (room ? "Görselin tamamı ortaya çıktı." : "Hazır puzzleları keşfet.") : progress > 0 ? "Görüntü ortaya çıkıyor." : "İlk parçayı sen yerleştir."}</p>
+            <p className="piece-inspector-copy">Tahtada veya dış alanda bir parçayı seçtiğinde burada büyük hâlini görebilirsin.</p>
+            <button className="primary-button full inspector-create" onClick={() => setDialog("create")}>{room ? "YENİ PUZZLE KUR →" : "FOTOĞRAFINLA BAŞLA →"}</button>
           </div>
-          <div className="progress-counts">
-            <div><span>YERİNDE</span><strong>{solvedCount}</strong><i>PARÇA</i></div>
-            <div><span>BEKLİYOR</span><strong>{remainingCount}</strong><i>PARÇA</i></div>
-          </div>
-          <div className="progress-rail"><i style={{ width: `${progress}%` }} /></div>
-          <div className="panel-help">
-            <span>✦ KÜÇÜK İPUCU</span>
-            <p>Parçayı doğru yere yaklaştırıp bırak; yerine kendiliğinden oturur.</p>
-          </div>
-          <button className="primary-button full progress-create" onClick={() => setDialog("create")}>{room ? "YENİ PUZZLE KUR →" : "FOTOĞRAFINLA BAŞLA →"}</button>
         </aside>
       </section>
 

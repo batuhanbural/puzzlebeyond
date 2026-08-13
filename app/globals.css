@@ -166,25 +166,19 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .gallery-card-copy em { margin-top:auto; font-size:8px; font-style:normal; font-weight:950; letter-spacing:.8px; }
 .gallery-empty { grid-column:1 / -1; margin:0; padding:28px; border:2px dashed var(--ink); background:var(--white); font-family:Georgia,serif; font-size:14px; text-align:center; }
 .gallery-actions { width:min(100%,920px); margin:24px auto 0; display:flex; justify-content:flex-end; gap:10px; }
-.progress-overview { padding:21px 14px 15px; display:grid; justify-items:center; gap:11px; text-align:center; }
-.progress-dial { position:relative; width:136px; height:136px; display:grid; place-items:center; border:2px solid var(--ink); border-radius:50%; box-shadow:5px 5px 0 var(--ink); transform:rotate(-2deg); }
-.progress-dial::after { content:""; position:absolute; inset:15px; border:2px solid var(--ink); border-radius:50%; background:var(--white); }
-.progress-dial>div { position:relative; z-index:1; display:flex; align-items:flex-start; line-height:.8; transform:rotate(2deg); }
-.progress-dial strong { font-size:48px; letter-spacing:-4px; }
-.progress-dial span { margin:2px 0 0 3px; font-size:16px; font-weight:950; }
-.progress-overview p { margin:0; color:#625f59; font-family:Georgia,serif; font-size:11px; line-height:1.35; }
-.progress-counts { margin:0 14px; display:grid; grid-template-columns:1fr 1fr; border:2px solid var(--ink); background:var(--white); }
-.progress-counts>div { min-width:0; padding:10px 5px; display:grid; justify-items:center; gap:2px; }
-.progress-counts>div+div { border-left:2px solid var(--ink); }
-.progress-counts span { font-size:7px; font-weight:950; letter-spacing:.8px; }
-.progress-counts strong { font-size:25px; line-height:1; }
-.progress-counts i { color:#77736b; font-size:6px; font-style:normal; font-weight:900; letter-spacing:.8px; }
-.progress-rail { height:12px; margin:14px 14px 0; overflow:hidden; border:2px solid var(--ink); background:#ded8cb; }
-.progress-rail i { display:block; height:100%; background:var(--coral); border-right:2px solid var(--ink); transition:width .25s; }
-.panel-help { margin:18px 14px 0; padding:13px; border:2px solid var(--ink); background:var(--lime); box-shadow:3px 3px 0 var(--ink); transform:rotate(1deg); }
-.panel-help span { font-size:8px; font-weight:950; letter-spacing:.9px; }
-.panel-help p { margin:7px 0 0; font-family:Georgia,serif; font-size:10px; line-height:1.45; }
-.progress-create { width:calc(100% - 28px); min-height:43px; margin:20px 14px 0; padding:0 9px; font-size:9px; }
+.piece-inspector { padding:14px; display:grid; gap:15px; }
+.piece-inspector-card { overflow:hidden; border:2px solid var(--ink); background:var(--white); box-shadow:5px 5px 0 var(--ink); transform:rotate(-1deg); }
+.piece-inspector-stage { position:relative; min-height:205px; display:grid; place-items:center; overflow:hidden; background-color:#ddd6c8; background-image:radial-gradient(rgba(21,21,21,.22) .7px,transparent .7px); background-size:12px 12px; border-bottom:2px solid var(--ink); }
+.piece-inspector-card.has-piece .piece-inspector-stage::after { content:""; position:absolute; z-index:0; width:120px; height:120px; border:1.5px dashed rgba(21,21,21,.34); border-radius:50%; }
+.piece-inspector-piece { position:relative; z-index:1; width:92px; height:92px; transform:rotate(2deg); }
+.piece-inspector-piece .piece-canvas { filter:drop-shadow(5px 7px 2px rgba(21,21,21,.38)); }
+.piece-inspector-placeholder { width:86px; height:86px; display:grid; place-items:center; border:2px dashed rgba(21,21,21,.45); background:rgba(255,253,247,.6); transform:rotate(3deg); }
+.piece-inspector-placeholder span { font-family:Georgia,serif; font-size:38px; font-weight:900; }
+.piece-inspector-meta { min-height:76px; padding:11px 12px; display:grid; align-content:center; gap:2px; background:var(--lime); }
+.piece-inspector-meta span,.piece-inspector-meta small { color:#5f5b55; font-size:7px; font-weight:950; letter-spacing:.9px; }
+.piece-inspector-meta strong { overflow:hidden; font-size:20px; line-height:1.05; text-overflow:ellipsis; }
+.piece-inspector-copy { margin:0; color:#625f59; font-family:Georgia,serif; font-size:10px; line-height:1.45; text-align:center; }
+.inspector-create { min-height:43px; padding:0 9px; font-size:9px; }
 footer { height:34px; min-height:34px; padding:0 4vw; display:flex; justify-content:space-between; align-items:center; overflow:hidden; background:var(--ink); color:var(--paper); font-size:8px; font-weight:900; letter-spacing:1.2px; }
 footer p { font-family:Georgia,serif; font-size:12px; font-style:italic; font-weight:400; letter-spacing:0; }
 .dialog-backdrop { position:fixed; z-index:100; inset:0; padding:24px; display:grid; place-items:center; background:rgba(21,21,21,.68); }
