@@ -57,6 +57,10 @@ function compileInlineLayoutHelpers(source) {
     ["pieceBoardTarget", ["id", "rows", "cols"]],
     ["isNearPieceTarget", ["clientX", "clientY", "bounds", "id", "rows", "cols"]],
     ["boardGridPath", ["rows", "cols"]],
+    ["projectAxisBetweenBoardFrames", ["value", "sourceStart", "sourceSize", "targetStart", "targetSize"]],
+    ["projectPositionBetweenBoardFrames", ["position", "source", "target"]],
+    ["workspaceToSharedPosition", ["position", "board"]],
+    ["sharedToWorkspacePosition", ["position", "board"]],
     ["pieceRailPositions", ["rows", "cols", "seed", "board", "mode"]],
     ["sidePiecePositions", ["rows", "cols", "seed", "board"]],
     ["bandPiecePositions", ["rows", "cols", "seed", "board"]],
@@ -78,6 +82,7 @@ function compileInlineLayoutHelpers(source) {
     .replace(/const commands: string\[\]/g, "const commands")
     .replace(/\)\s*:\s*BoardFrame\s*\{/, ") {")
     .replace(/\)\s*:\s*PieceRailMode\s*\{/, ") {")
+    .replace(/\)\s*:\s*PieceRailPosition\s*\{/, ") {")
     .replace(/: PieceRailPosition\[\]/g, "")
     .replace(/: PieceRailPosition\[\]\[\]/g, "")
     .replace(/new Map<number, PieceRailPosition>\(\)/g, "new Map()"));
@@ -88,7 +93,7 @@ function compileInlineLayoutHelpers(source) {
     const PUZZLE_LAYOUT_VERSION = ${JSON.stringify(layoutVersion)};
     const BOARD = { left: 0.19, top: 0.12, width: 0.62, height: 0.76 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, isNearPieceTarget, boardGridPath, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
+    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, isNearPieceTarget, boardGridPath, workspaceToSharedPosition, sharedToWorkspacePosition, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
@@ -408,16 +413,52 @@ test("exact centers of first and last edge pieces always snap", async () => {
   assert.equal(isNearPieceTarget(bounds.right, last.y, bounds, rows * cols - 1, rows, cols), false);
 });
 
-test("desktop and mobile use the same saved workspace coordinates", async () => {
+test("desktop and mobile decode the same saved shared coordinates", async () => {
   const source = await pageSourcePromise;
   const componentStart = source.indexOf("const InteractivePuzzlePiece");
   const componentEnd = source.indexOf("\n\nfunction positionRemotePuzzlePiece", componentStart);
   const component = source.slice(componentStart, componentEnd);
 
-  assert.match(component, /const sideX = piece\.positioned \? piece\.x : sidePosition\?\.x/);
-  assert.match(component, /const bandX = piece\.positioned \? piece\.x : bandPosition\?\.x/);
-  assert.match(component, /const landscapeX = piece\.positioned \? piece\.x : landscapePosition\?\.x/);
+  assert.match(component, /piece\.matCoordinateSpace === "shared"/);
+  assert.match(component, /sharedToWorkspacePosition\(piece, board\)/);
+  assert.match(component, /const sideSavedPosition = savedMatPosition\(sideBoard\)/);
+  assert.match(component, /const bandSavedPosition = savedMatPosition\(bandBoard\)/);
+  assert.match(component, /const landscapeSavedPosition = savedMatPosition\(landscapeBoard\)/);
   assert.doesNotMatch(component, /piece\.matLayout/);
+});
+
+test("the 1034-piece 47 by 22 board crosses every shared boundary without a jump", async () => {
+  const { fitPuzzleSize, workspaceToSharedPosition, sharedToWorkspacePosition } = await helpersPromise;
+  const fitted = fitPuzzleSize(puzzleSizes.at(-1), 0.45);
+  assert.deepEqual({ rows: fitted.rows, cols: fitted.cols, count: fitted.count }, { rows: 47, cols: 22, count: 1034 });
+
+  const desktop = { left: 0.24, top: 0.08, width: 0.52, height: 0.84 };
+  const mobile = { left: 0.08, top: 0.34, width: 0.84, height: 0.32 };
+  const epsilon = 1e-7;
+  const boundaries = [
+    { axis: "x", value: desktop.left, expected: mobile.left },
+    { axis: "x", value: desktop.left + desktop.width, expected: mobile.left + mobile.width },
+    { axis: "y", value: desktop.top, expected: mobile.top },
+    { axis: "y", value: desktop.top + desktop.height, expected: mobile.top + mobile.height },
+  ];
+
+  for (const { axis, value, expected } of boundaries) {
+    const project = (offset) => {
+      const desktopPoint = { x: 0.5, y: 0.5, [axis]: value + offset };
+      const shared = workspaceToSharedPosition(desktopPoint, desktop);
+      return sharedToWorkspacePosition(shared, mobile)[axis];
+    };
+    assert.ok(Math.abs(project(0) - expected) < 1e-12);
+    assert.ok(Math.abs(project(0) - project(-epsilon)) < 1e-5);
+    assert.ok(Math.abs(project(epsilon) - project(0)) < 1e-5);
+  }
+
+  for (let index = 0; index <= 1000; index += 1) {
+    const point = { x: index / 1000, y: 1 - index / 1000 };
+    const roundTrip = sharedToWorkspacePosition(workspaceToSharedPosition(point, desktop), desktop);
+    assert.ok(Math.abs(roundTrip.x - point.x) < 1e-12);
+    assert.ok(Math.abs(roundTrip.y - point.y) < 1e-12);
+  }
 });
 
 test("the mobile 1034-piece grid uses the exact same 47 by 22 coordinate lattice as pieces", async () => {

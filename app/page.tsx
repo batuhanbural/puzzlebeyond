@@ -3,10 +3,10 @@
 import { ChangeEvent, CSSProperties, PointerEvent, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { GalleryKind } from "@/lib/gallery";
 import type { RealtimeSubscription, RoomActionMessage, RoomDragMessage } from "@/lib/realtime-client";
-import type { MatLayout } from "@/lib/puzzle-validation";
+import type { MatCoordinateSpace, MatLayout } from "@/lib/puzzle-validation";
 
 type PieceZone = "board" | "mat";
-type Piece = { id: number; x: number; y: number; locked?: boolean; layoutVersion?: number; zone?: PieceZone; positioned?: true; matLayout?: MatLayout };
+type Piece = { id: number; x: number; y: number; locked?: boolean; layoutVersion?: number; zone?: PieceZone; positioned?: true; matLayout?: MatLayout; matCoordinateSpace?: MatCoordinateSpace };
 type Room = {
   code: string;
   title: string;
@@ -327,6 +327,51 @@ function boardGridPath(rows: number, cols: number) {
 type PieceRailPosition = { x: number; y: number };
 type PieceRailMode = "sides" | "top-bottom" | "perimeter";
 type BoardFrame = { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
+
+function projectAxisBetweenBoardFrames(
+  value: number,
+  sourceStart: number,
+  sourceSize: number,
+  targetStart: number,
+  targetSize: number,
+) {
+  const sourceEnd = sourceStart + sourceSize;
+  const targetEnd = targetStart + targetSize;
+  if (value <= sourceStart) {
+    return sourceStart > 0 ? value / sourceStart * targetStart : targetStart;
+  }
+  if (value < sourceEnd) {
+    return targetStart + (value - sourceStart) / sourceSize * targetSize;
+  }
+  const sourceTail = 1 - sourceEnd;
+  return sourceTail > 0
+    ? targetEnd + (value - sourceEnd) / sourceTail * (1 - targetEnd)
+    : targetEnd;
+}
+
+function projectPositionBetweenBoardFrames(position: PieceRailPosition, source: BoardFrame, target: BoardFrame): PieceRailPosition {
+  return {
+    x: projectAxisBetweenBoardFrames(position.x, source.left, source.width, target.left, target.width),
+    y: projectAxisBetweenBoardFrames(position.y, source.top, source.height, target.top, target.height),
+  };
+}
+
+function workspaceToSharedPosition(position: PieceRailPosition, board: BoardFrame) {
+  return projectPositionBetweenBoardFrames(position, board, BOARD);
+}
+
+function sharedToWorkspacePosition(position: PieceRailPosition, board: BoardFrame) {
+  return projectPositionBetweenBoardFrames(position, BOARD, board);
+}
+
+function boardFrameFromBounds(workspace: InnerBounds, board: InnerBounds): BoardFrame {
+  return {
+    left: (board.left - workspace.left) / workspace.width,
+    top: (board.top - workspace.top) / workspace.height,
+    width: board.width / workspace.width,
+    height: board.height / workspace.height,
+  };
+}
 
 function fitBoardFrame(imageAspect: number, workspaceAspect: number): BoardFrame {
   const safeImageAspect = Number.isFinite(imageAspect) && imageAspect > 0 ? imageAspect : DEFAULT_IMAGE_ASPECT;
@@ -981,12 +1026,25 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   onPlacePiece: (pieceId: number) => void;
 }) {
   const isBoardPiece = zone === "board";
-  const sideX = piece.positioned ? piece.x : sidePosition?.x ?? 0;
-  const sideY = piece.positioned ? piece.y : sidePosition?.y ?? 0;
-  const bandX = piece.positioned ? piece.x : bandPosition?.x ?? 0;
-  const bandY = piece.positioned ? piece.y : bandPosition?.y ?? 0;
-  const landscapeX = piece.positioned ? piece.x : landscapePosition?.x ?? 0;
-  const landscapeY = piece.positioned ? piece.y : landscapePosition?.y ?? 0;
+  const savedMatPosition = (board: BoardFrame) => {
+    if (!piece.positioned) return null;
+    const position = piece.matCoordinateSpace === "shared"
+      ? sharedToWorkspacePosition(piece, board)
+      : piece;
+    return {
+      x: Math.max(0, Math.min(1 - board.width / cols, position.x)),
+      y: Math.max(0, Math.min(1 - board.height / rows, position.y)),
+    };
+  };
+  const sideSavedPosition = savedMatPosition(sideBoard);
+  const bandSavedPosition = savedMatPosition(bandBoard);
+  const landscapeSavedPosition = savedMatPosition(landscapeBoard);
+  const sideX = sideSavedPosition?.x ?? sidePosition?.x ?? 0;
+  const sideY = sideSavedPosition?.y ?? sidePosition?.y ?? 0;
+  const bandX = bandSavedPosition?.x ?? bandPosition?.x ?? 0;
+  const bandY = bandSavedPosition?.y ?? bandPosition?.y ?? 0;
+  const landscapeX = landscapeSavedPosition?.x ?? landscapePosition?.x ?? 0;
+  const landscapeY = landscapeSavedPosition?.y ?? landscapePosition?.y ?? 0;
   const style = isBoardPiece
     ? {
       "--player-color": playerColor,
@@ -1038,19 +1096,24 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
 function positionRemotePuzzlePiece(element: HTMLDivElement, drag: RemoteDrag, rows: number, cols: number, animate: boolean) {
   const workspace = element.parentElement;
   const board = workspace?.querySelector<HTMLElement>(".puzzle-board-guide");
-  if (!workspace || !board || workspace.clientWidth <= 0 || workspace.clientHeight <= 0 || board.clientWidth <= 0 || board.clientHeight <= 0) return;
+  const boardArea = workspace?.querySelector<HTMLElement>(".puzzle-board-area");
+  if (!workspace || !board || !boardArea || workspace.clientWidth <= 0 || workspace.clientHeight <= 0 || board.clientWidth <= 0 || board.clientHeight <= 0) return;
   const pieceWidth = board.clientWidth / cols;
   const pieceHeight = board.clientHeight / rows;
   element.style.width = `${pieceWidth}px`;
   element.style.height = `${pieceHeight}px`;
   const workspaceRect = elementInnerBounds(workspace);
   const boardRect = elementInnerBounds(board);
+  const boardAreaRect = elementInnerBounds(boardArea);
+  const localSharedPosition = drag.coordinateSpace === "shared"
+    ? sharedToWorkspacePosition({ x: drag.x, y: drag.y }, boardFrameFromBounds(workspaceRect, boardAreaRect))
+    : null;
   let x = drag.coordinateSpace === "board"
     ? boardRect.left - workspaceRect.left + drag.x * boardRect.width - pieceWidth / 2
-    : drag.x * workspace.clientWidth - pieceWidth / 2;
+    : (localSharedPosition?.x ?? drag.x) * workspace.clientWidth - pieceWidth / 2;
   let y = drag.coordinateSpace === "board"
     ? boardRect.top - workspaceRect.top + drag.y * boardRect.height - pieceHeight / 2
-    : drag.y * workspace.clientHeight - pieceHeight / 2;
+    : (localSharedPosition?.y ?? drag.y) * workspace.clientHeight - pieceHeight / 2;
   if (drag.phase === "end" && drag.dropZone === "board" && drag.dropX !== undefined && drag.dropY !== undefined) {
     x = boardRect.left - workspaceRect.left + drag.dropX * boardRect.width;
     y = boardRect.top - workspaceRect.top + drag.dropY * boardRect.height;
@@ -1634,6 +1697,7 @@ export default function Home() {
                 locked: false,
                 positioned: true as const,
                 matLayout: message.dropMatLayout,
+                matCoordinateSpace: message.dropMatCoordinateSpace,
                 layoutVersion: PUZZLE_LAYOUT_VERSION,
               }
               : piece);
@@ -1675,7 +1739,7 @@ export default function Home() {
       setPieces((current) => {
         const next = current.map((piece) => piece.locked || piece.zone !== "board"
           ? piece
-          : { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, positioned: undefined, matLayout: undefined, layoutVersion: PUZZLE_LAYOUT_VERSION });
+          : { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, positioned: undefined, matLayout: undefined, matCoordinateSpace: undefined, layoutVersion: PUZZLE_LAYOUT_VERSION });
         piecesRef.current = next;
         return next;
       });
@@ -2108,20 +2172,19 @@ export default function Home() {
   const createLiveDragMessage = useCallback((drag: LocalDrag, phase: RoomDragMessage["phase"]) => {
     if (!realtimeSenderId.current) return null;
     const workspace = workspaceRef.current;
-    const board = boardRef.current;
+    const boardArea = boardAreaRef.current;
     const workspaceRect = workspace ? elementInnerBounds(workspace) : null;
-    const boardRect = board ? elementInnerBounds(board) : null;
+    const boardAreaRect = boardArea ? elementInnerBounds(boardArea) : null;
     if (!workspaceRect || workspaceRect.width <= 0 || workspaceRect.height <= 0) return null;
-    const coordinateSpace = boardRect && isWithinDropBounds(drag.clientX, drag.clientY, boardRect)
-      ? "board" as const
-      : "workspace" as const;
-    if (coordinateSpace === "board" && boardRect) {
-      drag.liveX = Math.max(-2, Math.min(3, (drag.clientX - boardRect.left) / boardRect.width));
-      drag.liveY = Math.max(-2, Math.min(3, (drag.clientY - boardRect.top) / boardRect.height));
-    } else {
-      drag.liveX = Math.max(-2, Math.min(3, (drag.clientX - workspaceRect.left) / workspaceRect.width));
-      drag.liveY = Math.max(-2, Math.min(3, (drag.clientY - workspaceRect.top) / workspaceRect.height));
-    }
+    const localPosition = {
+      x: (drag.clientX - workspaceRect.left) / workspaceRect.width,
+      y: (drag.clientY - workspaceRect.top) / workspaceRect.height,
+    };
+    const sharedPosition = boardAreaRect
+      ? workspaceToSharedPosition(localPosition, boardFrameFromBounds(workspaceRect, boardAreaRect))
+      : localPosition;
+    drag.liveX = Math.max(-2, Math.min(3, sharedPosition.x));
+    drag.liveY = Math.max(-2, Math.min(3, sharedPosition.y));
     const message: RoomDragMessage = {
       senderId: realtimeSenderId.current,
       gestureId: drag.gestureId,
@@ -2130,7 +2193,7 @@ export default function Home() {
       y: drag.liveY,
       seq: ++realtimeSequence.current,
       phase,
-      coordinateSpace,
+      coordinateSpace: "shared",
     };
     return message;
   }, []);
@@ -2200,8 +2263,10 @@ export default function Home() {
       rafRef.current = null;
     }
     const board = boardRef.current;
+    const boardArea = boardAreaRef.current;
     const workspace = workspaceRef.current;
     const rect = board ? elementInnerBounds(board) : null;
+    const matBoardRect = boardArea ? elementInnerBounds(boardArea) : null;
     const workspaceRect = workspace ? elementInnerBounds(workspace) : null;
     const droppedOnBoard = Boolean(rect && isWithinDropBounds(
       drag.clientX,
@@ -2225,22 +2290,29 @@ export default function Home() {
     const workspaceMatY = workspaceRect
       ? Math.max(0, Math.min(1 - drag.height / workspaceRect.height, (drag.clientY - workspaceRect.top - drag.height / 2) / workspaceRect.height))
       : 0;
+    const sharedMatPosition = workspaceRect && matBoardRect
+      ? workspaceToSharedPosition({ x: workspaceMatX, y: workspaceMatY }, boardFrameFromBounds(workspaceRect, matBoardRect))
+      : { x: workspaceMatX, y: workspaceMatY };
+    const sharedMatX = Math.max(0, Math.min(0.98, sharedMatPosition.x));
+    const sharedMatY = Math.max(0, Math.min(0.98, sharedMatPosition.y));
     const matLayout = placedOnBoard ? undefined : activeMatLayout(imageAspect);
     if (liveEndMessage) {
       liveEndMessage.dropZone = placedOnBoard ? "board" : "mat";
-      liveEndMessage.dropX = placedOnBoard ? finalBoardX : workspaceMatX;
-      liveEndMessage.dropY = placedOnBoard ? finalBoardY : workspaceMatY;
+      liveEndMessage.dropX = placedOnBoard ? finalBoardX : sharedMatX;
+      liveEndMessage.dropY = placedOnBoard ? finalBoardY : sharedMatY;
       liveEndMessage.dropMatLayout = matLayout;
+      liveEndMessage.dropMatCoordinateSpace = placedOnBoard ? undefined : "shared";
     }
     const next = piecesRef.current.map((piece) => piece.id === movingId
       ? {
         ...piece,
-        x: placedOnBoard ? finalBoardX : workspaceMatX,
-        y: placedOnBoard ? finalBoardY : workspaceMatY,
+        x: placedOnBoard ? finalBoardX : sharedMatX,
+        y: placedOnBoard ? finalBoardY : sharedMatY,
         zone: placedOnBoard ? "board" as const : "mat" as const,
         locked: snaps,
         positioned: placedOnBoard ? undefined : (true as const),
         matLayout,
+        matCoordinateSpace: placedOnBoard ? undefined : "shared" as const,
         layoutVersion: PUZZLE_LAYOUT_VERSION,
       }
       : piece);
@@ -2275,7 +2347,7 @@ export default function Home() {
   const placePieceFromKeyboard = useCallback((pieceId: number) => {
     const target = pieceBoardTarget(pieceId, rows, cols);
     const next = piecesRef.current.map((piece) => piece.id === pieceId
-      ? { ...piece, ...target, zone: "board" as const, locked: true, positioned: undefined, matLayout: undefined, layoutVersion: PUZZLE_LAYOUT_VERSION }
+      ? { ...piece, ...target, zone: "board" as const, locked: true, positioned: undefined, matLayout: undefined, matCoordinateSpace: undefined, layoutVersion: PUZZLE_LAYOUT_VERSION }
       : piece);
     setPieces(next);
     setLastHeldPieceId(pieceId);
@@ -2370,6 +2442,7 @@ export default function Home() {
         locked: false,
         positioned: undefined,
         matLayout: undefined,
+        matCoordinateSpace: undefined,
         layoutVersion: PUZZLE_LAYOUT_VERSION,
       };
     });

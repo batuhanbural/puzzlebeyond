@@ -200,9 +200,10 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.match(page, /drag\.dropZone === "mat" \? "remote-mat-handoff"/);
   assert.doesNotMatch(page, /liveEndMessage\.x = finalBoardX/);
   assert.doesNotMatch(page, /liveEndMessage\.y = finalBoardY/);
-  assert.match(page, /liveEndMessage\.dropX = placedOnBoard \? finalBoardX : workspaceMatX/);
-  assert.match(page, /liveEndMessage\.dropY = placedOnBoard \? finalBoardY : workspaceMatY/);
+  assert.match(page, /liveEndMessage\.dropX = placedOnBoard \? finalBoardX : sharedMatX/);
+  assert.match(page, /liveEndMessage\.dropY = placedOnBoard \? finalBoardY : sharedMatY/);
   assert.match(page, /liveEndMessage\.dropMatLayout = matLayout/);
+  assert.match(page, /liveEndMessage\.dropMatCoordinateSpace = placedOnBoard \? undefined : "shared"/);
   const remoteRule = styles.match(/\.puzzle-piece\.remote-drag-piece\s*\{[^}]*\}/)?.[0] || "";
   const remoteHeldRule = styles.match(/\.puzzle-piece\.remote-held:not\(\.dragging\)\s*\{[^}]*\}/)?.[0] || "";
   assert.match(remoteRule, /will-change:transform/);
@@ -328,9 +329,9 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.doesNotMatch(phoneLandscape, /landscape-workspace-aspect/);
   assert.match(phoneLandscape, /\.puzzle-board-area\s*\{[^}]*--landscape-board-left,14%[^}]*--landscape-board-top,4%[^}]*--landscape-board-width,72%[^}]*--landscape-board-height,92%/);
   assert.match(phoneLandscape, /\.puzzle-piece\.side-piece\s*\{[^}]*--landscape-piece-width/);
-  assert.match(page, /const sideX = piece\.positioned \? piece\.x : sidePosition\?\.x/);
-  assert.match(page, /const bandX = piece\.positioned \? piece\.x : bandPosition\?\.x/);
-  assert.match(page, /const landscapeX = piece\.positioned \? piece\.x : landscapePosition\?\.x/);
+  assert.match(page, /const sideSavedPosition = savedMatPosition\(sideBoard\)/);
+  assert.match(page, /const bandSavedPosition = savedMatPosition\(bandBoard\)/);
+  assert.match(page, /const landscapeSavedPosition = savedMatPosition\(landscapeBoard\)/);
   assert.doesNotMatch(page, /sideMatLayout=/);
 });
 

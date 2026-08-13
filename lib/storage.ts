@@ -1,4 +1,4 @@
-import { validateImageBytes, type MatLayout, type SupportedImageType } from "./puzzle-validation";
+import { validateImageBytes, type MatCoordinateSpace, type MatLayout, type SupportedImageType } from "./puzzle-validation";
 import { imageRequestNotModified, type ImageRequestConditions } from "./image-cache";
 
 export type { ImageRequestConditions } from "./image-cache";
@@ -12,6 +12,7 @@ export type Piece = {
   zone?: "board" | "mat";
   positioned?: true;
   matLayout?: MatLayout;
+  matCoordinateSpace?: MatCoordinateSpace;
 };
 export type RoomRecord = {
   code: string;
