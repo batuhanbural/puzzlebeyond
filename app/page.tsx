@@ -1599,7 +1599,7 @@ export default function Home() {
       setHintVisible(false);
       setRemoteDrags([]);
       setPieces((current) => {
-        const next = current.map((piece) => piece.locked
+        const next = current.map((piece) => piece.locked || piece.zone !== "board"
           ? piece
           : { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, positioned: undefined, layoutVersion: PUZZLE_LAYOUT_VERSION });
         piecesRef.current = next;
@@ -2264,9 +2264,9 @@ export default function Home() {
   }, [hintPiece, lastHeldPieceId]);
 
   const pushToSides = useCallback(() => {
-    const loosePieces = piecesRef.current.filter((piece) => !piece.locked);
-    if (loosePieces.length === 0) {
-      setNotice("Kenara alınacak serbest parça yok!");
+    const boardPieces = piecesRef.current.filter((piece) => !piece.locked && piece.zone === "board");
+    if (boardPieces.length === 0) {
+      setNotice("Tahtada kenara alınacak serbest parça yok!");
       return;
     }
     setHintVisible(false);
@@ -2275,9 +2275,9 @@ export default function Home() {
       && imageAspect > 1
       && window.matchMedia("(max-width: 760px) and (orientation: portrait)").matches;
     const activeLayout = useLandscapeLayout ? landscapeLayout : useBandLayout ? bandLayout : sideLayout;
-    const distributed = redistributePiecePositions(loosePieces.map((piece) => piece.id), activeLayout);
+    const distributed = redistributePiecePositions(boardPieces.map((piece) => piece.id), activeLayout);
     const next = piecesRef.current.map((piece) => {
-      if (piece.locked) return piece;
+      if (piece.locked || piece.zone !== "board") return piece;
       const position = distributed.get(piece.id);
       return {
         ...piece,
@@ -2304,7 +2304,7 @@ export default function Home() {
       }
       void pushPieces(next);
     }
-    setNotice("Serbest parçalar tahta çevresine toplandı.");
+    setNotice("Tahtadaki serbest parçalar kenara itildi.");
   }, [bandLayout, imageAspect, landscapeLayout, room, sideLayout, pushPieces]);
 
   const downloadCompletedImage = async () => {
@@ -2399,7 +2399,7 @@ export default function Home() {
             <div className="toolbar-right">
               {!room && !galleryVisible && <button className="skip-preview-button" onClick={skipPreviewPuzzle}>GALERİYE GEÇ →</button>}
               {room && <button className="sync-button" onClick={() => void forceSyncRoom()} disabled={syncBusy} title="Puzzle durumunu sunucudan yeniden al">{syncBusy ? "EŞİTLENİYOR…" : "↻ EŞİTLE"}</button>}
-              {(room || !galleryVisible) && <button className="push-sides-button" onClick={pushToSides} title="Kilitlenmemiş parçaları tahta çevresine topla">↹ KENARA İT</button>}
+              {(room || !galleryVisible) && <button className="push-sides-button" onClick={pushToSides} title="Tahtadaki kilitlenmemiş parçaları kenara it">↹ KENARA İT</button>}
               {(room || !galleryVisible) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
               <div className="difficulty-pill" title={`${rows}×${cols}`}>{progress}% · {pieceCount} PARÇA</div>
             </div>

@@ -502,8 +502,8 @@ test("the rendered puzzle switches horizontal mobile images to top and bottom ra
   assert.match(source, /imageAspect > 1 \? "horizontal-puzzle" : ""/);
   assert.match(source, /piece\.zone === "board" \|\| piece\.locked/);
   assert.match(source, /!piece\.locked && piece\.zone !== "board"/);
-  assert.match(source, /const loosePieces = piecesRef\.current\.filter\(\(piece\) => !piece\.locked\)/);
-  assert.match(source, /redistributePiecePositions\(loosePieces\.map\(\(piece\) => piece\.id\), activeLayout\)/);
+  assert.match(source, /const boardPieces = piecesRef\.current\.filter\(\(piece\) => !piece\.locked && piece\.zone === "board"\)/);
+  assert.match(source, /redistributePiecePositions\(boardPieces\.map\(\(piece\) => piece\.id\), activeLayout\)/);
   assert.match(source, /zone: droppedOnBoard \? "board" as const : "mat" as const/);
   assert.match(source, /positioned: droppedOnBoard \? undefined : \(true as const\)/);
   assert.match(source, /const workspaceRect = workspaceRef\.current\?\.getBoundingClientRect\(\)/);

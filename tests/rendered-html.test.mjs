@@ -156,7 +156,14 @@ test("pushing pieces to the edge updates immediately and persists in the backgro
   const pushToSides = page.slice(start, end);
   assert.ok(pushToSides.indexOf("setPieces(next)") < pushToSides.indexOf("pushPieces(next)"));
   assert.ok(pushToSides.indexOf("sendAction(message)") < pushToSides.indexOf("pushPieces(next)"));
+  assert.match(pushToSides, /filter\(\(piece\) => !piece\.locked && piece\.zone === "board"\)/);
+  assert.match(pushToSides, /if \(piece\.locked \|\| piece\.zone !== "board"\) return piece/);
   assert.match(pushToSides, /if \(room\) \{[\s\S]*void pushPieces\(next\)/);
+
+  const remoteStart = page.indexOf("const applyRemoteAction =");
+  const remoteEnd = page.indexOf("\n\n    void fetch(\"/api/realtime\")", remoteStart);
+  const remoteAction = page.slice(remoteStart, remoteEnd);
+  assert.match(remoteAction, /piece\.locked \|\| piece\.zone !== "board"/);
 });
 
 test("side panels yield before the puzzle map becomes unusable", async () => {
