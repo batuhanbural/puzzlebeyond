@@ -102,7 +102,8 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .hint-preview.visible { opacity:.48; }
 .board-grid { position:absolute; z-index:1; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
 .board-grid path { fill:none; stroke:rgba(21,21,21,.2); stroke-width:1; }
-.hint-target { position:absolute; z-index:12; display:grid; place-items:center; overflow:visible; border:3px solid var(--coral); background:rgba(211,211,255,.34); box-shadow:0 0 0 5px rgba(255,111,97,.22); pointer-events:none; animation:hintPulse .8s ease-in-out infinite alternate; }
+.hint-target { --hint-line:3px; --hint-glow:5px; position:absolute; z-index:12; display:grid; place-items:center; overflow:visible; border:0; background:rgba(211,211,255,.34); box-shadow:inset 0 0 0 var(--hint-line) var(--coral),0 0 0 var(--hint-glow) rgba(255,111,97,.22); pointer-events:none; animation:hintPulse .8s ease-in-out infinite alternate; }
+.hint-target.dense-hint-target { --hint-line:1px; --hint-glow:2px; }
 
 @keyframes hintPulse { from { transform:scale(.94); opacity:.72; } to { transform:scale(1.04); opacity:1; } }
 .puzzle-piece { position:absolute; z-index:5; cursor:grab; transition:filter .2s, transform .2s; touch-action:none; }
@@ -282,6 +283,8 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
   .site-shell.puzzle-active .puzzle-workspace { width:100%; height:calc(100% - 10px); max-width:none; max-height:none; aspect-ratio:auto; align-self:end; box-shadow:none; }
   .site-shell.puzzle-active .mobile-room-actions { display:none; }
   .puzzle-board-guide>p { font-size:7px; letter-spacing:.7px; }
+  .hint-target { --hint-line:1px; --hint-glow:2px; }
+  .hint-target.dense-hint-target { --hint-line:.5px; --hint-glow:1px; }
   .mobile-room-actions { width:100%; margin-top:6px; display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; }
   .mobile-room-actions .primary-button,.mobile-room-actions .outline-button { min-height:38px; padding:0 12px; font-size:9px; }
   .gallery-view { padding:18px 2px 16px; }

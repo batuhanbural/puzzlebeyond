@@ -229,6 +229,16 @@ test("piece canvases share exact display and board boundary geometry", async () 
   assert.match(styles, /\.board-grid path\s*\{[^}]*stroke:rgba\(21,21,21,\.2\)[^}]*stroke-width:1/);
 });
 
+test("hint lighting scales down on mobile and dense puzzles", async () => {
+  const [page, styles] = await Promise.all([read("app/page.tsx"), read("app/globals.css")]);
+
+  assert.match(page, /className=\{`hint-target \$\{pieceCount >= LARGE_PUZZLE_THRESHOLD \? "dense-hint-target" : ""\}`\}/);
+  assert.match(styles, /\.hint-target\.dense-hint-target\s*\{[^}]*--hint-line:1px[^}]*--hint-glow:2px/);
+  assert.match(styles, /@media \(max-width:760px\)[\s\S]*?\.hint-target\s*\{[^}]*--hint-line:1px[^}]*--hint-glow:2px/);
+  assert.match(styles, /@media \(max-width:760px\)[\s\S]*?\.hint-target\.dense-hint-target\s*\{[^}]*--hint-line:\.5px[^}]*--hint-glow:1px/);
+  assert.match(styles, /\.hint-target\s*\{[^}]*border:0[^}]*box-shadow:inset/);
+});
+
 test("pushing pieces to the edge updates immediately and persists in the background", async () => {
   const page = await read("app/page.tsx");
   const start = page.indexOf("const pushToSides = useCallback");

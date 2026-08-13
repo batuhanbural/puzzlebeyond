@@ -2510,7 +2510,7 @@ export default function Home() {
                     <p>PARÇALARI BURAYA YERLEŞTİR</p>
                     {hintVisible && hintPiece && (
                       <div
-                        className="hint-target"
+                        className={`hint-target ${pieceCount >= LARGE_PUZZLE_THRESHOLD ? "dense-hint-target" : ""}`}
                         style={{
                           left: `${(hintPiece.id % cols) * 100 / cols}%`,
                           top: `${Math.floor(hintPiece.id / cols) * 100 / rows}%`,
