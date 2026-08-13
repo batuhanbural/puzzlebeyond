@@ -53,11 +53,12 @@ function compileInlineLayoutHelpers(source) {
     ["fitPuzzleSize", ["size", "aspect"]],
     ["fitBoardFrame", ["imageAspect", "workspaceAspect"]],
     ["fitRailBoardFrame", ["board", "rows", "cols", "mode"]],
+    ["railModeForFrame", ["board", "pieceCount"]],
     ["pieceBoardTarget", ["id", "rows", "cols"]],
     ["pieceRailPositions", ["rows", "cols", "seed", "board", "mode"]],
     ["sidePiecePositions", ["rows", "cols", "seed", "board"]],
     ["bandPiecePositions", ["rows", "cols", "seed", "board"]],
-    ["landscapePiecePositions", ["rows", "cols", "seed", "board"]],
+    ["landscapePiecePositions", ["rows", "cols", "seed", "board", "mode"]],
     ["redistributePiecePositions", ["pieceIds", "layout"]],
     ["scatteredPieces", ["rows", "cols", "_seed"]],
     ["normalizePieceLayout", ["pieces", "rows", "cols", "seed"]],
@@ -74,6 +75,7 @@ function compileInlineLayoutHelpers(source) {
     .replace(/const randomBetween = \(minimum: number, maximum: number\) =>/, "const randomBetween = (minimum, maximum) =>")
     .replace(/const values: number\[\]/g, "const values")
     .replace(/\)\s*:\s*BoardFrame\s*\{/, ") {")
+    .replace(/\)\s*:\s*PieceRailMode\s*\{/, ") {")
     .replace(/: PieceRailPosition\[\]/g, "")
     .replace(/: PieceRailPosition\[\]\[\]/g, "")
     .replace(/new Map<number, PieceRailPosition>\(\)/g, "new Map()"));
@@ -84,9 +86,8 @@ function compileInlineLayoutHelpers(source) {
     const PUZZLE_LAYOUT_VERSION = ${JSON.stringify(layoutVersion)};
     const BOARD = { left: 0.19, top: 0.12, width: 0.62, height: 0.76 };
     const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 };
-    const MOBILE_LANDSCAPE_BOARD = { left: 0.14, top: 0.04, width: 0.72, height: 0.92 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, pieceBoardTarget, sidePiecePositions, bandPiecePositions, landscapePiecePositions, redistributePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
+    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, sidePiecePositions, bandPiecePositions, landscapePiecePositions, redistributePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
@@ -267,8 +268,8 @@ test("side and mobile band projections are deterministic and bounded", async () 
       for (const size of puzzleSizes) {
         const { rows, cols, count } = fitPuzzleSize(size, imageAspect);
         const board = fitRailBoardFrame(mode.board, rows, cols, mode.mode);
-        const first = mode.positions(rows, cols, "ROOM42", board);
-        const second = mode.positions(rows, cols, "ROOM42", board);
+        const first = mode.positions(rows, cols, "ROOM42", board, mode.mode);
+        const second = mode.positions(rows, cols, "ROOM42", board, mode.mode);
         const cellWidth = board.width / cols;
         const cellHeight = board.height / rows;
         let firstRailCount = 0;
@@ -297,6 +298,17 @@ test("side and mobile band projections are deterministic and bounded", async () 
       }
     }
   }
+});
+
+test("mobile landscape uses the real viewport shape to select loose-piece rails", async () => {
+  const { fitBoardFrame, railModeForFrame } = await helpersPromise;
+  const portraitImage = fitBoardFrame(9 / 16, 2.1);
+  const landscapeImage = fitBoardFrame(21 / 9, 2.1);
+
+  assert.equal(railModeForFrame(portraitImage, 12), "sides");
+  assert.equal(railModeForFrame(landscapeImage, 12), "top-bottom");
+  assert.equal(railModeForFrame(portraitImage, 120), "perimeter");
+  assert.equal(railModeForFrame(landscapeImage, 1024), "perimeter");
 });
 
 test("small desktop loose pieces remain visually outside the inner board", async () => {
@@ -471,14 +483,15 @@ test("the rendered puzzle switches horizontal mobile images to top and bottom ra
   const source = await pageSourcePromise;
   assert.match(source, /const BOARD = \{ left: 0\.19, top: 0\.12, width: 0\.62, height: 0\.76 \} as const/);
   assert.match(source, /const MOBILE_HORIZONTAL_BOARD = \{ left: 0\.06, top: 0\.26, width: 0\.88, height: 0\.48 \} as const/);
-  assert.match(source, /const MOBILE_LANDSCAPE_BOARD = \{ left: 0\.14, top: 0\.04, width: 0\.72, height: 0\.92 \} as const/);
+  assert.doesNotMatch(source, /MOBILE_LANDSCAPE_BOARD/);
   assert.match(source, /function fitBoardFrame/);
   assert.match(source, /function fitRailBoardFrame/);
   assert.doesNotMatch(source, /loosePieceScale/);
   assert.match(source, /"--side-piece-width": `\$\{sideBoard\.width \* 100 \/ cols\}%`/);
   assert.match(source, /const desktopBoardFrame = useMemo/);
   assert.match(source, /const bandWorkspaceAspect = imageAspect \* MOBILE_HORIZONTAL_BOARD\.height \/ MOBILE_HORIZONTAL_BOARD\.width/);
-  assert.match(source, /const landscapeWorkspaceAspect = imageAspect \* MOBILE_LANDSCAPE_BOARD\.height \/ MOBILE_LANDSCAPE_BOARD\.width/);
+  assert.match(source, /const landscapeBaseFrame = useMemo/);
+  assert.match(source, /const landscapeRailMode = railModeForFrame\(landscapeBaseFrame, pieceCount\)/);
   assert.match(source, /function pieceRailPositions/);
   assert.match(source, /function sidePiecePositions/);
   assert.match(source, /rows \* cols > 20 \? "perimeter" : "sides"/);

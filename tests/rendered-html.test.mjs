@@ -193,8 +193,8 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.match(phoneLandscape, /\.site-shell\.puzzle-active>footer/);
   assert.match(phoneLandscape, /\.site-shell\.puzzle-active \.mobile-room-actions/);
   assert.match(phoneLandscape, /grid-template-rows:minmax\(0,1fr\)/);
-  assert.match(phoneLandscape, /width:min\(100%,calc\(100dvh \* var\(--landscape-workspace-aspect\)\)\)/);
-  assert.match(phoneLandscape, /aspect-ratio:var\(--landscape-workspace-aspect\)/);
+  assert.match(phoneLandscape, /\.puzzle-workspace\s*\{[^}]*width:100%;[^}]*height:100%;[^}]*max-width:none;[^}]*max-height:none;[^}]*aspect-ratio:auto/);
+  assert.doesNotMatch(phoneLandscape, /landscape-workspace-aspect/);
   assert.match(phoneLandscape, /\.puzzle-board-area\s*\{[^}]*--landscape-board-left,14%[^}]*--landscape-board-top,4%[^}]*--landscape-board-width,72%[^}]*--landscape-board-height,92%/);
   assert.match(phoneLandscape, /\.puzzle-piece\.side-piece\s*\{[^}]*--landscape-piece-width/);
   assert.match(page, /const sideX = piece\.positioned \? piece\.x/);

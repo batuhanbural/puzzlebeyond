@@ -59,7 +59,6 @@ const ROOM_STORAGE_KEY = "puzzlebeyond-active-room";
 const NICKNAME_STORAGE_KEY = "puzzle-name";
 const BOARD = { left: 0.19, top: 0.12, width: 0.62, height: 0.76 } as const;
 const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 } as const;
-const MOBILE_LANDSCAPE_BOARD = { left: 0.14, top: 0.04, width: 0.72, height: 0.92 } as const;
 const PUZZLE_LAYOUT_VERSION = 3;
 const LARGE_PUZZLE_THRESHOLD = 120;
 const LIVE_DRAG_INTERVAL_MS = 33;
@@ -341,6 +340,11 @@ function fitRailBoardFrame(board: BoardFrame, rows: number, cols: number, mode: 
   return { left: (1 - width) / 2, top: (1 - height) / 2, width, height };
 }
 
+function railModeForFrame(board: BoardFrame, pieceCount: number): PieceRailMode {
+  if (pieceCount > 20) return "perimeter";
+  return board.left >= board.top ? "sides" : "top-bottom";
+}
+
 function pieceRailPositions(rows: number, cols: number, seed: string, board: BoardFrame, mode: PieceRailMode) {
   let state = Array.from(seed).reduce(
     (total, character) => Math.imul(total ^ character.charCodeAt(0), 2654435761),
@@ -528,8 +532,8 @@ function bandPiecePositions(rows: number, cols: number, seed: string, board: Boa
   return pieceRailPositions(rows, cols, seed, board, "top-bottom");
 }
 
-function landscapePiecePositions(rows: number, cols: number, seed: string, board: BoardFrame) {
-  return pieceRailPositions(rows, cols, seed, board, "sides");
+function landscapePiecePositions(rows: number, cols: number, seed: string, board: BoardFrame, mode: PieceRailMode) {
+  return pieceRailPositions(rows, cols, seed, board, mode);
 }
 
 function redistributePiecePositions(pieceIds: number[], layout: Map<number, PieceRailPosition>) {
@@ -1674,12 +1678,16 @@ export default function Home() {
     () => fitRailBoardFrame(MOBILE_HORIZONTAL_BOARD, rows, cols, "top-bottom"),
     [rows, cols],
   );
+  const landscapeBaseFrame = useMemo(
+    () => fitBoardFrame(imageAspect, desktopWorkspaceAspect),
+    [imageAspect, desktopWorkspaceAspect],
+  );
+  const landscapeRailMode = railModeForFrame(landscapeBaseFrame, pieceCount);
   const landscapeBoardFrame = useMemo(
-    () => fitRailBoardFrame(MOBILE_LANDSCAPE_BOARD, rows, cols, "sides"),
-    [rows, cols],
+    () => fitRailBoardFrame(landscapeBaseFrame, rows, cols, landscapeRailMode),
+    [landscapeBaseFrame, rows, cols, landscapeRailMode],
   );
   const bandWorkspaceAspect = imageAspect * MOBILE_HORIZONTAL_BOARD.height / MOBILE_HORIZONTAL_BOARD.width;
-  const landscapeWorkspaceAspect = imageAspect * MOBILE_LANDSCAPE_BOARD.height / MOBILE_LANDSCAPE_BOARD.width;
   const workspaceStyle = {
     "--desktop-board-left": `${desktopBoardFrame.left * 100}%`,
     "--desktop-board-top": `${desktopBoardFrame.top * 100}%`,
@@ -1695,7 +1703,6 @@ export default function Home() {
     "--landscape-board-height": `${landscapeBoardFrame.height * 100}%`,
     "--side-workspace-aspect": imageAspect * BOARD.height / BOARD.width,
     "--band-workspace-aspect": bandWorkspaceAspect,
-    "--landscape-workspace-aspect": landscapeWorkspaceAspect,
   } as CSSProperties;
   const boardStyle = boardSize.width > 0
     ? { width: `${boardSize.width}px`, height: `${boardSize.height}px` }
@@ -1721,8 +1728,8 @@ export default function Home() {
     [rows, cols, puzzleSeed, bandBoardFrame],
   );
   const landscapeLayout = useMemo(
-    () => landscapePiecePositions(rows, cols, puzzleSeed, landscapeBoardFrame),
-    [rows, cols, puzzleSeed, landscapeBoardFrame],
+    () => landscapePiecePositions(rows, cols, puzzleSeed, landscapeBoardFrame, landscapeRailMode),
+    [rows, cols, puzzleSeed, landscapeBoardFrame, landscapeRailMode],
   );
   const loosePieces = useMemo(() => pieces
     .filter((piece) => !piece.locked && piece.zone !== "board")
