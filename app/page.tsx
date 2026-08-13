@@ -1656,10 +1656,16 @@ export default function Home() {
   const bandWorkspaceAspect = imageAspect * MOBILE_HORIZONTAL_BOARD.height / MOBILE_HORIZONTAL_BOARD.width;
   const landscapeWorkspaceAspect = imageAspect * MOBILE_LANDSCAPE_BOARD.height / MOBILE_LANDSCAPE_BOARD.width;
   const workspaceStyle = {
+    "--desktop-board-left": `${desktopBoardFrame.left * 100}%`,
+    "--desktop-board-top": `${desktopBoardFrame.top * 100}%`,
     "--desktop-board-width": `${desktopBoardFrame.width * 100}%`,
     "--desktop-board-height": `${desktopBoardFrame.height * 100}%`,
+    "--band-board-left": `${bandBoardFrame.left * 100}%`,
+    "--band-board-top": `${bandBoardFrame.top * 100}%`,
     "--band-board-width": `${bandBoardFrame.width * 100}%`,
     "--band-board-height": `${bandBoardFrame.height * 100}%`,
+    "--landscape-board-left": `${landscapeBoardFrame.left * 100}%`,
+    "--landscape-board-top": `${landscapeBoardFrame.top * 100}%`,
     "--landscape-board-width": `${landscapeBoardFrame.width * 100}%`,
     "--landscape-board-height": `${landscapeBoardFrame.height * 100}%`,
     "--side-workspace-aspect": imageAspect * BOARD.height / BOARD.width,

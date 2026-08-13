@@ -94,7 +94,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .puzzle-workspace.preview-replay { animation:previewReplay .7s cubic-bezier(.22,.8,.24,1) both; }
 @keyframes previewReplay { from { opacity:0; transform:translateY(12px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
 .puzzle-workspace::before { content:""; position:absolute; inset:0; z-index:0; opacity:.22; background-image:radial-gradient(#151515 0.8px,transparent 0.8px); background-size:13px 13px; pointer-events:none; }
-.puzzle-board-area { position:absolute; z-index:1; left:50%; top:50%; width:var(--desktop-board-width,62%); height:var(--desktop-board-height,76%); min-width:0; min-height:0; display:grid; place-items:center; overflow:visible; transform:translate(-50%,-50%); }
+.puzzle-board-area { position:absolute; z-index:1; left:var(--desktop-board-left,19%); top:var(--desktop-board-top,12%); width:var(--desktop-board-width,62%); height:var(--desktop-board-height,76%); min-width:0; min-height:0; display:grid; place-items:center; overflow:visible; }
 .puzzle-board-area.recent-piece-area { z-index:45; }
 .puzzle-board-area.drag-active { z-index:50; overflow:visible; }
 .puzzle-board-guide { position:relative; z-index:2; flex:none; overflow:visible; border:2px solid rgba(21,21,21,.66); background:rgba(244,240,230,.72); box-shadow:inset 0 0 0 6px rgba(21,21,21,.06); }
@@ -276,7 +276,7 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
 }
 @media (max-width:760px) and (orientation:portrait) {
   .puzzle-workspace.horizontal-puzzle { width:min(100%,calc((100dvh - 236px) * var(--band-workspace-aspect))); aspect-ratio:var(--band-workspace-aspect); }
-  .puzzle-workspace.horizontal-puzzle .puzzle-board-area { left:50%; top:50%; width:var(--band-board-width,88%); height:var(--band-board-height,48%); }
+  .puzzle-workspace.horizontal-puzzle .puzzle-board-area { left:var(--band-board-left,6%); top:var(--band-board-top,26%); width:var(--band-board-width,88%); height:var(--band-board-height,48%); }
   .puzzle-workspace.horizontal-puzzle .puzzle-piece.side-piece { width:var(--band-piece-width); height:var(--band-piece-height); left:var(--band-piece-x); top:var(--band-piece-y); }
 }
 @media (max-height:640px) and (orientation:landscape) {
@@ -300,7 +300,7 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
   .site-shell.puzzle-active .game-layout { width:100%; max-width:none; height:100%; display:grid; grid-template-columns:minmax(0,1fr); border:0; }
   .site-shell.puzzle-active .board-section { width:100%; height:100%; padding:0; grid-template-rows:minmax(0,1fr); place-items:center; }
   .site-shell.puzzle-active .puzzle-workspace { width:min(100%,calc(100dvh * var(--landscape-workspace-aspect))); height:auto; max-width:100%; max-height:100dvh; aspect-ratio:var(--landscape-workspace-aspect); margin:auto; border:0; box-shadow:none; }
-  .site-shell.puzzle-active .puzzle-board-area { left:50%; top:50%; width:var(--landscape-board-width,72%); height:var(--landscape-board-height,92%); }
+  .site-shell.puzzle-active .puzzle-board-area { left:var(--landscape-board-left,14%); top:var(--landscape-board-top,4%); width:var(--landscape-board-width,72%); height:var(--landscape-board-height,92%); }
   .site-shell.puzzle-active .puzzle-piece.side-piece { width:var(--landscape-piece-width); height:var(--landscape-piece-height); left:var(--landscape-piece-x); top:var(--landscape-piece-y); }
 }
 @media (max-width:380px) {

@@ -38,10 +38,10 @@ test("contains the puzzle app entry points", async () => {
   assert.match(page, /layoutVersion/);
   assert.match(styles, /\.puzzle-piece\.side-piece/);
   assert.match(styles, /\.puzzle-workspace\s*\{[^}]*width:100%;[^}]*height:100%/);
-  assert.match(styles, /\.puzzle-board-area\s*\{[^}]*left:50%;[^}]*top:50%;[^}]*--desktop-board-width[^}]*--desktop-board-height[^}]*transform:translate\(-50%,-50%\)/);
+  assert.match(styles, /\.puzzle-board-area\s*\{[^}]*--desktop-board-left[^}]*--desktop-board-top[^}]*--desktop-board-width[^}]*--desktop-board-height/);
   assert.match(styles, /@media \(max-width:760px\) and \(orientation:portrait\)/);
   assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle\s*\{[^}]*aspect-ratio:var\(--band-workspace-aspect\)/);
-  assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle \.puzzle-board-area\s*\{[^}]*left:50%;[^}]*top:50%;[^}]*--band-board-width,88%[^}]*--band-board-height,48%/);
+  assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle \.puzzle-board-area\s*\{[^}]*--band-board-left,6%[^}]*--band-board-top,26%[^}]*--band-board-width,88%[^}]*--band-board-height,48%/);
   assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle \.puzzle-piece\.side-piece\s*\{[^}]*--band-piece-width/);
   assert.doesNotMatch(styles, /\.piece-mat/);
   assert.match(layout, /generateMetadata|metadata/i);
@@ -187,7 +187,7 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.match(phoneLandscape, /grid-template-rows:minmax\(0,1fr\)/);
   assert.match(phoneLandscape, /width:min\(100%,calc\(100dvh \* var\(--landscape-workspace-aspect\)\)\)/);
   assert.match(phoneLandscape, /aspect-ratio:var\(--landscape-workspace-aspect\)/);
-  assert.match(phoneLandscape, /\.puzzle-board-area\s*\{[^}]*left:50%;[^}]*top:50%;[^}]*--landscape-board-width,72%[^}]*--landscape-board-height,92%/);
+  assert.match(phoneLandscape, /\.puzzle-board-area\s*\{[^}]*--landscape-board-left,14%[^}]*--landscape-board-top,4%[^}]*--landscape-board-width,72%[^}]*--landscape-board-height,92%/);
   assert.match(phoneLandscape, /\.puzzle-piece\.side-piece\s*\{[^}]*--landscape-piece-width/);
   assert.match(page, /const sideX = piece\.positioned \? piece\.x/);
 });
