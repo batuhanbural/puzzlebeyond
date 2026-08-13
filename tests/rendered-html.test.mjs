@@ -141,8 +141,10 @@ test("pointer release commits a piece without replaying its movement", async () 
   assert.match(endMove, /drag\.width \/ 2/);
   assert.match(endMove, /drag\.height \/ 2/);
   assert.doesNotMatch(endMove, /dropTolerance|drag\.width \* 0\.2|drag\.height \* 0\.2/);
-  assert.match(endMove, /positioned: droppedOnBoard \? undefined : \(true as const\)/);
-  assert.match(endMove, /const matLayout = droppedOnBoard \? undefined : activeMatLayout\(imageAspect\)/);
+  assert.match(endMove, /const snaps = Boolean\(rect && isNearPieceTarget\(drag\.clientX, drag\.clientY, rect, movingId, rows, cols\)\)/);
+  assert.match(endMove, /const placedOnBoard = droppedOnBoard \|\| snaps/);
+  assert.match(endMove, /positioned: placedOnBoard \? undefined : \(true as const\)/);
+  assert.match(endMove, /const matLayout = placedOnBoard \? undefined : activeMatLayout\(imageAspect\)/);
   assert.match(endMove, /liveEndMessage\.dropMatLayout = matLayout/);
   assert.ok(
     endMove.indexOf("getBoundingClientRect()") < endMove.indexOf('setAttribute("style", drag.originalStyle)'),
@@ -195,10 +197,10 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.match(page, /drag\.phase === "end" \? "remote-drop-handoff"/);
   assert.match(page, /message\.dropZone === "mat" && message\.dropX !== undefined && message\.dropY !== undefined/);
   assert.match(page, /drag\.dropZone === "mat" \? "remote-mat-handoff"/);
-  assert.match(page, /liveEndMessage\.x = finalBoardX \+ 1 \/ \(2 \* cols\)/);
-  assert.match(page, /liveEndMessage\.y = finalBoardY \+ 1 \/ \(2 \* rows\)/);
-  assert.match(page, /liveEndMessage\.dropX = droppedOnBoard \? finalBoardX : matX/);
-  assert.match(page, /liveEndMessage\.dropY = droppedOnBoard \? finalBoardY : matY/);
+  assert.doesNotMatch(page, /liveEndMessage\.x = finalBoardX/);
+  assert.doesNotMatch(page, /liveEndMessage\.y = finalBoardY/);
+  assert.match(page, /liveEndMessage\.dropX = placedOnBoard \? finalBoardX : matX/);
+  assert.match(page, /liveEndMessage\.dropY = placedOnBoard \? finalBoardY : matY/);
   assert.match(page, /liveEndMessage\.dropMatLayout = matLayout/);
   const remoteRule = styles.match(/\.puzzle-piece\.remote-drag-piece\s*\{[^}]*\}/)?.[0] || "";
   const remoteHeldRule = styles.match(/\.puzzle-piece\.remote-held:not\(\.dragging\)\s*\{[^}]*\}/)?.[0] || "";

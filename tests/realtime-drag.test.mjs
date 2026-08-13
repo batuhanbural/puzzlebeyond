@@ -83,10 +83,12 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   assert.match(page, /removeCommittedRemoteDrops\(current, nextRoom\.pieces\)/);
   assert.match(page, /drag\.phase === "end" && drag\.dropZone === "mat"/);
   assert.match(page, /querySelector<HTMLElement>\(`\[data-piece-id="\$\{drag\.pieceId\}"\]`\)/);
-  assert.match(page, /x = targetRect\.left - boardRect\.left/);
-  assert.match(page, /y = targetRect\.top - boardRect\.top/);
+  assert.match(page, /x = targetRect\.left - workspaceRect\.left/);
+  assert.match(page, /y = targetRect\.top - workspaceRect\.top/);
   assert.match(page, /data-piece-id=\{piece\.id\}/);
-  assert.match(page, /liveEndMessage\.dropZone = droppedOnBoard \? "board" : "mat"/);
+  assert.match(page, /const workspace = workspaceRef\.current/);
+  assert.match(page, /drag\.x \* workspace\.clientWidth - pieceWidth \/ 2/);
+  assert.match(page, /liveEndMessage\.dropZone = placedOnBoard \? "board" : "mat"/);
   assert.match(page, /liveEndMessage\.dropMatLayout = matLayout/);
   assert.match(page, /const refreshDelay = 750 - \(now - lastRefreshAt\)/);
   assert.match(page, /scheduleAuthoritativeRefresh\(refreshDelay\)/);

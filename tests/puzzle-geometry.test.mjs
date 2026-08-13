@@ -55,6 +55,7 @@ function compileInlineLayoutHelpers(source) {
     ["fitRailBoardFrame", ["board", "rows", "cols", "mode"]],
     ["railModeForFrame", ["board", "pieceCount"]],
     ["pieceBoardTarget", ["id", "rows", "cols"]],
+    ["isNearPieceTarget", ["clientX", "clientY", "bounds", "id", "rows", "cols"]],
     ["boardGridPath", ["rows", "cols"]],
     ["pieceRailPositions", ["rows", "cols", "seed", "board", "mode"]],
     ["sidePiecePositions", ["rows", "cols", "seed", "board"]],
@@ -89,7 +90,7 @@ function compileInlineLayoutHelpers(source) {
     const BOARD = { left: 0.19, top: 0.12, width: 0.62, height: 0.76 };
     const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, boardGridPath, sidePiecePositions, bandPiecePositions, landscapePiecePositions, redistributePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
+    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, isNearPieceTarget, boardGridPath, sidePiecePositions, bandPiecePositions, landscapePiecePositions, redistributePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
@@ -406,6 +407,24 @@ test("piece targets stay inside the normalized board for all reviewed grids", as
   }
 });
 
+test("exact centers of first and last edge pieces always snap", async () => {
+  const { isNearPieceTarget } = await helpersPromise;
+  const bounds = { left: 100, top: 50, right: 540, bottom: 990, width: 440, height: 940 };
+  const rows = 47;
+  const cols = 22;
+  const center = (id) => ({
+    x: bounds.left + ((id % cols) + 0.5) * bounds.width / cols,
+    y: bounds.top + (Math.floor(id / cols) + 0.5) * bounds.height / rows,
+  });
+
+  const first = center(0);
+  const last = center(rows * cols - 1);
+  assert.equal(isNearPieceTarget(first.x, first.y, bounds, 0, rows, cols), true);
+  assert.equal(isNearPieceTarget(last.x, last.y, bounds, rows * cols - 1, rows, cols), true);
+  assert.equal(isNearPieceTarget(bounds.left, first.y, bounds, 0, rows, cols), false);
+  assert.equal(isNearPieceTarget(bounds.right, last.y, bounds, rows * cols - 1, rows, cols), false);
+});
+
 test("desktop and mobile portrait edge coordinates use distinct layout identities", async () => {
   const source = await pageSourcePromise;
   const componentStart = source.indexOf("const InteractivePuzzlePiece");
@@ -535,8 +554,8 @@ test("the rendered puzzle switches horizontal mobile images to top and bottom ra
   assert.match(source, /!piece\.locked && piece\.zone !== "board"/);
   assert.match(source, /const boardPieces = piecesRef\.current\.filter\(\(piece\) => !piece\.locked && piece\.zone === "board"\)/);
   assert.doesNotMatch(source, /redistributePiecePositions\(boardPieces\.map/);
-  assert.match(source, /zone: droppedOnBoard \? "board" as const : "mat" as const/);
-  assert.match(source, /positioned: droppedOnBoard \? undefined : \(true as const\)/);
+  assert.match(source, /zone: placedOnBoard \? "board" as const : "mat" as const/);
+  assert.match(source, /positioned: placedOnBoard \? undefined : \(true as const\)/);
   assert.match(source, /matLayout,/);
   assert.match(source, /function activeMatLayout/);
   assert.match(source, /const workspaceRect = workspace \? elementInnerBounds\(workspace\) : null/);

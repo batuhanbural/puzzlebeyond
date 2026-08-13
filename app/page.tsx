@@ -309,6 +309,15 @@ function pieceBoardTarget(id: number, rows: number, cols: number) {
   };
 }
 
+function isNearPieceTarget(clientX: number, clientY: number, bounds: InnerBounds, id: number, rows: number, cols: number) {
+  if (!isWithinDropBounds(clientX, clientY, bounds)) return false;
+  const target = pieceBoardTarget(id, rows, cols);
+  const targetCenterX = bounds.left + (target.x + 1 / (2 * cols)) * bounds.width;
+  const targetCenterY = bounds.top + (target.y + 1 / (2 * rows)) * bounds.height;
+  return Math.abs(clientX - targetCenterX) < bounds.width / cols * 0.72
+    && Math.abs(clientY - targetCenterY) < bounds.height / rows * 0.72;
+}
+
 function boardGridPath(rows: number, cols: number) {
   const commands: string[] = [];
   for (let col = 1; col < cols; col += 1) commands.push(`M ${col} 0 V ${rows}`);
@@ -1058,18 +1067,27 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
 });
 
 function positionRemotePuzzlePiece(element: HTMLDivElement, drag: RemoteDrag, rows: number, cols: number, animate: boolean) {
-  const board = element.parentElement;
-  if (!board || board.clientWidth <= 0 || board.clientHeight <= 0) return;
-  let x = (drag.x - 1 / (2 * cols)) * board.clientWidth;
-  let y = (drag.y - 1 / (2 * rows)) * board.clientHeight;
+  const workspace = element.parentElement;
+  const board = workspace?.querySelector<HTMLElement>(".puzzle-board-guide");
+  if (!workspace || !board || workspace.clientWidth <= 0 || workspace.clientHeight <= 0 || board.clientWidth <= 0 || board.clientHeight <= 0) return;
+  const pieceWidth = board.clientWidth / cols;
+  const pieceHeight = board.clientHeight / rows;
+  element.style.width = `${pieceWidth}px`;
+  element.style.height = `${pieceHeight}px`;
+  let x = drag.x * workspace.clientWidth - pieceWidth / 2;
+  let y = drag.y * workspace.clientHeight - pieceHeight / 2;
+  const workspaceRect = elementInnerBounds(workspace);
+  if (drag.phase === "end" && drag.dropZone === "board" && drag.dropX !== undefined && drag.dropY !== undefined) {
+    const boardRect = elementInnerBounds(board);
+    x = boardRect.left - workspaceRect.left + drag.dropX * boardRect.width;
+    y = boardRect.top - workspaceRect.top + drag.dropY * boardRect.height;
+  }
   if (drag.phase === "end" && drag.dropZone === "mat") {
-    const workspace = board.closest(".puzzle-workspace");
     const target = workspace?.querySelector<HTMLElement>(`[data-piece-id="${drag.pieceId}"]`);
     if (target) {
-      const boardRect = board.getBoundingClientRect();
       const targetRect = target.getBoundingClientRect();
-      x = targetRect.left - boardRect.left;
-      y = targetRect.top - boardRect.top;
+      x = targetRect.left - workspaceRect.left;
+      y = targetRect.top - workspaceRect.top;
       element.style.width = `${targetRect.width}px`;
       element.style.height = `${targetRect.height}px`;
     }
@@ -1114,9 +1132,11 @@ const RemotePuzzlePiece = memo(function RemotePuzzlePiece({
 
   useEffect(() => {
     const element = elementRef.current;
-    const board = element?.parentElement;
-    if (!element || !board || typeof ResizeObserver === "undefined") return;
+    const workspace = element?.parentElement;
+    const board = workspace?.querySelector<HTMLElement>(".puzzle-board-guide");
+    if (!element || !workspace || !board || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => positionRemotePuzzlePiece(element, latestDragRef.current, rows, cols, false));
+    observer.observe(workspace);
     observer.observe(board);
     return () => observer.disconnect();
   }, [rows, cols]);
@@ -1127,8 +1147,8 @@ const RemotePuzzlePiece = memo(function RemotePuzzlePiece({
       className={`puzzle-piece remote-drag-piece ${drag.phase === "end" ? "remote-drop-handoff" : ""} ${drag.dropZone === "mat" ? "remote-mat-handoff" : ""} ${densityClass}`}
       style={{
         "--player-color": playerColor,
-        width: `${100 / cols}%`,
-        height: `${100 / rows}%`,
+        width: 0,
+        height: 0,
         left: 0,
         top: 0,
       } as CSSProperties}
@@ -2129,8 +2149,8 @@ export default function Home() {
   const createLiveDragMessage = useCallback((drag: LocalDrag, phase: RoomDragMessage["phase"]) => {
     if (!realtimeSenderId.current) return null;
     if (phase === "move") {
-      const board = boardRef.current;
-      const rect = board ? elementInnerBounds(board) : null;
+      const workspace = workspaceRef.current;
+      const rect = workspace ? elementInnerBounds(workspace) : null;
       if (!rect || rect.width <= 0 || rect.height <= 0) return null;
       drag.liveX = Math.max(-2, Math.min(3, (drag.clientX - rect.left) / rect.width));
       drag.liveY = Math.max(-2, Math.min(3, (drag.clientY - rect.top) / rect.height));
@@ -2227,9 +2247,8 @@ export default function Home() {
     const boardX = rect ? Math.max(0, Math.min(maxX, (drag.clientX - rect.left) / rect.width - 1 / (2 * cols))) : 0;
     const boardY = rect ? Math.max(0, Math.min(maxY, (drag.clientY - rect.top) / rect.height - 1 / (2 * rows))) : 0;
     const { x: targetX, y: targetY } = pieceBoardTarget(movingId, rows, cols);
-    const snaps = droppedOnBoard
-      && Math.abs(boardX - targetX) < (1 / cols) * 0.72
-      && Math.abs(boardY - targetY) < (1 / rows) * 0.72;
+    const snaps = Boolean(rect && isNearPieceTarget(drag.clientX, drag.clientY, rect, movingId, rows, cols));
+    const placedOnBoard = droppedOnBoard || snaps;
     const finalBoardX = snaps ? targetX : boardX;
     const finalBoardY = snaps ? targetY : boardY;
     const matX = workspaceRect
@@ -2238,25 +2257,21 @@ export default function Home() {
     const matY = workspaceRect
       ? Math.max(0, Math.min(1 - drag.height / workspaceRect.height, (drag.clientY - workspaceRect.top - drag.height / 2) / workspaceRect.height))
       : 0;
-    const matLayout = droppedOnBoard ? undefined : activeMatLayout(imageAspect);
+    const matLayout = placedOnBoard ? undefined : activeMatLayout(imageAspect);
     if (liveEndMessage) {
-      liveEndMessage.dropZone = droppedOnBoard ? "board" : "mat";
-      liveEndMessage.dropX = droppedOnBoard ? finalBoardX : matX;
-      liveEndMessage.dropY = droppedOnBoard ? finalBoardY : matY;
+      liveEndMessage.dropZone = placedOnBoard ? "board" : "mat";
+      liveEndMessage.dropX = placedOnBoard ? finalBoardX : matX;
+      liveEndMessage.dropY = placedOnBoard ? finalBoardY : matY;
       liveEndMessage.dropMatLayout = matLayout;
-      if (droppedOnBoard) {
-        liveEndMessage.x = finalBoardX + 1 / (2 * cols);
-        liveEndMessage.y = finalBoardY + 1 / (2 * rows);
-      }
     }
     const next = piecesRef.current.map((piece) => piece.id === movingId
       ? {
         ...piece,
-        x: droppedOnBoard ? finalBoardX : matX,
-        y: droppedOnBoard ? finalBoardY : matY,
-        zone: droppedOnBoard ? "board" as const : "mat" as const,
+        x: placedOnBoard ? finalBoardX : matX,
+        y: placedOnBoard ? finalBoardY : matY,
+        zone: placedOnBoard ? "board" as const : "mat" as const,
         locked: snaps,
-        positioned: droppedOnBoard ? undefined : (true as const),
+        positioned: placedOnBoard ? undefined : (true as const),
         matLayout,
         layoutVersion: PUZZLE_LAYOUT_VERSION,
       }
@@ -2604,18 +2619,6 @@ export default function Home() {
                         onPlacePiece={placePieceFromKeyboard}
                       />
                     ))}
-                    {remoteDrags.map((drag) => (
-                      <RemotePuzzlePiece
-                        key={`${drag.senderId}:${drag.gestureId}`}
-                        drag={drag}
-                        rows={rows}
-                        cols={cols}
-                        seed={puzzleSeed}
-                        imageUrl={imageUrl}
-                        pieceCount={pieceCount}
-                        playerColor={playerColor(drag.senderId)}
-                      />
-                    ))}
                     {room && progress === 100 && (
                       <div className="board-completion-card">
                         <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
@@ -2629,6 +2632,18 @@ export default function Home() {
                     )}
                   </div>
                 </div>
+                {remoteDrags.map((drag) => (
+                  <RemotePuzzlePiece
+                    key={`${drag.senderId}:${drag.gestureId}`}
+                    drag={drag}
+                    rows={rows}
+                    cols={cols}
+                    seed={puzzleSeed}
+                    imageUrl={imageUrl}
+                    pieceCount={pieceCount}
+                    playerColor={playerColor(drag.senderId)}
+                  />
+                ))}
                 {loosePieces.map((piece) => (
                   <InteractivePuzzlePiece
                     key={piece.id}
