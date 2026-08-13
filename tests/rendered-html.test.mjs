@@ -95,6 +95,13 @@ test("mobile piece inspector opens as an explicit bottom sheet", async () => {
   assert.match(page, /const \[mobileInspectorOpen, setMobileInspectorOpen\] = useState\(false\)/);
   assert.match(page, /className="mobile-inspector-trigger"/);
   assert.match(page, /className="mobile-inspector-landscape-trigger"/);
+  const portraitTriggerStart = page.indexOf('className="mobile-inspector-trigger"');
+  const portraitTrigger = page.slice(portraitTriggerStart, page.indexOf("</button>", portraitTriggerStart) + 9);
+  const landscapeTriggerStart = page.indexOf('className="mobile-inspector-landscape-trigger"');
+  const landscapeTrigger = page.slice(landscapeTriggerStart, page.indexOf("</button>", landscapeTriggerStart) + 9);
+  assert.match(portraitTrigger, />İNCELE<\/button>/);
+  assert.match(landscapeTrigger, />\s*İNCELE\s*<\/button>/);
+  assert.doesNotMatch(`${portraitTrigger}${landscapeTrigger}`, /selectedPiece\.id|#\$\{/);
   assert.match(page, /mobileInspectorOpen && !galleryVisible/);
   assert.match(page, /className="mobile-piece-inspector-backdrop"/);
   assert.match(page, /className="mobile-piece-inspector-sheet"/);

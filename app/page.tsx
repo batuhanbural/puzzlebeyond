@@ -2453,7 +2453,7 @@ export default function Home() {
               {room && <button className="sync-button" onClick={() => void forceSyncRoom()} disabled={syncBusy} title="Puzzle durumunu sunucudan yeniden al">{syncBusy ? "EŞİTLENİYOR…" : "↻ EŞİTLE"}</button>}
               {(room || !galleryVisible) && <button className="push-sides-button" onClick={pushToSides} title="Tahtadaki kilitlenmemiş parçaları kenara it">↹ KENARA İT</button>}
               {(room || !galleryVisible) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
-              {(room || !galleryVisible) && <button className="mobile-inspector-trigger" onClick={() => setMobileInspectorOpen(true)} disabled={!selectedPiece} aria-haspopup="dialog">◇ {selectedPiece ? `#${selectedPiece.id + 1}` : "PARÇA"}</button>}
+              {(room || !galleryVisible) && <button className="mobile-inspector-trigger" onClick={() => setMobileInspectorOpen(true)} disabled={!selectedPiece} aria-haspopup="dialog">İNCELE</button>}
               <div className="difficulty-pill" title={`${rows}×${cols}`}>{progress}% · {pieceCount} PARÇA</div>
             </div>
           </div>
@@ -2668,9 +2668,9 @@ export default function Home() {
           onClick={() => setMobileInspectorOpen(true)}
           disabled={!selectedPiece}
           aria-haspopup="dialog"
-          aria-label={selectedPiece ? `${selectedPiece.id + 1} numaralı parçayı incele` : "İncelemek için bir parça seç"}
+          aria-label={selectedPiece ? "Seçili parçayı incele" : "İncelemek için bir parça seç"}
         >
-          <span>◇</span>{selectedPiece ? `#${selectedPiece.id + 1}` : "PARÇA"}
+          İNCELE
         </button>
       )}
 
