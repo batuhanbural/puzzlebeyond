@@ -37,7 +37,8 @@ test("contains the puzzle app entry points", async () => {
   assert.match(page, /6 karakterlik oda kodunu/);
   assert.match(page, /layoutVersion/);
   assert.match(styles, /\.puzzle-piece\.side-piece/);
-  assert.match(styles, /\.puzzle-workspace\s*\{[^}]*width:100%;[^}]*height:100%/);
+  assert.match(styles, /\.puzzle-workspace\s*\{[^}]*width:100%;[^}]*height:calc\(100% - 10px\);[^}]*align-self:end/);
+  assert.match(styles, /\.board-section\s*\{[^}]*padding:0 18px 10px/);
   assert.match(styles, /\.puzzle-board-area\s*\{[^}]*--desktop-board-left[^}]*--desktop-board-top[^}]*--desktop-board-width[^}]*--desktop-board-height/);
   assert.match(styles, /@media \(max-width:760px\) and \(orientation:portrait\)/);
   assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle\s*\{[^}]*aspect-ratio:var\(--band-workspace-aspect\)/);
