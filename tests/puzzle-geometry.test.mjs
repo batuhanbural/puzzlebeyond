@@ -187,13 +187,16 @@ test("invalid image ratios consistently fall back to the default aspect", async 
 
 test("contained board sizing preserves every supported image aspect", async () => {
   const source = await pageSourcePromise;
-  assert.match(source, /const width = Math\.min\(rect\.width, rect\.height \* imageAspect\);/);
-  assert.match(source, /const height = width \/ imageAspect;/);
+  assert.match(source, /const contentWidth = Math\.min\(availableWidth, availableHeight \* imageAspect\);/);
+  assert.match(source, /const contentHeight = contentWidth \/ imageAspect;/);
+  assert.match(source, /const width = contentWidth \+ borderWidth;/);
   assert.match(source, /style=\{boardStyle\}/);
 
   const containBoard = (areaWidth, areaHeight, imageAspect) => {
-    const width = Math.min(areaWidth, areaHeight * imageAspect);
-    return { width, height: width / imageAspect };
+    const border = 4;
+    const contentWidth = Math.min(areaWidth - border, (areaHeight - border) * imageAspect);
+    const contentHeight = contentWidth / imageAspect;
+    return { width: contentWidth + border, height: contentHeight + border, contentWidth, contentHeight };
   };
   const areas = [[378, 534], [964, 620], [240, 900], [1200, 220]];
   const aspects = [9 / 16, 3 / 4, 1, 16 / 9];
@@ -203,7 +206,7 @@ test("contained board sizing preserves every supported image aspect", async () =
       const board = containBoard(areaWidth, areaHeight, aspect);
       assert.ok(board.width <= areaWidth + Number.EPSILON);
       assert.ok(board.height <= areaHeight + Number.EPSILON);
-      assert.ok(Math.abs(board.width / board.height - aspect) < 1e-12);
+      assert.ok(Math.abs(board.contentWidth / board.contentHeight - aspect) < 1e-12);
     }
   }
 });

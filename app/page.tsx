@@ -753,7 +753,7 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, 
         canvas.height = Math.ceil(height * scale);
         const context = canvas.getContext("2d");
         if (!context) return;
-        context.scale(scale, scale);
+        context.setTransform(canvas.width / width, 0, 0, canvas.height / height, 0, 0);
 
         context.beginPath();
         traceJigsawPiecePath(context, id, rows, cols, seed, padX, padY, cellWidth, cellHeight);
@@ -831,6 +831,8 @@ const LockedPiecesCanvas = memo(function LockedPiecesCanvas({
       const renderScale = Math.max(0.25, Math.min(window.devicePixelRatio || 1, 2048 / Math.max(size.width, size.height)));
       const pixelWidth = Math.max(1, Math.round(size.width * renderScale));
       const pixelHeight = Math.max(1, Math.round(size.height * renderScale));
+      const renderScaleX = pixelWidth / size.width;
+      const renderScaleY = pixelHeight / size.height;
       const geometryKey = `${imageUrl}:${rows}:${cols}:${seed}:${pixelWidth}:${pixelHeight}`;
       const context = canvas.getContext("2d");
       if (!context) return;
@@ -843,12 +845,12 @@ const LockedPiecesCanvas = memo(function LockedPiecesCanvas({
       if (!canAppend) {
         canvas.width = pixelWidth;
         canvas.height = pixelHeight;
-        context.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+        context.setTransform(renderScaleX, 0, 0, renderScaleY, 0, 0);
         context.clearRect(0, 0, size.width, size.height);
         drawnIdsRef.current.clear();
         geometryKeyRef.current = geometryKey;
       } else {
-        context.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+        context.setTransform(renderScaleX, 0, 0, renderScaleY, 0, 0);
       }
 
       const cellWidth = size.width / cols;
@@ -1346,8 +1348,15 @@ export default function Home() {
     const updateSize = () => {
       const rect = area.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
-      const width = Math.min(rect.width, rect.height * imageAspect);
-      const height = width / imageAspect;
+      const guide = boardRef.current;
+      const borderWidth = guide ? Math.max(0, guide.offsetWidth - guide.clientWidth) : 4;
+      const borderHeight = guide ? Math.max(0, guide.offsetHeight - guide.clientHeight) : 4;
+      const availableWidth = Math.max(0, rect.width - borderWidth);
+      const availableHeight = Math.max(0, rect.height - borderHeight);
+      const contentWidth = Math.min(availableWidth, availableHeight * imageAspect);
+      const contentHeight = contentWidth / imageAspect;
+      const width = contentWidth + borderWidth;
+      const height = contentHeight + borderHeight;
       setBoardSize((current) => Math.abs(current.width - width) < 0.5 && Math.abs(current.height - height) < 0.5
         ? current
         : { width, height });
@@ -2594,7 +2603,7 @@ export default function Home() {
             <div className={`piece-inspector-card ${selectedPiece ? "has-piece" : "is-empty"}`}>
               <div className="piece-inspector-stage">
                 {selectedPiece ? (
-                  <div className="piece-inspector-piece">
+                  <div className="piece-inspector-piece" style={{ aspectRatio: imageAspect * rows / cols }}>
                     <JigsawPiece
                       id={selectedPiece.id}
                       rows={rows}

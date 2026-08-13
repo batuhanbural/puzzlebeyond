@@ -140,6 +140,8 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.match(page, /const LARGE_PUZZLE_THRESHOLD = 120/);
   assert.match(page, /imageUrl=\{imageUrl\} eager=\{pieceCount >= LARGE_PUZZLE_THRESHOLD \|\| isRecent \|\| isRemoteHeld\}/);
   assert.match(component, /rows \* cols >= LARGE_PUZZLE_THRESHOLD \? 1 : 2/);
+  assert.match(component, /context\.setTransform\(canvas\.width \/ width, 0, 0, canvas\.height \/ height, 0, 0\)/);
+  assert.doesNotMatch(component, /context\.scale\(scale, scale\)/);
   assert.doesNotMatch(page, /pieceCount > 120|rows \* cols > 120/);
   assert.match(component, /if \(eager\) return;[\s\S]*observePuzzlePiece/);
   assert.match(page, /drag\.phase === "end" \? "remote-drop-handoff"/);
@@ -162,6 +164,20 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.match(page, /const puzzlePieceCanvasCache = new Map<string, HTMLCanvasElement>\(\)/);
   assert.match(page, /restorePuzzlePieceCanvas\(canvasKey, canvas\)/);
   assert.match(page, /rememberPuzzlePieceCanvas\(canvasKey, canvas\)/);
+});
+
+test("piece canvases share exact display and board boundary geometry", async () => {
+  const [page, styles] = await Promise.all([read("app/page.tsx"), read("app/globals.css")]);
+  const pieceCanvasRule = styles.match(/\.piece-canvas\s*\{[^}]*\}/)?.[0] || "";
+  assert.match(pieceCanvasRule, /width:168%/);
+  assert.match(pieceCanvasRule, /height:168%/);
+  assert.doesNotMatch(pieceCanvasRule, /height:auto/);
+  assert.match(page, /const renderScaleX = pixelWidth \/ size\.width/);
+  assert.match(page, /const renderScaleY = pixelHeight \/ size\.height/);
+  assert.match(page, /context\.setTransform\(renderScaleX, 0, 0, renderScaleY, 0, 0\)/);
+  assert.match(page, /const borderWidth = guide \? Math\.max\(0, guide\.offsetWidth - guide\.clientWidth\) : 4/);
+  assert.match(page, /const availableWidth = Math\.max\(0, rect\.width - borderWidth\)/);
+  assert.match(page, /style=\{\{ aspectRatio: imageAspect \* rows \/ cols \}\}/);
 });
 
 test("pushing pieces to the edge updates immediately and persists in the background", async () => {
