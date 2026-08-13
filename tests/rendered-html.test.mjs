@@ -42,7 +42,7 @@ test("contains the puzzle app entry points", async () => {
   assert.match(styles, /\.board-section\s*\{[^}]*padding:0 18px 10px/);
   assert.match(styles, /\.puzzle-board-area\s*\{[^}]*--desktop-board-left[^}]*--desktop-board-top[^}]*--desktop-board-width[^}]*--desktop-board-height/);
   assert.match(styles, /@media \(max-width:760px\) and \(orientation:portrait\)/);
-  assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle\s*\{[^}]*aspect-ratio:var\(--band-workspace-aspect\)/);
+  assert.doesNotMatch(styles, /--band-workspace-aspect/);
   assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle \.puzzle-board-area\s*\{[^}]*--band-board-left,6%[^}]*--band-board-top,26%[^}]*--band-board-width,88%[^}]*--band-board-height,48%/);
   assert.match(styles, /\.puzzle-workspace\.horizontal-puzzle \.puzzle-piece\.side-piece\s*\{[^}]*--band-piece-width/);
   assert.doesNotMatch(styles, /\.piece-mat/);
@@ -251,11 +251,13 @@ test("snap coordinates use the board's inner drawing bounds", async () => {
 });
 
 test("completion card stays centered and compact on mobile", async () => {
-  const styles = await read("app/globals.css");
+  const [page, styles] = await Promise.all([read("app/page.tsx"), read("app/globals.css")]);
 
   assert.match(styles, /\.board-completion-card\s*\{[^}]*top:50%[^}]*transform:translate\(-50%,-50%\)/);
   assert.match(styles, /@media \(max-width:760px\)[\s\S]*?\.board-completion-card\s*\{[^}]*width:min\(210px,calc\(100% - 14px\)\)/);
   assert.doesNotMatch(styles.match(/\.board-completion-card\s*\{[^}]*\}/)?.[0] || "", /rotate/);
+  assert.match(page, /<svg viewBox="0 0 16 16"><path d="M3 8\.2 6\.5 12 13 4" \/><\/svg>/);
+  assert.match(styles, /\.complete-label>span svg\s*\{[^}]*display:block[^}]*stroke:currentColor/);
 });
 
 test("hint lighting scales down on mobile and dense puzzles", async () => {
@@ -327,7 +329,8 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.match(phoneLandscape, /\.puzzle-board-area\s*\{[^}]*--landscape-board-left,14%[^}]*--landscape-board-top,4%[^}]*--landscape-board-width,72%[^}]*--landscape-board-height,92%/);
   assert.match(phoneLandscape, /\.puzzle-piece\.side-piece\s*\{[^}]*--landscape-piece-width/);
   assert.match(page, /const usesSavedMatPosition = \(layout: MatLayout, board: BoardFrame\)/);
-  assert.match(page, /if \(piece\.matLayout\) return piece\.matLayout === layout/);
+  assert.match(page, /if \(piece\.matLayout && piece\.matLayout !== layout\) return false/);
+  assert.match(page, /return isOutsideBoardPosition\(piece\.x, piece\.y, board, rows, cols\)/);
   assert.match(page, /sideMatLayout=\{sideMatLayout\}/);
   assert.match(page, /const bandX = useBandPosition \? piece\.x : bandPosition\?\.x/);
 });

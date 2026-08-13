@@ -60,7 +60,6 @@ const DEFAULT_IMAGE_ASPECT = 4 / 3;
 const ROOM_STORAGE_KEY = "puzzlebeyond-active-room";
 const NICKNAME_STORAGE_KEY = "puzzle-name";
 const BOARD = { left: 0.19, top: 0.12, width: 0.62, height: 0.76 } as const;
-const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 } as const;
 const PUZZLE_LAYOUT_VERSION = 3;
 const LARGE_PUZZLE_THRESHOLD = 120;
 const LIVE_DRAG_INTERVAL_MS = 33;
@@ -563,6 +562,15 @@ function landscapePiecePositions(rows: number, cols: number, seed: string, board
   return pieceRailPositions(rows, cols, seed, board, mode);
 }
 
+function isOutsideBoardPosition(x: number, y: number, board: BoardFrame, rows: number, cols: number) {
+  const cellWidth = board.width / cols;
+  const cellHeight = board.height / rows;
+  return x + cellWidth * 1.28 < board.left
+    || x - cellWidth * 0.28 > board.left + board.width
+    || y + cellHeight * 1.28 < board.top
+    || y - cellHeight * 0.28 > board.top + board.height;
+}
+
 function activeMatLayout(imageAspect: number): MatLayout {
   if (window.matchMedia("(max-width: 1024px) and (orientation: landscape), (orientation: landscape) and (hover: none) and (pointer: coarse)").matches) {
     return "landscape";
@@ -986,13 +994,8 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   const isBoardPiece = zone === "board";
   const usesSavedMatPosition = (layout: MatLayout, board: BoardFrame) => {
     if (!piece.positioned) return false;
-    if (piece.matLayout) return piece.matLayout === layout;
-    const cellWidth = board.width / cols;
-    const cellHeight = board.height / rows;
-    return piece.x + cellWidth * 1.28 < board.left
-      || piece.x - cellWidth * 0.28 > board.left + board.width
-      || piece.y + cellHeight * 1.28 < board.top
-      || piece.y - cellHeight * 0.28 > board.top + board.height;
+    if (piece.matLayout && piece.matLayout !== layout) return false;
+    return isOutsideBoardPosition(piece.x, piece.y, board, rows, cols);
   };
   const useSidePosition = usesSavedMatPosition(sideMatLayout, sideBoard);
   const useBandPosition = usesSavedMatPosition("band", bandBoard);
@@ -1772,20 +1775,19 @@ export default function Home() {
     cols,
     pieceCount > 20 ? "perimeter" : "sides",
   ), [imageAspect, desktopWorkspaceAspect, rows, cols, pieceCount]);
-  const bandBoardFrame = useMemo(
-    () => fitRailBoardFrame(MOBILE_HORIZONTAL_BOARD, rows, cols, "top-bottom"),
-    [rows, cols],
-  );
   const landscapeBaseFrame = useMemo(
     () => fitBoardFrame(imageAspect, desktopWorkspaceAspect),
     [imageAspect, desktopWorkspaceAspect],
+  );
+  const bandBoardFrame = useMemo(
+    () => fitRailBoardFrame(landscapeBaseFrame, rows, cols, "top-bottom"),
+    [landscapeBaseFrame, rows, cols],
   );
   const landscapeRailMode = railModeForFrame(landscapeBaseFrame, pieceCount);
   const landscapeBoardFrame = useMemo(
     () => fitRailBoardFrame(landscapeBaseFrame, rows, cols, landscapeRailMode),
     [landscapeBaseFrame, rows, cols, landscapeRailMode],
   );
-  const bandWorkspaceAspect = imageAspect * MOBILE_HORIZONTAL_BOARD.height / MOBILE_HORIZONTAL_BOARD.width;
   const workspaceStyle = {
     "--desktop-board-left": `${desktopBoardFrame.left * 100}%`,
     "--desktop-board-top": `${desktopBoardFrame.top * 100}%`,
@@ -1800,7 +1802,6 @@ export default function Home() {
     "--landscape-board-width": `${landscapeBoardFrame.width * 100}%`,
     "--landscape-board-height": `${landscapeBoardFrame.height * 100}%`,
     "--side-workspace-aspect": imageAspect * BOARD.height / BOARD.width,
-    "--band-workspace-aspect": bandWorkspaceAspect,
   } as CSSProperties;
   const boardStyle = boardSize.width > 0
     ? { width: `${boardSize.width}px`, height: `${boardSize.height}px` }
@@ -2637,13 +2638,13 @@ export default function Home() {
                     {boardPieceNodes}
                     {room && progress === 100 && (
                       <div className="board-completion-card">
-                        <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
+                        <div className="complete-label"><span aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M3 8.2 6.5 12 13 4" /></svg></span> TAMAMLANDI!</div>
                         <button className="download-image-button" type="button" onClick={() => void downloadCompletedImage()} disabled={downloadBusy}>{downloadBusy ? "HAZIRLANIYOR…" : "GÖRSELİ İNDİR ↓"}</button>
                       </div>
                     )}
                     {!room && introCompletion === "showing" && (
                       <div className="complete-badge intro-complete">
-                        <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
+                        <div className="complete-label"><span aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M3 8.2 6.5 12 13 4" /></svg></span> TAMAMLANDI!</div>
                       </div>
                     )}
                   </div>

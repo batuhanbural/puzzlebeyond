@@ -61,6 +61,7 @@ function compileInlineLayoutHelpers(source) {
     ["sidePiecePositions", ["rows", "cols", "seed", "board"]],
     ["bandPiecePositions", ["rows", "cols", "seed", "board"]],
     ["landscapePiecePositions", ["rows", "cols", "seed", "board", "mode"]],
+    ["isOutsideBoardPosition", ["x", "y", "board", "rows", "cols"]],
     ["scatteredPieces", ["rows", "cols", "_seed"]],
     ["normalizePieceLayout", ["pieces", "rows", "cols", "seed"]],
     ["isWithinDropBounds", ["clientX", "clientY", "bounds", "insetX = 0", "insetY = 0"]],
@@ -87,9 +88,8 @@ function compileInlineLayoutHelpers(source) {
     const DEFAULT_IMAGE_ASPECT = ${JSON.stringify(defaultAspect)};
     const PUZZLE_LAYOUT_VERSION = ${JSON.stringify(layoutVersion)};
     const BOARD = { left: 0.19, top: 0.12, width: 0.62, height: 0.76 };
-    const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, isNearPieceTarget, boardGridPath, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
+    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, isNearPieceTarget, boardGridPath, sidePiecePositions, bandPiecePositions, landscapePiecePositions, isOutsideBoardPosition, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
@@ -214,25 +214,34 @@ test("desktop boards maximize height while preserving every image aspect", async
   }
 });
 
-test("mobile band workspaces preserve board and piece ratios", () => {
-  const boards = [
-    { left: 0.06, top: 0.26, width: 0.88, height: 0.48 },
-    { left: 0.14, top: 0.04, width: 0.72, height: 0.92 },
-  ];
+test("mobile workspaces derive board boundaries from their actual aspect ratio", async () => {
+  const { fitBoardFrame, fitRailBoardFrame } = await helpersPromise;
   for (const imageAspect of [1 / 5, 9 / 16, 3 / 4, 1, 16 / 9, 5]) {
-    for (const board of boards) {
-      const workspaceAspect = imageAspect * board.height / board.width;
-      const physicalBoardWidth = workspaceAspect * board.width;
-      const physicalBoardHeight = board.height;
-      assert.ok(Math.abs(physicalBoardWidth / physicalBoardHeight - imageAspect) < 1e-12);
-      assert.ok(board.left > 0 && board.left + board.width < 1);
-      assert.ok(board.top > 0 && board.top + board.height < 1);
-      for (const { rows, cols } of puzzleSizes) {
-        const cellAspect = workspaceAspect * (board.width / cols) / (board.height / rows);
-        assert.ok(Math.abs(cellAspect - imageAspect * rows / cols) < 1e-12);
+    for (const workspaceAspect of [0.42, 0.56, 0.75, 1.8, 2.2]) {
+      for (const mode of ["top-bottom", "perimeter"]) {
+        const board = fitRailBoardFrame(fitBoardFrame(imageAspect, workspaceAspect), 47, 22, mode);
+        const physicalBoardWidth = workspaceAspect * board.width;
+        const physicalBoardHeight = board.height;
+        assert.ok(Math.abs(physicalBoardWidth / physicalBoardHeight - imageAspect) < 1e-12);
+        assert.ok(board.left > 0 && board.left + board.width < 1);
+        assert.ok(board.top > 0 && board.top + board.height < 1);
+        for (const { rows, cols } of puzzleSizes) {
+          const cellAspect = workspaceAspect * (board.width / cols) / (board.height / rows);
+          assert.ok(Math.abs(cellAspect - imageAspect * rows / cols) < 1e-12);
+        }
       }
     }
   }
+});
+
+test("saved outer positions are rejected when a new viewport puts them over the board", async () => {
+  const { isOutsideBoardPosition } = await helpersPromise;
+  const desktopBoard = { left: 0.2, top: 0.1, width: 0.6, height: 0.8 };
+  const mobileBoard = { left: 0.05, top: 0.2, width: 0.9, height: 0.6 };
+  const saved = { x: 0.08, y: 0.45 };
+
+  assert.equal(isOutsideBoardPosition(saved.x, saved.y, desktopBoard, 20, 30), true);
+  assert.equal(isOutsideBoardPosition(saved.x, saved.y, mobileBoard, 20, 30), false);
 });
 
 test("side and mobile band projections are deterministic and bounded", async () => {
@@ -416,9 +425,9 @@ test("desktop and mobile portrait edge coordinates use distinct layout identitie
   const componentEnd = source.indexOf("\n\nfunction positionRemotePuzzlePiece", componentStart);
   const component = source.slice(componentStart, componentEnd);
 
-  assert.match(component, /if \(piece\.matLayout\) return piece\.matLayout === layout/);
+  assert.match(component, /if \(piece\.matLayout && piece\.matLayout !== layout\) return false/);
   assert.match(component, /usesSavedMatPosition\(sideMatLayout, sideBoard\)/);
-  assert.match(component, /piece\.x \+ cellWidth \* 1\.28 < board\.left/);
+  assert.match(component, /isOutsideBoardPosition\(piece\.x, piece\.y, board, rows, cols\)/);
   assert.match(source, /return "mobile-side"/);
   assert.match(source, /const sideMatLayout = matLayoutMode === "mobile-side" \? "mobile-side" : "side"/);
 });
@@ -517,14 +526,14 @@ test("piece normalization enforces board bounds and board/mat zones", async () =
 test("the rendered puzzle switches horizontal mobile images to top and bottom rails", async () => {
   const source = await pageSourcePromise;
   assert.match(source, /const BOARD = \{ left: 0\.19, top: 0\.12, width: 0\.62, height: 0\.76 \} as const/);
-  assert.match(source, /const MOBILE_HORIZONTAL_BOARD = \{ left: 0\.06, top: 0\.26, width: 0\.88, height: 0\.48 \} as const/);
+  assert.doesNotMatch(source, /MOBILE_HORIZONTAL_BOARD/);
   assert.doesNotMatch(source, /MOBILE_LANDSCAPE_BOARD/);
   assert.match(source, /function fitBoardFrame/);
   assert.match(source, /function fitRailBoardFrame/);
   assert.doesNotMatch(source, /loosePieceScale/);
   assert.match(source, /"--side-piece-width": `\$\{sideBoard\.width \* 100 \/ cols\}%`/);
   assert.match(source, /const desktopBoardFrame = useMemo/);
-  assert.match(source, /const bandWorkspaceAspect = imageAspect \* MOBILE_HORIZONTAL_BOARD\.height \/ MOBILE_HORIZONTAL_BOARD\.width/);
+  assert.match(source, /fitRailBoardFrame\(landscapeBaseFrame, rows, cols, "top-bottom"\)/);
   assert.match(source, /const landscapeBaseFrame = useMemo/);
   assert.match(source, /const landscapeRailMode = railModeForFrame\(landscapeBaseFrame, pieceCount\)/);
   assert.match(source, /function pieceRailPositions/);
