@@ -61,7 +61,6 @@ function compileInlineLayoutHelpers(source) {
     ["sidePiecePositions", ["rows", "cols", "seed", "board"]],
     ["bandPiecePositions", ["rows", "cols", "seed", "board"]],
     ["landscapePiecePositions", ["rows", "cols", "seed", "board", "mode"]],
-    ["redistributePiecePositions", ["pieceIds", "layout"]],
     ["scatteredPieces", ["rows", "cols", "_seed"]],
     ["normalizePieceLayout", ["pieces", "rows", "cols", "seed"]],
     ["isWithinDropBounds", ["clientX", "clientY", "bounds", "insetX = 0", "insetY = 0"]],
@@ -90,7 +89,7 @@ function compileInlineLayoutHelpers(source) {
     const BOARD = { left: 0.19, top: 0.12, width: 0.62, height: 0.76 };
     const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, isNearPieceTarget, boardGridPath, sidePiecePositions, bandPiecePositions, landscapePiecePositions, redistributePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
+    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, isNearPieceTarget, boardGridPath, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
@@ -109,20 +108,6 @@ test("board drops require the pointer to be strictly inside the inner boundary",
   assert.equal(isWithinDropBounds(125.51, 200, bounds, 25, 20), true);
   assert.equal(isWithinDropBounds(475.5, 200, bounds, 25, 20), false);
   assert.equal(isWithinDropBounds(300, 100.25, bounds, 25, 20), false);
-});
-
-test("edge redistribution samples the full available layout", async () => {
-  const { redistributePiecePositions } = await helpersPromise;
-  const layout = new Map(Array.from({ length: 100 }, (_, index) => [
-    index,
-    { x: index / 100, y: (index % 10) / 10 },
-  ]));
-  const result = redistributePiecePositions([89, 2, 55, 8, 21], layout);
-  const xPositions = [...result.values()].map(({ x }) => x);
-
-  assert.equal(result.size, 5);
-  assert.ok(Math.min(...xPositions) < 0.2);
-  assert.ok(Math.max(...xPositions) > 0.8);
 });
 
 test("fitPuzzleSize chooses stable portrait, square, and landscape grids", async () => {
@@ -548,7 +533,8 @@ test("the rendered puzzle switches horizontal mobile images to top and bottom ra
   assert.match(source, /function bandPiecePositions/);
   assert.match(source, /function landscapePiecePositions/);
   assert.doesNotMatch(source, /MAX_VISIBLE_LOOSE_PIECES|visibleLoosePieces/);
-  assert.match(source, /\{loosePieces\.map\(\(piece\) =>/);
+  assert.match(source, /const loosePieceNodes = useMemo\(\(\) => loosePieces\.map/);
+  assert.match(source, /\{loosePieceNodes\}/);
   assert.match(source, /imageAspect > 1 \? "horizontal-puzzle" : ""/);
   assert.match(source, /piece\.zone === "board" \|\| piece\.locked/);
   assert.match(source, /!piece\.locked && piece\.zone !== "board"/);

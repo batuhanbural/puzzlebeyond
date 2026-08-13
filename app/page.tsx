@@ -576,21 +576,6 @@ function activeMatLayout(imageAspect: number): MatLayout {
   return "side";
 }
 
-function redistributePiecePositions(pieceIds: number[], layout: Map<number, PieceRailPosition>) {
-  const positions = [...layout.values()];
-  const ids = [...pieceIds].sort((left, right) => left - right);
-  const distributed = new Map<number, PieceRailPosition>();
-  ids.forEach((id, index) => {
-    const positionIndex = Math.min(
-      positions.length - 1,
-      Math.floor((index + 0.5) * positions.length / ids.length),
-    );
-    const position = positions[positionIndex];
-    if (position) distributed.set(id, position);
-  });
-  return distributed;
-}
-
 function scatteredPieces(rows: number, cols: number, _seed?: string) {
   void _seed;
   return Array.from({ length: rows * cols }, (_, id) => ({
@@ -1829,7 +1814,8 @@ export default function Home() {
   const keyboardPieceId = pieces.find((piece) => piece.id === lastHeldPieceId && !piece.locked)?.id
     ?? pieces.find((piece) => !piece.locked)?.id
     ?? -1;
-  const remoteHeldIds = useMemo(() => new Set(remoteDrags.map((drag) => drag.pieceId)), [remoteDrags]);
+  const remoteHeldIdsKey = useMemo(() => [...new Set(remoteDrags.map((drag) => drag.pieceId))].sort((left, right) => left - right).join(","), [remoteDrags]);
+  const remoteHeldIds = useMemo(() => new Set(remoteHeldIdsKey ? remoteHeldIdsKey.split(",").map(Number) : []), [remoteHeldIdsKey]);
   const boardPieces = useMemo(() => pieces.filter((piece) => piece.zone === "board" || piece.locked), [pieces]);
   const interactiveBoardPieces = useMemo(() => pieceCount >= LARGE_PUZZLE_THRESHOLD
     ? boardPieces.filter((piece) => !piece.locked)
@@ -2447,6 +2433,59 @@ export default function Home() {
     }
   };
 
+  const boardPieceNodes = useMemo(() => interactiveBoardPieces.map((piece) => (
+    <InteractivePuzzlePiece
+      key={piece.id}
+      piece={piece}
+      zone="board"
+      rows={rows}
+      cols={cols}
+      seed={puzzleSeed}
+      imageUrl={imageUrl}
+      pieceCount={pieceCount}
+      isRecent={piece.id === lastHeldPieceId}
+      isKeyboardPiece={piece.id === keyboardPieceId}
+      isRemoteHeld={remoteHeldIds.has(piece.id)}
+      playerColor={localPlayerColor}
+      sideBoard={desktopBoardFrame}
+      bandBoard={bandBoardFrame}
+      landscapeBoard={landscapeBoardFrame}
+      sideMatLayout={sideMatLayout}
+      onStart={startMove}
+      onLostCapture={handleLostPieceCapture}
+      onFocusPiece={focusPiece}
+      onPlacePiece={placePieceFromKeyboard}
+    />
+  )), [interactiveBoardPieces, rows, cols, puzzleSeed, imageUrl, pieceCount, lastHeldPieceId, keyboardPieceId, remoteHeldIds, localPlayerColor, desktopBoardFrame, bandBoardFrame, landscapeBoardFrame, sideMatLayout, startMove, handleLostPieceCapture, focusPiece, placePieceFromKeyboard]);
+
+  const loosePieceNodes = useMemo(() => loosePieces.map((piece) => (
+    <InteractivePuzzlePiece
+      key={piece.id}
+      piece={piece}
+      zone="mat"
+      rows={rows}
+      cols={cols}
+      seed={puzzleSeed}
+      imageUrl={imageUrl}
+      pieceCount={pieceCount}
+      isRecent={piece.id === lastHeldPieceId}
+      isKeyboardPiece={piece.id === keyboardPieceId}
+      isRemoteHeld={remoteHeldIds.has(piece.id)}
+      playerColor={localPlayerColor}
+      sideBoard={desktopBoardFrame}
+      bandBoard={bandBoardFrame}
+      landscapeBoard={landscapeBoardFrame}
+      sideMatLayout={sideMatLayout}
+      sidePosition={sideLayout.get(piece.id)}
+      bandPosition={bandLayout.get(piece.id)}
+      landscapePosition={landscapeLayout.get(piece.id)}
+      onStart={startMove}
+      onLostCapture={handleLostPieceCapture}
+      onFocusPiece={focusPiece}
+      onPlacePiece={placePieceFromKeyboard}
+    />
+  )), [loosePieces, rows, cols, puzzleSeed, imageUrl, pieceCount, lastHeldPieceId, keyboardPieceId, remoteHeldIds, localPlayerColor, desktopBoardFrame, bandBoardFrame, landscapeBoardFrame, sideMatLayout, sideLayout, bandLayout, landscapeLayout, startMove, handleLostPieceCapture, focusPiece, placePieceFromKeyboard]);
+
   return (
     <main className={`site-shell ${galleryVisible ? "gallery-active" : "puzzle-active"}`} onContextMenu={(event) => event.preventDefault()}>
       <header className="topbar">
@@ -2595,30 +2634,7 @@ export default function Home() {
                         imageUrl={imageUrl}
                       />
                     )}
-                    {interactiveBoardPieces.map((piece) => (
-                      <InteractivePuzzlePiece
-                        key={piece.id}
-                        piece={piece}
-                        zone="board"
-                        rows={rows}
-                        cols={cols}
-                        seed={puzzleSeed}
-                        imageUrl={imageUrl}
-                        pieceCount={pieceCount}
-                        isRecent={piece.id === lastHeldPieceId}
-                        isKeyboardPiece={piece.id === keyboardPieceId}
-                        isRemoteHeld={remoteHeldIds.has(piece.id)}
-                        playerColor={localPlayerColor}
-                        sideBoard={desktopBoardFrame}
-                        bandBoard={bandBoardFrame}
-                        landscapeBoard={landscapeBoardFrame}
-                        sideMatLayout={sideMatLayout}
-                        onStart={startMove}
-                        onLostCapture={handleLostPieceCapture}
-                        onFocusPiece={focusPiece}
-                        onPlacePiece={placePieceFromKeyboard}
-                      />
-                    ))}
+                    {boardPieceNodes}
                     {room && progress === 100 && (
                       <div className="board-completion-card">
                         <div className="complete-label"><span>✓</span> TAMAMLANDI!</div>
@@ -2644,33 +2660,7 @@ export default function Home() {
                     playerColor={playerColor(drag.senderId)}
                   />
                 ))}
-                {loosePieces.map((piece) => (
-                  <InteractivePuzzlePiece
-                    key={piece.id}
-                    piece={piece}
-                    zone="mat"
-                    rows={rows}
-                    cols={cols}
-                    seed={puzzleSeed}
-                    imageUrl={imageUrl}
-                    pieceCount={pieceCount}
-                    isRecent={piece.id === lastHeldPieceId}
-                    isKeyboardPiece={piece.id === keyboardPieceId}
-                    isRemoteHeld={remoteHeldIds.has(piece.id)}
-                    playerColor={localPlayerColor}
-                    sideBoard={desktopBoardFrame}
-                    bandBoard={bandBoardFrame}
-                    landscapeBoard={landscapeBoardFrame}
-                    sideMatLayout={sideMatLayout}
-                    sidePosition={sideLayout.get(piece.id)}
-                    bandPosition={bandLayout.get(piece.id)}
-                    landscapePosition={landscapeLayout.get(piece.id)}
-                    onStart={startMove}
-                    onLostCapture={handleLostPieceCapture}
-                    onFocusPiece={focusPiece}
-                    onPlacePiece={placePieceFromKeyboard}
-                  />
-                ))}
+                {loosePieceNodes}
               </div>
               <div className="mobile-room-actions">
                 {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}

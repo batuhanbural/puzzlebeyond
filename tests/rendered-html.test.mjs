@@ -23,7 +23,8 @@ test("contains the puzzle app entry points", async () => {
   assert.match(page, /function sidePiecePositions/);
   assert.match(page, /function bandPiecePositions/);
   assert.doesNotMatch(page, /MAX_VISIBLE_LOOSE_PIECES|visibleLoosePieces/);
-  assert.match(page, /\{loosePieces\.map\(\(piece\) =>/);
+  assert.match(page, /const loosePieceNodes = useMemo\(\(\) => loosePieces\.map/);
+  assert.match(page, /\{loosePieceNodes\}/);
   assert.match(page, /"horizontal-puzzle"/);
   assert.match(page, /"side-piece"/);
   assert.match(page, /KENARA İT/);

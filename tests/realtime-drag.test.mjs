@@ -61,6 +61,10 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   assert.match(realtime, /event: "room-action"/);
   assert.match(page, /playerColor\(drag\.senderId\)/);
   assert.doesNotMatch(realtime, /playerName/);
+  assert.match(page, /const remoteHeldIdsKey = useMemo/);
+  assert.match(page, /const remoteHeldIds = useMemo\(\(\) => new Set\(remoteHeldIdsKey/);
+  assert.match(page, /const boardPieceNodes = useMemo\(\(\) => interactiveBoardPieces\.map/);
+  assert.match(page, /const loosePieceNodes = useMemo\(\(\) => loosePieces\.map/);
 
   const start = page.indexOf("const applyRemoteDrag");
   const end = page.indexOf("\n\n    const applyRemoteAction", start);
