@@ -61,6 +61,10 @@ function compileInlineLayoutHelpers(source) {
     ["projectPositionBetweenBoardFrames", ["position", "source", "target"]],
     ["workspaceToSharedPosition", ["position", "board"]],
     ["sharedToWorkspacePosition", ["position", "board"]],
+    ["projectBoardRelativePosition", ["position", "source", "target"]],
+    ["workspaceToBoardRelativePosition", ["position", "board"]],
+    ["boardRelativeToWorkspacePosition", ["position", "board"]],
+    ["constrainSavedMatPosition", ["position", "board", "rows", "cols", "coordinateSpace"]],
     ["matPositionAtPointer", ["clientX", "clientY", "workspace", "pieceWidth", "pieceHeight"]],
     ["pieceTouchesBoardArea", ["piece", "rows", "cols"]],
     ["pieceRailPositions", ["rows", "cols", "seed", "board", "mode"]],
@@ -95,7 +99,7 @@ function compileInlineLayoutHelpers(source) {
     const PUZZLE_LAYOUT_VERSION = ${JSON.stringify(layoutVersion)};
     const BOARD = { left: 0.19, top: 0.12, width: 0.62, height: 0.76 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, isNearPieceTarget, boardGridPath, workspaceToSharedPosition, sharedToWorkspacePosition, matPositionAtPointer, pieceTouchesBoardArea, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
+    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, isNearPieceTarget, boardGridPath, workspaceToSharedPosition, sharedToWorkspacePosition, workspaceToBoardRelativePosition, boardRelativeToWorkspacePosition, constrainSavedMatPosition, matPositionAtPointer, pieceTouchesBoardArea, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
@@ -423,6 +427,8 @@ test("desktop and mobile decode the same saved shared coordinates", async () => 
 
   assert.match(component, /piece\.matCoordinateSpace === "shared"/);
   assert.match(component, /sharedToWorkspacePosition\(piece, board\)/);
+  assert.match(component, /piece\.matCoordinateSpace === "board-relative"/);
+  assert.match(component, /boardRelativeToWorkspacePosition\(piece, board\)/);
   assert.match(component, /const sideSavedPosition = savedMatPosition\(sideBoard\)/);
   assert.match(component, /const bandSavedPosition = savedMatPosition\(bandBoard\)/);
   assert.match(component, /const landscapeSavedPosition = savedMatPosition\(landscapeBoard\)/);
@@ -460,6 +466,37 @@ test("the 1034-piece 47 by 22 board crosses every shared boundary without a jump
     const roundTrip = sharedToWorkspacePosition(workspaceToSharedPosition(point, desktop), desktop);
     assert.ok(Math.abs(roundTrip.x - point.x) < 1e-12);
     assert.ok(Math.abs(roundTrip.y - point.y) < 1e-12);
+  }
+});
+
+test("mobile and desktop preserve exact 47 by 22 visual contact with every board edge", async () => {
+  const { workspaceToBoardRelativePosition, boardRelativeToWorkspacePosition, constrainSavedMatPosition } = await helpersPromise;
+  const rows = 47;
+  const cols = 22;
+  const desktop = { left: 0.24, top: 0.08, width: 0.52, height: 0.84 };
+  const mobile = { left: 0.08, top: 0.34, width: 0.84, height: 0.32 };
+  const desktopPiece = { width: desktop.width / cols, height: desktop.height / rows };
+  const mobilePiece = { width: mobile.width / cols, height: mobile.height / rows };
+  const desktopContacts = [
+    { x: desktop.left - desktopPiece.width * 1.28, y: desktop.top + desktop.height / 2, edge: "left" },
+    { x: desktop.left + desktop.width + desktopPiece.width * 0.28, y: desktop.top + desktop.height / 2, edge: "right" },
+    { x: desktop.left + desktop.width / 2, y: desktop.top - desktopPiece.height * 1.28, edge: "top" },
+    { x: desktop.left + desktop.width / 2, y: desktop.top + desktop.height + desktopPiece.height * 0.28, edge: "bottom" },
+  ];
+
+  for (const contact of desktopContacts) {
+    const shared = workspaceToBoardRelativePosition(contact, desktop);
+    const projected = constrainSavedMatPosition(
+      boardRelativeToWorkspacePosition(shared, mobile),
+      mobile,
+      rows,
+      cols,
+      "board-relative",
+    );
+    if (contact.edge === "left") assert.ok(Math.abs(projected.x + mobilePiece.width * 1.28 - mobile.left) < 1e-12);
+    if (contact.edge === "right") assert.ok(Math.abs(projected.x - mobilePiece.width * 0.28 - (mobile.left + mobile.width)) < 1e-12);
+    if (contact.edge === "top") assert.ok(Math.abs(projected.y + mobilePiece.height * 1.28 - mobile.top) < 1e-12);
+    if (contact.edge === "bottom") assert.ok(Math.abs(projected.y - mobilePiece.height * 0.28 - (mobile.top + mobile.height)) < 1e-12);
   }
 });
 

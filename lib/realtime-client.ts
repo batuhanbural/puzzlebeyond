@@ -16,12 +16,12 @@ export type RoomDragMessage = {
   y: number;
   seq: number;
   phase: "move" | "end";
-  coordinateSpace?: "board" | "workspace" | "shared";
+  coordinateSpace?: "board" | "workspace" | "shared" | "board-relative";
   dropZone?: "board" | "mat";
   dropX?: number;
   dropY?: number;
   dropMatLayout?: MatLayout;
-  dropMatCoordinateSpace?: "shared";
+  dropMatCoordinateSpace?: "shared" | "board-relative";
 };
 
 export type RoomActionMessage = {
@@ -69,16 +69,18 @@ export function parseRoomDragMessage(value: unknown): RoomDragMessage | null {
   if (typeof y !== "number" || !Number.isFinite(y) || y < -2 || y > 3) return null;
   if (!Number.isInteger(seq) || Number(seq) < 0 || Number(seq) > 1_000_000_000) return null;
   if (phase !== "move" && phase !== "end") return null;
-  if (coordinateSpace !== undefined && coordinateSpace !== "board" && coordinateSpace !== "workspace" && coordinateSpace !== "shared") return null;
+  if (coordinateSpace !== undefined && coordinateSpace !== "board" && coordinateSpace !== "workspace" && coordinateSpace !== "shared" && coordinateSpace !== "board-relative") return null;
   const hasDropTarget = dropZone !== undefined || dropX !== undefined || dropY !== undefined || dropMatLayout !== undefined || dropMatCoordinateSpace !== undefined;
   if (hasDropTarget) {
     if (phase !== "end" || (dropZone !== "board" && dropZone !== "mat")) return null;
-    if (typeof dropX !== "number" || !Number.isFinite(dropX) || dropX < 0 || dropX > 1) return null;
-    if (typeof dropY !== "number" || !Number.isFinite(dropY) || dropY < 0 || dropY > 1) return null;
     if (dropMatLayout !== undefined && dropMatLayout !== "side" && dropMatLayout !== "mobile-side" && dropMatLayout !== "band" && dropMatLayout !== "landscape") return null;
     if (dropZone !== "mat" && dropMatLayout !== undefined) return null;
-    if (dropMatCoordinateSpace !== undefined && dropMatCoordinateSpace !== "shared") return null;
+    if (dropMatCoordinateSpace !== undefined && dropMatCoordinateSpace !== "shared" && dropMatCoordinateSpace !== "board-relative") return null;
     if (dropZone !== "mat" && dropMatCoordinateSpace !== undefined) return null;
+    const dropMinimum = dropZone === "mat" && dropMatCoordinateSpace === "board-relative" ? -2 : 0;
+    const dropMaximum = dropZone === "mat" && dropMatCoordinateSpace === "board-relative" ? 3 : 1;
+    if (typeof dropX !== "number" || !Number.isFinite(dropX) || dropX < dropMinimum || dropX > dropMaximum) return null;
+    if (typeof dropY !== "number" || !Number.isFinite(dropY) || dropY < dropMinimum || dropY > dropMaximum) return null;
     return {
       senderId, gestureId, pieceId: Number(pieceId), x, y, seq: Number(seq), phase,
       ...(coordinateSpace ? { coordinateSpace } : {}),

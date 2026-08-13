@@ -356,12 +356,52 @@ function projectPositionBetweenBoardFrames(position: PieceRailPosition, source: 
   };
 }
 
+// Kept for legacy shared-coordinate geometry and migration coverage.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function workspaceToSharedPosition(position: PieceRailPosition, board: BoardFrame) {
   return projectPositionBetweenBoardFrames(position, board, BOARD);
 }
 
 function sharedToWorkspacePosition(position: PieceRailPosition, board: BoardFrame) {
   return projectPositionBetweenBoardFrames(position, BOARD, board);
+}
+
+function projectBoardRelativePosition(position: PieceRailPosition, source: BoardFrame, target: BoardFrame): PieceRailPosition {
+  return {
+    x: target.left + (position.x - source.left) / source.width * target.width,
+    y: target.top + (position.y - source.top) / source.height * target.height,
+  };
+}
+
+function workspaceToBoardRelativePosition(position: PieceRailPosition, board: BoardFrame) {
+  return projectBoardRelativePosition(position, board, BOARD);
+}
+
+function boardRelativeToWorkspacePosition(position: PieceRailPosition, board: BoardFrame) {
+  return projectBoardRelativePosition(position, BOARD, board);
+}
+
+function constrainSavedMatPosition(
+  position: PieceRailPosition,
+  board: BoardFrame,
+  rows: number,
+  cols: number,
+  coordinateSpace?: MatCoordinateSpace,
+) {
+  const pieceWidth = board.width / cols;
+  const pieceHeight = board.height / rows;
+  if (coordinateSpace === "board-relative") {
+    // Preserve board contact across layouts. Only intervene when the piece would
+    // otherwise become completely unreachable outside the workspace.
+    return {
+      x: Math.max(-pieceWidth * 1.27, Math.min(1 + pieceWidth * 0.27, position.x)),
+      y: Math.max(-pieceHeight * 1.27, Math.min(1 + pieceHeight * 0.27, position.y)),
+    };
+  }
+  return {
+    x: Math.max(0, Math.min(1 - pieceWidth, position.x)),
+    y: Math.max(0, Math.min(1 - pieceHeight, position.y)),
+  };
 }
 
 function boardFrameFromBounds(workspace: InnerBounds, board: InnerBounds): BoardFrame {
@@ -673,8 +713,10 @@ function normalizePieceLayout(pieces: Piece[], rows: number, cols: number, seed:
     const usesPositionedMat = piece.layoutVersion === PUZZLE_LAYOUT_VERSION
       && piece.zone === "mat" && piece.positioned === true
       && Number.isFinite(piece.x) && Number.isFinite(piece.y)
-      && piece.x >= 0 && piece.x <= 0.98
-      && piece.y >= 0 && piece.y <= 0.98;
+      && piece.x >= (piece.matCoordinateSpace === "board-relative" ? -2 : 0)
+      && piece.x <= (piece.matCoordinateSpace === "board-relative" ? 3 : 0.98)
+      && piece.y >= (piece.matCoordinateSpace === "board-relative" ? -2 : 0)
+      && piece.y <= (piece.matCoordinateSpace === "board-relative" ? 3 : 0.98);
     return usesCurrentLayout
       ? { ...piece, id, zone: "board" as const, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION }
       : usesPositionedMat
@@ -1052,13 +1094,12 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   const isBoardPiece = zone === "board";
   const savedMatPosition = (board: BoardFrame) => {
     if (!piece.positioned) return null;
-    const position = piece.matCoordinateSpace === "shared"
-      ? sharedToWorkspacePosition(piece, board)
-      : piece;
-    return {
-      x: Math.max(0, Math.min(1 - board.width / cols, position.x)),
-      y: Math.max(0, Math.min(1 - board.height / rows, position.y)),
-    };
+    const position = piece.matCoordinateSpace === "board-relative"
+      ? boardRelativeToWorkspacePosition(piece, board)
+      : piece.matCoordinateSpace === "shared"
+        ? sharedToWorkspacePosition(piece, board)
+        : piece;
+    return constrainSavedMatPosition(position, board, rows, cols, piece.matCoordinateSpace);
   };
   const sideSavedPosition = savedMatPosition(sideBoard);
   const bandSavedPosition = savedMatPosition(bandBoard);
@@ -1129,15 +1170,18 @@ function positionRemotePuzzlePiece(element: HTMLDivElement, drag: RemoteDrag, ro
   const workspaceRect = elementInnerBounds(workspace);
   const boardRect = elementInnerBounds(board);
   const boardAreaRect = elementInnerBounds(boardArea);
-  const localSharedPosition = drag.coordinateSpace === "shared"
-    ? sharedToWorkspacePosition({ x: drag.x, y: drag.y }, boardFrameFromBounds(workspaceRect, boardAreaRect))
-    : null;
+  const coordinateBoard = boardFrameFromBounds(workspaceRect, boardAreaRect);
+  const localMatPosition = drag.coordinateSpace === "board-relative"
+    ? boardRelativeToWorkspacePosition({ x: drag.x, y: drag.y }, coordinateBoard)
+    : drag.coordinateSpace === "shared"
+      ? sharedToWorkspacePosition({ x: drag.x, y: drag.y }, coordinateBoard)
+      : null;
   let x = drag.coordinateSpace === "board"
     ? boardRect.left - workspaceRect.left + drag.x * boardRect.width - pieceWidth / 2
-    : (localSharedPosition?.x ?? drag.x) * workspace.clientWidth - pieceWidth / 2;
+    : (localMatPosition?.x ?? drag.x) * workspace.clientWidth - pieceWidth / 2;
   let y = drag.coordinateSpace === "board"
     ? boardRect.top - workspaceRect.top + drag.y * boardRect.height - pieceHeight / 2
-    : (localSharedPosition?.y ?? drag.y) * workspace.clientHeight - pieceHeight / 2;
+    : (localMatPosition?.y ?? drag.y) * workspace.clientHeight - pieceHeight / 2;
   if (drag.phase === "end" && drag.dropZone === "board" && drag.dropX !== undefined && drag.dropY !== undefined) {
     x = boardRect.left - workspaceRect.left + drag.dropX * boardRect.width;
     y = boardRect.top - workspaceRect.top + drag.dropY * boardRect.height;
@@ -2231,7 +2275,7 @@ export default function Home() {
       y: (drag.clientY - workspaceRect.top) / workspaceRect.height,
     };
     const sharedPosition = boardAreaRect
-      ? workspaceToSharedPosition(localPosition, boardFrameFromBounds(workspaceRect, boardAreaRect))
+      ? workspaceToBoardRelativePosition(localPosition, boardFrameFromBounds(workspaceRect, boardAreaRect))
       : localPosition;
     drag.liveX = Math.max(-2, Math.min(3, sharedPosition.x));
     drag.liveY = Math.max(-2, Math.min(3, sharedPosition.y));
@@ -2243,7 +2287,7 @@ export default function Home() {
       y: drag.liveY,
       seq: ++realtimeSequence.current,
       phase,
-      coordinateSpace: "shared",
+      coordinateSpace: "board-relative",
     };
     return message;
   }, []);
@@ -2340,17 +2384,17 @@ export default function Home() {
       ? matPositionAtPointer(drag.clientX, drag.clientY, workspaceRect, matPieceWidth, matPieceHeight)
       : { x: 0, y: 0 };
     const sharedMatPosition = workspaceRect && matBoardRect
-      ? workspaceToSharedPosition(workspaceMatPosition, boardFrameFromBounds(workspaceRect, matBoardRect))
+      ? workspaceToBoardRelativePosition(workspaceMatPosition, boardFrameFromBounds(workspaceRect, matBoardRect))
       : workspaceMatPosition;
-    const sharedMatX = Math.max(0, Math.min(0.98, sharedMatPosition.x));
-    const sharedMatY = Math.max(0, Math.min(0.98, sharedMatPosition.y));
+    const sharedMatX = Math.max(-2, Math.min(3, sharedMatPosition.x));
+    const sharedMatY = Math.max(-2, Math.min(3, sharedMatPosition.y));
     const matLayout = placedOnBoard ? undefined : activeMatLayout(imageAspect);
     if (liveEndMessage) {
       liveEndMessage.dropZone = placedOnBoard ? "board" : "mat";
       liveEndMessage.dropX = placedOnBoard ? finalBoardX : sharedMatX;
       liveEndMessage.dropY = placedOnBoard ? finalBoardY : sharedMatY;
       liveEndMessage.dropMatLayout = matLayout;
-      liveEndMessage.dropMatCoordinateSpace = placedOnBoard ? undefined : "shared";
+      liveEndMessage.dropMatCoordinateSpace = placedOnBoard ? undefined : "board-relative";
     }
     const next = piecesRef.current.map((piece) => piece.id === movingId
       ? {
@@ -2361,7 +2405,7 @@ export default function Home() {
         locked: snaps,
         positioned: placedOnBoard ? undefined : (true as const),
         matLayout,
-        matCoordinateSpace: placedOnBoard ? undefined : "shared" as const,
+        matCoordinateSpace: placedOnBoard ? undefined : "board-relative" as const,
         layoutVersion: PUZZLE_LAYOUT_VERSION,
       }
       : piece);

@@ -10,7 +10,7 @@ export const MAX_IMAGE_ASPECT = 5;
 
 export type PieceZone = "board" | "mat";
 export type MatLayout = "side" | "mobile-side" | "band" | "landscape";
-export type MatCoordinateSpace = "shared";
+export type MatCoordinateSpace = "shared" | "board-relative";
 export type ValidatedPiece = {
   id: number;
   x: number;
@@ -63,11 +63,13 @@ export function normalizePuzzlePiece(value: unknown, rows: number, cols: number)
   const zone: PieceZone = value.zone === "board" ? "board" : "mat";
   if (zone === "mat") {
     if (value.positioned === true) {
-      if (x < 0 || x > 0.98 || y < 0 || y > 0.98) return null;
       const matLayout = value.matLayout;
       if (matLayout !== undefined && matLayout !== "side" && matLayout !== "mobile-side" && matLayout !== "band" && matLayout !== "landscape") return null;
       const matCoordinateSpace = value.matCoordinateSpace;
-      if (matCoordinateSpace !== undefined && matCoordinateSpace !== "shared") return null;
+      if (matCoordinateSpace !== undefined && matCoordinateSpace !== "shared" && matCoordinateSpace !== "board-relative") return null;
+      const minimum = matCoordinateSpace === "board-relative" ? -2 : 0;
+      const maximum = matCoordinateSpace === "board-relative" ? 3 : 0.98;
+      if (x < minimum || x > maximum || y < minimum || y > maximum) return null;
       return {
         id, x, y, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION, zone, positioned: true,
         ...(matLayout ? { matLayout } : {}),

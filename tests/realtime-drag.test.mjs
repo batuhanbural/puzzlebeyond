@@ -20,6 +20,7 @@ test("live drag messages accept only bounded ephemeral coordinates", () => {
   assert.deepEqual(parseRoomDragMessage({ ...valid, coordinateSpace: "board" })?.coordinateSpace, "board");
   assert.deepEqual(parseRoomDragMessage({ ...valid, coordinateSpace: "workspace" })?.coordinateSpace, "workspace");
   assert.deepEqual(parseRoomDragMessage({ ...valid, coordinateSpace: "shared" })?.coordinateSpace, "shared");
+  assert.deepEqual(parseRoomDragMessage({ ...valid, coordinateSpace: "board-relative" })?.coordinateSpace, "board-relative");
   assert.equal(parseRoomDragMessage({ ...valid, coordinateSpace: "screen" }), null);
   assert.equal(parseRoomDragMessage({ ...valid, senderId: "short" }), null);
   assert.equal(parseRoomDragMessage({ ...valid, pieceId: 48 * 48 }), null);
@@ -35,6 +36,9 @@ test("live drag messages accept only bounded ephemeral coordinates", () => {
   assert.equal(parseRoomDragMessage({ ...matDrop, dropZone: "board" }), null);
   assert.equal(parseRoomDragMessage({ ...matDrop, dropMatCoordinateSpace: "workspace" }), null);
   assert.equal(parseRoomDragMessage({ ...matDrop, phase: "move" }), null);
+  const boardRelativeDrop = { ...matDrop, dropX: -0.4, dropY: 1.2, dropMatCoordinateSpace: "board-relative" };
+  assert.deepEqual(parseRoomDragMessage(boardRelativeDrop), boardRelativeDrop);
+  assert.equal(parseRoomDragMessage({ ...boardRelativeDrop, dropX: 3.1 }), null);
 });
 
 test("room actions accept only a bounded push-to-edges event", () => {
@@ -97,11 +101,12 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   assert.match(page, /y = targetRect\.top - workspaceRect\.top/);
   assert.match(page, /data-piece-id=\{piece\.id\}/);
   assert.match(page, /const boardArea = boardAreaRef\.current/);
-  assert.match(page, /workspaceToSharedPosition\(localPosition, boardFrameFromBounds\(workspaceRect, boardAreaRect\)\)/);
-  assert.match(page, /coordinateSpace: "shared"/);
-  assert.match(page, /const localSharedPosition = drag\.coordinateSpace === "shared"/);
+  assert.match(page, /workspaceToBoardRelativePosition\(localPosition, boardFrameFromBounds\(workspaceRect, boardAreaRect\)\)/);
+  assert.match(page, /coordinateSpace: "board-relative"/);
+  assert.match(page, /const localMatPosition = drag\.coordinateSpace === "board-relative"/);
+  assert.match(page, /boardRelativeToWorkspacePosition\(\{ x: drag\.x, y: drag\.y \}, coordinateBoard\)/);
   assert.match(page, /boardFrameFromBounds\(workspaceRect, boardAreaRect\)/);
-  assert.match(page, /\(localSharedPosition\?\.x \?\? drag\.x\) \* workspace\.clientWidth - pieceWidth \/ 2/);
+  assert.match(page, /\(localMatPosition\?\.x \?\? drag\.x\) \* workspace\.clientWidth - pieceWidth \/ 2/);
   assert.match(page, /drag\.coordinateSpace === "board"/);
   assert.match(page, /liveEndMessage\.dropZone = placedOnBoard \? "board" : "mat"/);
   assert.match(page, /liveEndMessage\.dropMatLayout = matLayout/);

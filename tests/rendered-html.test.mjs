@@ -237,7 +237,7 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.match(page, /liveEndMessage\.dropX = placedOnBoard \? finalBoardX : sharedMatX/);
   assert.match(page, /liveEndMessage\.dropY = placedOnBoard \? finalBoardY : sharedMatY/);
   assert.match(page, /liveEndMessage\.dropMatLayout = matLayout/);
-  assert.match(page, /liveEndMessage\.dropMatCoordinateSpace = placedOnBoard \? undefined : "shared"/);
+  assert.match(page, /liveEndMessage\.dropMatCoordinateSpace = placedOnBoard \? undefined : "board-relative"/);
   const remoteRule = styles.match(/\.puzzle-piece\.remote-drag-piece\s*\{[^}]*\}/)?.[0] || "";
   const remoteHeldRule = styles.match(/\.puzzle-piece\.remote-held:not\(\.dragging\)\s*\{[^}]*\}/)?.[0] || "";
   assert.match(remoteRule, /will-change:transform/);
