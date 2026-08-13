@@ -1542,6 +1542,29 @@ export default function Home() {
         if (typeof oldestSender === "string") dragSequences.delete(oldestSender);
       }
       if (message.phase === "end") {
+        if (message.dropZone === "mat" && message.dropX !== undefined && message.dropY !== undefined) {
+          const dropX = message.dropX;
+          const dropY = message.dropY;
+          setRemoteDrags((current) => current.filter((drag) => drag.senderId !== message.senderId
+            || drag.gestureId !== message.gestureId));
+          setPieces((current) => {
+            const next = current.map((piece) => piece.id === message.pieceId && !piece.locked
+              ? {
+                ...piece,
+                x: dropX,
+                y: dropY,
+                zone: "mat" as const,
+                locked: false,
+                positioned: true as const,
+                layoutVersion: PUZZLE_LAYOUT_VERSION,
+              }
+              : piece);
+            piecesRef.current = next;
+            return next;
+          });
+          scheduleAuthoritativeRefresh(0);
+          return;
+        }
         const expiresAt = Date.now() + REMOTE_DROP_HANDOFF_MS;
         setRemoteDrags((current) => current.map((drag) => drag.senderId === message.senderId && drag.gestureId === message.gestureId
           ? { ...message, expiresAt }

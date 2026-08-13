@@ -128,6 +128,7 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.doesNotMatch(page, /pieceCount > 120|rows \* cols > 120/);
   assert.match(component, /if \(eager\) return;[\s\S]*observePuzzlePiece/);
   assert.match(page, /drag\.phase === "end" \? "remote-drop-handoff"/);
+  assert.match(page, /message\.dropZone === "mat" && message\.dropX !== undefined && message\.dropY !== undefined/);
   assert.match(page, /drag\.dropZone === "mat" \? "remote-mat-handoff"/);
   assert.match(page, /liveEndMessage\.x = finalBoardX \+ 1 \/ \(2 \* cols\)/);
   assert.match(page, /liveEndMessage\.y = finalBoardY \+ 1 \/ \(2 \* rows\)/);

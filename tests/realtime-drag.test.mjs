@@ -64,10 +64,15 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   assert.ok(start >= 0 && end > start, "remote drag handler must remain inspectable");
   const handler = page.slice(start, end);
   assert.match(handler, /setRemoteDrags/);
+  assert.match(handler, /message\.dropZone === "mat"/);
+  assert.match(handler, /drag\.gestureId !== message\.gestureId/);
+  assert.match(handler, /positioned: true as const/);
+  assert.match(handler, /scheduleAuthoritativeRefresh\(0\)/);
   assert.match(handler, /expiresAt = Date\.now\(\) \+ REMOTE_DROP_HANDOFF_MS/);
   assert.match(handler, /drag\.senderId !== message\.senderId \|\| drag\.phase === "end"/);
   assert.doesNotMatch(handler, /refreshAuthoritativeRoom\(true\)/);
-  assert.doesNotMatch(handler, /setPieces|remoteUpdatedAt\.current\s*=/);
+  assert.match(handler, /setPieces/);
+  assert.doesNotMatch(handler, /remoteUpdatedAt\.current\s*=/);
 
   assert.match(page, /transform = `translate3d\(\$\{x\}px,\$\{y\}px,0\)`/);
   assert.match(page, /removeCommittedRemoteDrops\(current, nextRoom\.pieces\)/);
