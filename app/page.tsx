@@ -717,7 +717,7 @@ function traceJigsawPiecePath(
   path.closePath();
 }
 
-const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, eager = false, detail = false, outlined = true }: { id: number; rows: number; cols: number; seed: string; imageUrl: string; eager?: boolean; detail?: boolean; outlined?: boolean }) {
+const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, eager = false, detail = false }: { id: number; rows: number; cols: number; seed: string; imageUrl: string; eager?: boolean; detail?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(eager);
 
@@ -736,7 +736,7 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, 
       canvas.height = 1;
       return;
     }
-    const canvasKey = `${puzzlePieceCanvasKey(id, rows, cols, seed, imageUrl)}\u0000${detail ? "detail" : "board"}\u0000${outlined ? "outlined" : "seamless"}`;
+    const canvasKey = `${puzzlePieceCanvasKey(id, rows, cols, seed, imageUrl)}\u0000${detail ? "detail" : "board"}`;
     const preserveCanvas = () => rememberPuzzlePieceCanvas(canvasKey, canvas);
     if (restorePuzzlePieceCanvas(canvasKey, canvas)) return preserveCanvas;
     let cancelled = false;
@@ -772,17 +772,15 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, 
         context.clip();
         context.drawImage(image, padX - col * cellWidth, padY - row * cellHeight, boardWidth, boardHeight);
         context.restore();
-        if (outlined) {
-          context.lineJoin = "round";
-          context.lineCap = "round";
-          const edgeScale = rows * cols <= 20 ? 1 : Math.max(0.18, Math.sqrt(20 / (rows * cols)));
-          context.strokeStyle = "rgba(21,21,21,.92)";
-          context.lineWidth = 3 * edgeScale;
-          context.stroke();
-          context.strokeStyle = "rgba(255,255,255,.46)";
-          context.lineWidth = 0.9 * edgeScale;
-          context.stroke();
-        }
+        context.lineJoin = "round";
+        context.lineCap = "round";
+        const edgeScale = rows * cols <= 20 ? 1 : Math.max(0.18, Math.sqrt(20 / (rows * cols)));
+        context.strokeStyle = "rgba(21,21,21,.92)";
+        context.lineWidth = 3 * edgeScale;
+        context.stroke();
+        context.strokeStyle = "rgba(255,255,255,.46)";
+        context.lineWidth = 0.9 * edgeScale;
+        context.stroke();
       };
       if (eager) drawPiece();
       else drawTimer = window.setTimeout(drawPiece, (id % 64) * 4);
@@ -792,7 +790,7 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, 
       if (drawTimer !== undefined) window.clearTimeout(drawTimer);
       preserveCanvas();
     };
-  }, [id, rows, cols, seed, imageUrl, visible, eager, detail, outlined]);
+  }, [id, rows, cols, seed, imageUrl, visible, eager, detail]);
 
   return <canvas ref={canvasRef} className="piece-canvas" aria-hidden="true" />;
 });
@@ -868,6 +866,12 @@ const LockedPiecesCanvas = memo(function LockedPiecesCanvas({
 
       const cellWidth = size.width / cols;
       const cellHeight = size.height / rows;
+      const sourceRatio = image.naturalWidth / image.naturalHeight || DEFAULT_IMAGE_ASPECT;
+      const sourceBoardWidth = sourceRatio >= 1 ? 800 : 800 * sourceRatio;
+      const edgeScale = rows * cols <= 20 ? 1 : Math.max(0.18, Math.sqrt(20 / (rows * cols)));
+      const displayScale = size.width / sourceBoardWidth;
+      context.lineJoin = "round";
+      context.lineCap = "round";
 
       for (const id of lockedIds) {
         if (drawnIdsRef.current.has(id)) continue;
@@ -899,6 +903,12 @@ const LockedPiecesCanvas = memo(function LockedPiecesCanvas({
           destinationHeight,
         );
         context.restore();
+        context.strokeStyle = "rgba(21,21,21,.92)";
+        context.lineWidth = 3 * edgeScale * displayScale;
+        context.stroke(path);
+        context.strokeStyle = "rgba(255,255,255,.46)";
+        context.lineWidth = 0.9 * edgeScale * displayScale;
+        context.stroke(path);
         drawnIdsRef.current.add(id);
       }
     }).catch(() => { /* The next image URL change retries the render. */ });
@@ -1026,7 +1036,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
       aria-disabled={isBoardPiece ? piece.locked : undefined}
       aria-label={`${piece.id + 1}. puzzle parçası${piece.locked ? ", yerleştirildi" : ". Enter ile doğru yerine yerleştir"}`}
     >
-      <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager={pieceCount >= LARGE_PUZZLE_THRESHOLD || isRecent || isRemoteHeld} outlined={!piece.locked} />
+      <JigsawPiece id={piece.id} rows={rows} cols={cols} seed={seed} imageUrl={imageUrl} eager={pieceCount >= LARGE_PUZZLE_THRESHOLD || isRecent || isRemoteHeld} />
     </div>
   );
 });
