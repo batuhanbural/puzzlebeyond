@@ -406,6 +406,17 @@ test("piece targets stay inside the normalized board for all reviewed grids", as
   }
 });
 
+test("saved desktop edge coordinates are rejected when they overlap a mobile board", async () => {
+  const source = await pageSourcePromise;
+  const componentStart = source.indexOf("const InteractivePuzzlePiece");
+  const componentEnd = source.indexOf("\n\nfunction positionRemotePuzzlePiece", componentStart);
+  const component = source.slice(componentStart, componentEnd);
+
+  assert.match(component, /if \(piece\.matLayout && piece\.matLayout !== layout\) return false/);
+  assert.doesNotMatch(component, /if \(piece\.matLayout\) return piece\.matLayout === layout/);
+  assert.match(component, /piece\.x \+ cellWidth \* 1\.28 < board\.left/);
+});
+
 test("the mobile 1034-piece grid uses the exact same 47 by 22 coordinate lattice as pieces", async () => {
   const { fitPuzzleSize, pieceBoardTarget, boardGridPath } = await helpersPromise;
   const fitted = fitPuzzleSize(puzzleSizes.at(-1), 0.45);
@@ -526,7 +537,7 @@ test("the rendered puzzle switches horizontal mobile images to top and bottom ra
   assert.match(source, /positioned: droppedOnBoard \? undefined : \(true as const\)/);
   assert.match(source, /matLayout,/);
   assert.match(source, /function activeMatLayout/);
-  assert.match(source, /const workspaceRect = workspaceRef\.current\?\.getBoundingClientRect\(\)/);
+  assert.match(source, /const workspaceRect = workspace \? elementInnerBounds\(workspace\) : null/);
   assert.match(source, /onPointerCancel=\{cancelMove\}/);
   assert.match(source, /onLostPointerCapture=/);
   assert.match(source, /classList\.add\("drag-active"\)/);

@@ -236,6 +236,25 @@ test("piece canvases share exact display and board boundary geometry", async () 
   assert.match(styles, /\.board-grid path\s*\{[^}]*stroke:rgba\(21,21,21,\.2\)[^}]*stroke-width:1/);
 });
 
+test("snap coordinates use the board's inner drawing bounds", async () => {
+  const page = await read("app/page.tsx");
+
+  assert.match(page, /function elementInnerBounds\(element: HTMLElement\)/);
+  assert.match(page, /const left = rect\.left \+ element\.clientLeft/);
+  assert.match(page, /const width = element\.clientWidth/);
+  assert.match(page, /const rect = board \? elementInnerBounds\(board\) : null/);
+  assert.match(page, /const workspaceRect = workspace \? elementInnerBounds\(workspace\) : null/);
+  assert.match(page, /const boardRect = elementInnerBounds\(boardRef\.current\)/);
+});
+
+test("completion card stays centered and compact on mobile", async () => {
+  const styles = await read("app/globals.css");
+
+  assert.match(styles, /\.board-completion-card\s*\{[^}]*top:50%[^}]*transform:translate\(-50%,-50%\)/);
+  assert.match(styles, /@media \(max-width:760px\)[\s\S]*?\.board-completion-card\s*\{[^}]*width:min\(210px,calc\(100% - 14px\)\)/);
+  assert.doesNotMatch(styles.match(/\.board-completion-card\s*\{[^}]*\}/)?.[0] || "", /rotate/);
+});
+
 test("hint lighting scales down on mobile and dense puzzles", async () => {
   const [page, styles] = await Promise.all([read("app/page.tsx"), read("app/globals.css")]);
 
@@ -305,7 +324,7 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.match(phoneLandscape, /\.puzzle-board-area\s*\{[^}]*--landscape-board-left,14%[^}]*--landscape-board-top,4%[^}]*--landscape-board-width,72%[^}]*--landscape-board-height,92%/);
   assert.match(phoneLandscape, /\.puzzle-piece\.side-piece\s*\{[^}]*--landscape-piece-width/);
   assert.match(page, /const usesSavedMatPosition = \(layout: MatLayout, board: BoardFrame\)/);
-  assert.match(page, /if \(piece\.matLayout\) return piece\.matLayout === layout/);
+  assert.match(page, /if \(piece\.matLayout && piece\.matLayout !== layout\) return false/);
   assert.match(page, /const bandX = useBandPosition \? piece\.x : bandPosition\?\.x/);
 });
 

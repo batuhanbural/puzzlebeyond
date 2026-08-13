@@ -25,6 +25,7 @@ type RoomPlayer = {
 
 type RemoteDrag = RoomDragMessage & { expiresAt: number };
 type DropBounds = { left: number; right: number; top: number; bottom: number };
+type InnerBounds = DropBounds & { width: number; height: number };
 type LocalDrag = {
   id: number;
   clientX: number;
@@ -110,6 +111,15 @@ function isWithinDropBounds(
     && clientX < bounds.right - insetX
     && clientY > bounds.top + insetY
     && clientY < bounds.bottom - insetY;
+}
+
+function elementInnerBounds(element: HTMLElement): InnerBounds {
+  const rect = element.getBoundingClientRect();
+  const left = rect.left + element.clientLeft;
+  const top = rect.top + element.clientTop;
+  const width = element.clientWidth;
+  const height = element.clientHeight;
+  return { left, top, width, height, right: left + width, bottom: top + height };
 }
 
 function puzzlePieceCanvasKey(id: number, rows: number, cols: number, seed: string, imageUrl: string) {
@@ -977,7 +987,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   const isBoardPiece = zone === "board";
   const usesSavedMatPosition = (layout: MatLayout, board: BoardFrame) => {
     if (!piece.positioned) return false;
-    if (piece.matLayout) return piece.matLayout === layout;
+    if (piece.matLayout && piece.matLayout !== layout) return false;
     const cellWidth = board.width / cols;
     const cellHeight = board.height / rows;
     return piece.x + cellWidth * 1.28 < board.left
@@ -2102,7 +2112,8 @@ export default function Home() {
   const createLiveDragMessage = useCallback((drag: LocalDrag, phase: RoomDragMessage["phase"]) => {
     if (!realtimeSenderId.current) return null;
     if (phase === "move") {
-      const rect = boardRef.current?.getBoundingClientRect();
+      const board = boardRef.current;
+      const rect = board ? elementInnerBounds(board) : null;
       if (!rect || rect.width <= 0 || rect.height <= 0) return null;
       drag.liveX = Math.max(-2, Math.min(3, (drag.clientX - rect.left) / rect.width));
       drag.liveY = Math.max(-2, Math.min(3, (drag.clientY - rect.top) / rect.height));
@@ -2183,8 +2194,10 @@ export default function Home() {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
-    const rect = boardRef.current?.getBoundingClientRect();
-    const workspaceRect = workspaceRef.current?.getBoundingClientRect();
+    const board = boardRef.current;
+    const workspace = workspaceRef.current;
+    const rect = board ? elementInnerBounds(board) : null;
+    const workspaceRect = workspace ? elementInnerBounds(workspace) : null;
     const droppedOnBoard = Boolean(rect && isWithinDropBounds(
       drag.clientX,
       drag.clientY,
@@ -2275,7 +2288,7 @@ export default function Home() {
   const startMove = useCallback((event: PointerEvent<HTMLDivElement>, piece: Piece) => {
     if (piece.locked || !boardRef.current || event.button !== 0 || !event.isPrimary) return;
     if (dragRef.current) cancelMove();
-    const boardRect = boardRef.current.getBoundingClientRect();
+    const boardRect = elementInnerBounds(boardRef.current);
     const width = boardRect.width / cols;
     const height = boardRect.height / rows;
     const element = event.currentTarget;

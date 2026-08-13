@@ -139,11 +139,11 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .download-image-button { min-height:32px; padding:0 11px; border:1.5px solid var(--ink); background:var(--white); color:var(--ink); font-size:8px; font-weight:950; letter-spacing:.65px; cursor:pointer; box-shadow:2px 2px 0 var(--ink); }
 .download-image-button:hover { background:var(--blue); color:var(--white); transform:translate(-1px,-1px); box-shadow:3px 3px 0 var(--ink); }
 .download-image-button:disabled { opacity:.6; cursor:wait; transform:none; }
-.board-completion-card { position:absolute; z-index:100; left:50%; top:85%; width:min(250px,calc(100% - 24px)); display:grid; justify-items:center; gap:10px; padding:14px; border:2px solid var(--ink); background:var(--lime); box-shadow:4px 4px 0 var(--ink); transform:translate(-50%,-50%) rotate(-1deg); animation:boardCompleteIn .35s cubic-bezier(.22,.8,.24,1) both; }
+.board-completion-card { position:absolute; z-index:100; left:50%; top:50%; width:min(250px,calc(100% - 24px)); display:grid; justify-items:center; gap:10px; padding:14px; border:2px solid var(--ink); background:var(--lime); box-shadow:4px 4px 0 var(--ink); transform:translate(-50%,-50%); animation:boardCompleteIn .35s cubic-bezier(.22,.8,.24,1) both; }
 .board-completion-card .complete-label { font-size:17px; font-weight:950; white-space:nowrap; }
 .board-completion-card .complete-label>span { display:inline-grid; width:25px; height:25px; margin-right:7px; place-items:center; border-radius:50%; background:var(--ink); color:var(--lime); }
 .board-completion-card .download-image-button { width:100%; min-height:36px; }
-@keyframes boardCompleteIn { from { opacity:0; transform:translate(-50%,calc(-50% + 8px)) rotate(-1deg); } to { opacity:1; transform:translate(-50%,-50%) rotate(-1deg); } }
+@keyframes boardCompleteIn { from { opacity:0; transform:translate(-50%,calc(-50% + 8px)) scale(.97); } to { opacity:1; transform:translate(-50%,-50%) scale(1); } }
 @keyframes introComplete { 0% { opacity:0; transform:translate(-50%,-43%) rotate(-2deg) scale(.9); } 22% { opacity:1; transform:translate(-50%,-50%) rotate(-2deg) scale(1); } 72% { opacity:1; transform:translate(-50%,-50%) rotate(-2deg) scale(1); } 100% { opacity:0; transform:translate(-50%,-54%) rotate(-2deg) scale(1.03); } }
 .mobile-room-actions { display:none; }
 .mobile-inspector-trigger,.mobile-inspector-landscape-trigger,.mobile-piece-inspector-backdrop { display:none; }
@@ -285,6 +285,10 @@ fieldset { margin:20px 0 0; padding:0; border:0; }
   .puzzle-board-guide>p { font-size:7px; letter-spacing:.7px; }
   .hint-target { --hint-line:1px; --hint-glow:2px; }
   .hint-target.dense-hint-target { --hint-line:.5px; --hint-glow:1px; }
+  .board-completion-card { width:min(210px,calc(100% - 14px)); gap:7px; padding:9px; box-shadow:3px 3px 0 var(--ink); }
+  .board-completion-card .complete-label { font-size:14px; }
+  .board-completion-card .complete-label>span { width:21px; height:21px; margin-right:5px; }
+  .board-completion-card .download-image-button { min-height:32px; }
   .mobile-room-actions { width:100%; margin-top:6px; display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; }
   .mobile-room-actions .primary-button,.mobile-room-actions .outline-button { min-height:38px; padding:0 12px; font-size:9px; }
   .gallery-view { padding:18px 2px 16px; }
