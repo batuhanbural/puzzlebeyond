@@ -16,6 +16,7 @@ export type RoomDragMessage = {
   y: number;
   seq: number;
   phase: "move" | "end";
+  coordinateSpace?: "board" | "workspace";
   dropZone?: "board" | "mat";
   dropX?: number;
   dropY?: number;
@@ -59,7 +60,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function parseRoomDragMessage(value: unknown): RoomDragMessage | null {
   if (!isRecord(value)) return null;
-  const { senderId, gestureId, pieceId, x, y, seq, phase, dropZone, dropX, dropY, dropMatLayout } = value;
+  const { senderId, gestureId, pieceId, x, y, seq, phase, coordinateSpace, dropZone, dropX, dropY, dropMatLayout } = value;
   if (typeof senderId !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(senderId)) return null;
   if (typeof gestureId !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(gestureId)) return null;
   if (!Number.isInteger(pieceId) || Number(pieceId) < 0 || Number(pieceId) >= 48 * 48) return null;
@@ -67,6 +68,7 @@ export function parseRoomDragMessage(value: unknown): RoomDragMessage | null {
   if (typeof y !== "number" || !Number.isFinite(y) || y < -2 || y > 3) return null;
   if (!Number.isInteger(seq) || Number(seq) < 0 || Number(seq) > 1_000_000_000) return null;
   if (phase !== "move" && phase !== "end") return null;
+  if (coordinateSpace !== undefined && coordinateSpace !== "board" && coordinateSpace !== "workspace") return null;
   const hasDropTarget = dropZone !== undefined || dropX !== undefined || dropY !== undefined || dropMatLayout !== undefined;
   if (hasDropTarget) {
     if (phase !== "end" || (dropZone !== "board" && dropZone !== "mat")) return null;
@@ -75,11 +77,16 @@ export function parseRoomDragMessage(value: unknown): RoomDragMessage | null {
     if (dropMatLayout !== undefined && dropMatLayout !== "side" && dropMatLayout !== "mobile-side" && dropMatLayout !== "band" && dropMatLayout !== "landscape") return null;
     if (dropZone !== "mat" && dropMatLayout !== undefined) return null;
     return {
-      senderId, gestureId, pieceId: Number(pieceId), x, y, seq: Number(seq), phase, dropZone, dropX, dropY,
+      senderId, gestureId, pieceId: Number(pieceId), x, y, seq: Number(seq), phase,
+      ...(coordinateSpace ? { coordinateSpace } : {}),
+      dropZone, dropX, dropY,
       ...(dropMatLayout ? { dropMatLayout } : {}),
     };
   }
-  return { senderId, gestureId, pieceId: Number(pieceId), x, y, seq: Number(seq), phase };
+  return {
+    senderId, gestureId, pieceId: Number(pieceId), x, y, seq: Number(seq), phase,
+    ...(coordinateSpace ? { coordinateSpace } : {}),
+  };
 }
 
 export function parseRoomActionMessage(value: unknown): RoomActionMessage | null {

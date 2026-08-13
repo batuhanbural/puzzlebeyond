@@ -562,15 +562,6 @@ function landscapePiecePositions(rows: number, cols: number, seed: string, board
   return pieceRailPositions(rows, cols, seed, board, mode);
 }
 
-function isOutsideBoardPosition(x: number, y: number, board: BoardFrame, rows: number, cols: number) {
-  const cellWidth = board.width / cols;
-  const cellHeight = board.height / rows;
-  return x + cellWidth * 1.28 < board.left
-    || x - cellWidth * 0.28 > board.left + board.width
-    || y + cellHeight * 1.28 < board.top
-    || y - cellHeight * 0.28 > board.top + board.height;
-}
-
 function activeMatLayout(imageAspect: number): MatLayout {
   if (window.matchMedia("(max-width: 1024px) and (orientation: landscape), (orientation: landscape) and (hover: none) and (pointer: coarse)").matches) {
     return "landscape";
@@ -959,7 +950,6 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   sideBoard,
   bandBoard,
   landscapeBoard,
-  sideMatLayout,
   sidePosition,
   bandPosition,
   landscapePosition,
@@ -982,7 +972,6 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   sideBoard: BoardFrame;
   bandBoard: BoardFrame;
   landscapeBoard: BoardFrame;
-  sideMatLayout: "side" | "mobile-side";
   sidePosition?: PieceRailPosition;
   bandPosition?: PieceRailPosition;
   landscapePosition?: PieceRailPosition;
@@ -992,20 +981,12 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   onPlacePiece: (pieceId: number) => void;
 }) {
   const isBoardPiece = zone === "board";
-  const usesSavedMatPosition = (layout: MatLayout, board: BoardFrame) => {
-    if (!piece.positioned) return false;
-    if (piece.matLayout && piece.matLayout !== layout) return false;
-    return isOutsideBoardPosition(piece.x, piece.y, board, rows, cols);
-  };
-  const useSidePosition = usesSavedMatPosition(sideMatLayout, sideBoard);
-  const useBandPosition = usesSavedMatPosition("band", bandBoard);
-  const useLandscapePosition = usesSavedMatPosition("landscape", landscapeBoard);
-  const sideX = useSidePosition ? piece.x : sidePosition?.x ?? 0;
-  const sideY = useSidePosition ? piece.y : sidePosition?.y ?? 0;
-  const bandX = useBandPosition ? piece.x : bandPosition?.x ?? 0;
-  const bandY = useBandPosition ? piece.y : bandPosition?.y ?? 0;
-  const landscapeX = useLandscapePosition ? piece.x : landscapePosition?.x ?? 0;
-  const landscapeY = useLandscapePosition ? piece.y : landscapePosition?.y ?? 0;
+  const sideX = piece.positioned ? piece.x : sidePosition?.x ?? 0;
+  const sideY = piece.positioned ? piece.y : sidePosition?.y ?? 0;
+  const bandX = piece.positioned ? piece.x : bandPosition?.x ?? 0;
+  const bandY = piece.positioned ? piece.y : bandPosition?.y ?? 0;
+  const landscapeX = piece.positioned ? piece.x : landscapePosition?.x ?? 0;
+  const landscapeY = piece.positioned ? piece.y : landscapePosition?.y ?? 0;
   const style = isBoardPiece
     ? {
       "--player-color": playerColor,
@@ -1062,11 +1043,15 @@ function positionRemotePuzzlePiece(element: HTMLDivElement, drag: RemoteDrag, ro
   const pieceHeight = board.clientHeight / rows;
   element.style.width = `${pieceWidth}px`;
   element.style.height = `${pieceHeight}px`;
-  let x = drag.x * workspace.clientWidth - pieceWidth / 2;
-  let y = drag.y * workspace.clientHeight - pieceHeight / 2;
   const workspaceRect = elementInnerBounds(workspace);
+  const boardRect = elementInnerBounds(board);
+  let x = drag.coordinateSpace === "board"
+    ? boardRect.left - workspaceRect.left + drag.x * boardRect.width - pieceWidth / 2
+    : drag.x * workspace.clientWidth - pieceWidth / 2;
+  let y = drag.coordinateSpace === "board"
+    ? boardRect.top - workspaceRect.top + drag.y * boardRect.height - pieceHeight / 2
+    : drag.y * workspace.clientHeight - pieceHeight / 2;
   if (drag.phase === "end" && drag.dropZone === "board" && drag.dropX !== undefined && drag.dropY !== undefined) {
-    const boardRect = elementInnerBounds(board);
     x = boardRect.left - workspaceRect.left + drag.dropX * boardRect.width;
     y = boardRect.top - workspaceRect.top + drag.dropY * boardRect.height;
   }
@@ -1314,7 +1299,6 @@ export default function Home() {
   const piecesRef = useRef(pieces);
   const [workspaceSize, setWorkspaceSize] = useState({ width: 0, height: 0 });
   const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
-  const [matLayoutMode, setMatLayoutMode] = useState<MatLayout>("side");
   const lastLocalMove = useRef(0);
   const remoteUpdatedAt = useRef(0);
   const realtimeConnected = useRef(false);
@@ -1377,16 +1361,6 @@ export default function Home() {
     }).catch(() => { /* The file validation flow reports unreadable images. */ });
     return () => { cancelled = true; };
   }, [imageUrl]);
-  useEffect(() => {
-    const updateLayoutMode = () => setMatLayoutMode(activeMatLayout(imageAspect));
-    updateLayoutMode();
-    window.addEventListener("resize", updateLayoutMode);
-    window.addEventListener("orientationchange", updateLayoutMode);
-    return () => {
-      window.removeEventListener("resize", updateLayoutMode);
-      window.removeEventListener("orientationchange", updateLayoutMode);
-    };
-  }, [imageAspect]);
   useEffect(() => {
     const workspace = workspaceRef.current;
     if (!workspace || typeof ResizeObserver === "undefined") return;
@@ -1856,8 +1830,6 @@ export default function Home() {
       ? roomPlayers
       : [fallbackPlayer, ...roomPlayers];
   const localPlayerColor = playerColor(localPlayerIdentity);
-  const sideMatLayout = matLayoutMode === "mobile-side" ? "mobile-side" : "side";
-
   useEffect(() => {
     if (room || introCompletion !== "showing") return;
     const timer = window.setTimeout(() => setIntroCompletion("gallery"), 1150);
@@ -2135,12 +2107,20 @@ export default function Home() {
 
   const createLiveDragMessage = useCallback((drag: LocalDrag, phase: RoomDragMessage["phase"]) => {
     if (!realtimeSenderId.current) return null;
-    if (phase === "move") {
-      const workspace = workspaceRef.current;
-      const rect = workspace ? elementInnerBounds(workspace) : null;
-      if (!rect || rect.width <= 0 || rect.height <= 0) return null;
-      drag.liveX = Math.max(-2, Math.min(3, (drag.clientX - rect.left) / rect.width));
-      drag.liveY = Math.max(-2, Math.min(3, (drag.clientY - rect.top) / rect.height));
+    const workspace = workspaceRef.current;
+    const board = boardRef.current;
+    const workspaceRect = workspace ? elementInnerBounds(workspace) : null;
+    const boardRect = board ? elementInnerBounds(board) : null;
+    if (!workspaceRect || workspaceRect.width <= 0 || workspaceRect.height <= 0) return null;
+    const coordinateSpace = boardRect && isWithinDropBounds(drag.clientX, drag.clientY, boardRect)
+      ? "board" as const
+      : "workspace" as const;
+    if (coordinateSpace === "board" && boardRect) {
+      drag.liveX = Math.max(-2, Math.min(3, (drag.clientX - boardRect.left) / boardRect.width));
+      drag.liveY = Math.max(-2, Math.min(3, (drag.clientY - boardRect.top) / boardRect.height));
+    } else {
+      drag.liveX = Math.max(-2, Math.min(3, (drag.clientX - workspaceRect.left) / workspaceRect.width));
+      drag.liveY = Math.max(-2, Math.min(3, (drag.clientY - workspaceRect.top) / workspaceRect.height));
     }
     const message: RoomDragMessage = {
       senderId: realtimeSenderId.current,
@@ -2150,6 +2130,7 @@ export default function Home() {
       y: drag.liveY,
       seq: ++realtimeSequence.current,
       phase,
+      coordinateSpace,
     };
     return message;
   }, []);
@@ -2238,24 +2219,24 @@ export default function Home() {
     const placedOnBoard = droppedOnBoard || snaps;
     const finalBoardX = snaps ? targetX : boardX;
     const finalBoardY = snaps ? targetY : boardY;
-    const matX = workspaceRect
+    const workspaceMatX = workspaceRect
       ? Math.max(0, Math.min(1 - drag.width / workspaceRect.width, (drag.clientX - workspaceRect.left - drag.width / 2) / workspaceRect.width))
       : 0;
-    const matY = workspaceRect
+    const workspaceMatY = workspaceRect
       ? Math.max(0, Math.min(1 - drag.height / workspaceRect.height, (drag.clientY - workspaceRect.top - drag.height / 2) / workspaceRect.height))
       : 0;
     const matLayout = placedOnBoard ? undefined : activeMatLayout(imageAspect);
     if (liveEndMessage) {
       liveEndMessage.dropZone = placedOnBoard ? "board" : "mat";
-      liveEndMessage.dropX = placedOnBoard ? finalBoardX : matX;
-      liveEndMessage.dropY = placedOnBoard ? finalBoardY : matY;
+      liveEndMessage.dropX = placedOnBoard ? finalBoardX : workspaceMatX;
+      liveEndMessage.dropY = placedOnBoard ? finalBoardY : workspaceMatY;
       liveEndMessage.dropMatLayout = matLayout;
     }
     const next = piecesRef.current.map((piece) => piece.id === movingId
       ? {
         ...piece,
-        x: placedOnBoard ? finalBoardX : matX,
-        y: placedOnBoard ? finalBoardY : matY,
+        x: placedOnBoard ? finalBoardX : workspaceMatX,
+        y: placedOnBoard ? finalBoardY : workspaceMatY,
         zone: placedOnBoard ? "board" as const : "mat" as const,
         locked: snaps,
         positioned: placedOnBoard ? undefined : (true as const),
@@ -2451,13 +2432,12 @@ export default function Home() {
       sideBoard={desktopBoardFrame}
       bandBoard={bandBoardFrame}
       landscapeBoard={landscapeBoardFrame}
-      sideMatLayout={sideMatLayout}
       onStart={startMove}
       onLostCapture={handleLostPieceCapture}
       onFocusPiece={focusPiece}
       onPlacePiece={placePieceFromKeyboard}
     />
-  )), [interactiveBoardPieces, rows, cols, puzzleSeed, imageUrl, pieceCount, lastHeldPieceId, keyboardPieceId, remoteHeldIds, localPlayerColor, desktopBoardFrame, bandBoardFrame, landscapeBoardFrame, sideMatLayout, startMove, handleLostPieceCapture, focusPiece, placePieceFromKeyboard]);
+  )), [interactiveBoardPieces, rows, cols, puzzleSeed, imageUrl, pieceCount, lastHeldPieceId, keyboardPieceId, remoteHeldIds, localPlayerColor, desktopBoardFrame, bandBoardFrame, landscapeBoardFrame, startMove, handleLostPieceCapture, focusPiece, placePieceFromKeyboard]);
 
   const loosePieceNodes = useMemo(() => loosePieces.map((piece) => (
     <InteractivePuzzlePiece
@@ -2476,7 +2456,6 @@ export default function Home() {
       sideBoard={desktopBoardFrame}
       bandBoard={bandBoardFrame}
       landscapeBoard={landscapeBoardFrame}
-      sideMatLayout={sideMatLayout}
       sidePosition={sideLayout.get(piece.id)}
       bandPosition={bandLayout.get(piece.id)}
       landscapePosition={landscapeLayout.get(piece.id)}
@@ -2485,7 +2464,7 @@ export default function Home() {
       onFocusPiece={focusPiece}
       onPlacePiece={placePieceFromKeyboard}
     />
-  )), [loosePieces, rows, cols, puzzleSeed, imageUrl, pieceCount, lastHeldPieceId, keyboardPieceId, remoteHeldIds, localPlayerColor, desktopBoardFrame, bandBoardFrame, landscapeBoardFrame, sideMatLayout, sideLayout, bandLayout, landscapeLayout, startMove, handleLostPieceCapture, focusPiece, placePieceFromKeyboard]);
+  )), [loosePieces, rows, cols, puzzleSeed, imageUrl, pieceCount, lastHeldPieceId, keyboardPieceId, remoteHeldIds, localPlayerColor, desktopBoardFrame, bandBoardFrame, landscapeBoardFrame, sideLayout, bandLayout, landscapeLayout, startMove, handleLostPieceCapture, focusPiece, placePieceFromKeyboard]);
 
   return (
     <main className={`site-shell ${galleryVisible ? "gallery-active" : "puzzle-active"}`} onContextMenu={(event) => event.preventDefault()}>

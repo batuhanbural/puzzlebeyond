@@ -17,6 +17,9 @@ test("live drag messages accept only bounded ephemeral coordinates", () => {
     phase: "move",
   };
   assert.deepEqual(parseRoomDragMessage(valid), valid);
+  assert.deepEqual(parseRoomDragMessage({ ...valid, coordinateSpace: "board" })?.coordinateSpace, "board");
+  assert.deepEqual(parseRoomDragMessage({ ...valid, coordinateSpace: "workspace" })?.coordinateSpace, "workspace");
+  assert.equal(parseRoomDragMessage({ ...valid, coordinateSpace: "screen" }), null);
   assert.equal(parseRoomDragMessage({ ...valid, senderId: "short" }), null);
   assert.equal(parseRoomDragMessage({ ...valid, pieceId: 48 * 48 }), null);
   assert.equal(parseRoomDragMessage({ ...valid, x: Number.NaN }), null);
@@ -90,8 +93,12 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   assert.match(page, /x = targetRect\.left - workspaceRect\.left/);
   assert.match(page, /y = targetRect\.top - workspaceRect\.top/);
   assert.match(page, /data-piece-id=\{piece\.id\}/);
-  assert.match(page, /const workspace = workspaceRef\.current/);
+  assert.match(page, /const board = boardRef\.current/);
+  assert.match(page, /const coordinateSpace = boardRect && isWithinDropBounds\(drag\.clientX, drag\.clientY, boardRect\)/);
+  assert.match(page, /drag\.clientX - boardRect\.left/);
+  assert.match(page, /coordinateSpace,/);
   assert.match(page, /drag\.x \* workspace\.clientWidth - pieceWidth \/ 2/);
+  assert.match(page, /drag\.coordinateSpace === "board"/);
   assert.match(page, /liveEndMessage\.dropZone = placedOnBoard \? "board" : "mat"/);
   assert.match(page, /liveEndMessage\.dropMatLayout = matLayout/);
   assert.match(page, /const refreshDelay = 750 - \(now - lastRefreshAt\)/);

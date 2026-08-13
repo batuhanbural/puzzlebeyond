@@ -136,8 +136,8 @@ test("pointer release commits a piece without replaying its movement", async () 
   assert.match(endMove, /event: PointerEvent<HTMLDivElement>/);
   assert.match(endMove, /drag\.clientX = event\.clientX/);
   assert.match(endMove, /drag\.clientY = event\.clientY/);
-  assert.match(endMove, /const matX = workspaceRect/);
-  assert.match(endMove, /const matY = workspaceRect/);
+  assert.match(endMove, /const workspaceMatX = workspaceRect/);
+  assert.match(endMove, /const workspaceMatY = workspaceRect/);
   assert.match(endMove, /isWithinDropBounds/);
   assert.match(endMove, /drag\.width \/ 2/);
   assert.match(endMove, /drag\.height \/ 2/);
@@ -200,8 +200,8 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.match(page, /drag\.dropZone === "mat" \? "remote-mat-handoff"/);
   assert.doesNotMatch(page, /liveEndMessage\.x = finalBoardX/);
   assert.doesNotMatch(page, /liveEndMessage\.y = finalBoardY/);
-  assert.match(page, /liveEndMessage\.dropX = placedOnBoard \? finalBoardX : matX/);
-  assert.match(page, /liveEndMessage\.dropY = placedOnBoard \? finalBoardY : matY/);
+  assert.match(page, /liveEndMessage\.dropX = placedOnBoard \? finalBoardX : workspaceMatX/);
+  assert.match(page, /liveEndMessage\.dropY = placedOnBoard \? finalBoardY : workspaceMatY/);
   assert.match(page, /liveEndMessage\.dropMatLayout = matLayout/);
   const remoteRule = styles.match(/\.puzzle-piece\.remote-drag-piece\s*\{[^}]*\}/)?.[0] || "";
   const remoteHeldRule = styles.match(/\.puzzle-piece\.remote-held:not\(\.dragging\)\s*\{[^}]*\}/)?.[0] || "";
@@ -328,11 +328,10 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.doesNotMatch(phoneLandscape, /landscape-workspace-aspect/);
   assert.match(phoneLandscape, /\.puzzle-board-area\s*\{[^}]*--landscape-board-left,14%[^}]*--landscape-board-top,4%[^}]*--landscape-board-width,72%[^}]*--landscape-board-height,92%/);
   assert.match(phoneLandscape, /\.puzzle-piece\.side-piece\s*\{[^}]*--landscape-piece-width/);
-  assert.match(page, /const usesSavedMatPosition = \(layout: MatLayout, board: BoardFrame\)/);
-  assert.match(page, /if \(piece\.matLayout && piece\.matLayout !== layout\) return false/);
-  assert.match(page, /return isOutsideBoardPosition\(piece\.x, piece\.y, board, rows, cols\)/);
-  assert.match(page, /sideMatLayout=\{sideMatLayout\}/);
-  assert.match(page, /const bandX = useBandPosition \? piece\.x : bandPosition\?\.x/);
+  assert.match(page, /const sideX = piece\.positioned \? piece\.x : sidePosition\?\.x/);
+  assert.match(page, /const bandX = piece\.positioned \? piece\.x : bandPosition\?\.x/);
+  assert.match(page, /const landscapeX = piece\.positioned \? piece\.x : landscapePosition\?\.x/);
+  assert.doesNotMatch(page, /sideMatLayout=/);
 });
 
 test("exposes the production API routes", async () => {

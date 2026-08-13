@@ -61,7 +61,6 @@ function compileInlineLayoutHelpers(source) {
     ["sidePiecePositions", ["rows", "cols", "seed", "board"]],
     ["bandPiecePositions", ["rows", "cols", "seed", "board"]],
     ["landscapePiecePositions", ["rows", "cols", "seed", "board", "mode"]],
-    ["isOutsideBoardPosition", ["x", "y", "board", "rows", "cols"]],
     ["scatteredPieces", ["rows", "cols", "_seed"]],
     ["normalizePieceLayout", ["pieces", "rows", "cols", "seed"]],
     ["isWithinDropBounds", ["clientX", "clientY", "bounds", "insetX = 0", "insetY = 0"]],
@@ -89,7 +88,7 @@ function compileInlineLayoutHelpers(source) {
     const PUZZLE_LAYOUT_VERSION = ${JSON.stringify(layoutVersion)};
     const BOARD = { left: 0.19, top: 0.12, width: 0.62, height: 0.76 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, isNearPieceTarget, boardGridPath, sidePiecePositions, bandPiecePositions, landscapePiecePositions, isOutsideBoardPosition, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
+    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, isNearPieceTarget, boardGridPath, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
@@ -232,16 +231,6 @@ test("mobile workspaces derive board boundaries from their actual aspect ratio",
       }
     }
   }
-});
-
-test("saved outer positions are rejected when a new viewport puts them over the board", async () => {
-  const { isOutsideBoardPosition } = await helpersPromise;
-  const desktopBoard = { left: 0.2, top: 0.1, width: 0.6, height: 0.8 };
-  const mobileBoard = { left: 0.05, top: 0.2, width: 0.9, height: 0.6 };
-  const saved = { x: 0.08, y: 0.45 };
-
-  assert.equal(isOutsideBoardPosition(saved.x, saved.y, desktopBoard, 20, 30), true);
-  assert.equal(isOutsideBoardPosition(saved.x, saved.y, mobileBoard, 20, 30), false);
 });
 
 test("side and mobile band projections are deterministic and bounded", async () => {
@@ -419,17 +408,16 @@ test("exact centers of first and last edge pieces always snap", async () => {
   assert.equal(isNearPieceTarget(bounds.right, last.y, bounds, rows * cols - 1, rows, cols), false);
 });
 
-test("desktop and mobile portrait edge coordinates use distinct layout identities", async () => {
+test("desktop and mobile use the same saved workspace coordinates", async () => {
   const source = await pageSourcePromise;
   const componentStart = source.indexOf("const InteractivePuzzlePiece");
   const componentEnd = source.indexOf("\n\nfunction positionRemotePuzzlePiece", componentStart);
   const component = source.slice(componentStart, componentEnd);
 
-  assert.match(component, /if \(piece\.matLayout && piece\.matLayout !== layout\) return false/);
-  assert.match(component, /usesSavedMatPosition\(sideMatLayout, sideBoard\)/);
-  assert.match(component, /isOutsideBoardPosition\(piece\.x, piece\.y, board, rows, cols\)/);
-  assert.match(source, /return "mobile-side"/);
-  assert.match(source, /const sideMatLayout = matLayoutMode === "mobile-side" \? "mobile-side" : "side"/);
+  assert.match(component, /const sideX = piece\.positioned \? piece\.x : sidePosition\?\.x/);
+  assert.match(component, /const bandX = piece\.positioned \? piece\.x : bandPosition\?\.x/);
+  assert.match(component, /const landscapeX = piece\.positioned \? piece\.x : landscapePosition\?\.x/);
+  assert.doesNotMatch(component, /piece\.matLayout/);
 });
 
 test("the mobile 1034-piece grid uses the exact same 47 by 22 coordinate lattice as pieces", async () => {
