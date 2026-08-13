@@ -54,7 +54,7 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   const [page, realtime] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("lib/realtime-client.ts", root), "utf8"),
-  ]);
+  ]).then((sources) => sources.map((source) => source.replace(/\r\n/g, "\n")));
   assert.match(page, /LIVE_DRAG_INTERVAL_MS = 33/);
   assert.match(page, /REMOTE_MOVE_TRANSITION_MS = 90/);
   assert.match(page, /REMOTE_SETTLE_TRANSITION_MS = 110/);

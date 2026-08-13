@@ -52,7 +52,6 @@ async function responsePayload<T>(response: Response) {
 
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  const [configured, setConfigured] = useState(true);
   const [password, setPassword] = useState("");
   const [data, setData] = useState<AdminData | null>(null);
   const [title, setTitle] = useState("");
@@ -90,8 +89,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     void fetch("/api/admin/auth", { cache: "no-store" }).then(async (response) => {
-      const payload = await responsePayload<{ authenticated: boolean; configured: boolean }>(response);
-      setConfigured(payload.configured !== false);
+      const payload = await responsePayload<{ authenticated: boolean }>(response);
       if (payload.authenticated) {
         setAuthenticated(true);
         await load();
@@ -335,10 +333,9 @@ export default function AdminPage() {
           <p className="eyebrow">PUZZLEBEYOND / YÖNETİM</p>
           <h1>Admin paneli</h1>
           <p className="admin-muted">Bu alan yalnızca site sahibinin parolasıyla açılır.</p>
-          {!configured && <p className="admin-error">Vercel’de en az 12 karakterlik <code>ADMIN_PASSWORD</code> ve en az 32 karakterlik <code>ADMIN_SESSION_SECRET</code> tanımlanmalı.</p>}
           <form onSubmit={login} className="admin-login-form">
             <label><span>Admin parolası</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" autoFocus /></label>
-            <button className="primary-button full" type="submit" disabled={busy || !configured}>{busy ? "KONTROL EDİLİYOR…" : "PANELE GİR →"}</button>
+            <button className="primary-button full" type="submit" disabled={busy}>{busy ? "KONTROL EDİLİYOR…" : "PANELE GİR →"}</button>
           </form>
           {notice && <p className="admin-error">{notice}</p>}
           <Link className="admin-back-link" href="/">← Ana sayfaya dön</Link>

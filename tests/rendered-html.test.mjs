@@ -5,8 +5,21 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 
 async function read(relativePath) {
-  return readFile(new URL(relativePath, root), "utf8");
+  return (await readFile(new URL(relativePath, root), "utf8")).replace(/\r\n/g, "\n");
 }
+
+test("admin login stays available while configuration is verified by the server", async () => {
+  const [page, authRoute] = await Promise.all([
+    read("app/admin/page.tsx"),
+    read("app/api/admin/auth/route.ts"),
+  ]);
+
+  assert.doesNotMatch(page, /Vercel’de en az 12 karakterlik/);
+  assert.doesNotMatch(page, /busy \|\| !configured/);
+  assert.match(page, /type="submit" disabled=\{busy\}/);
+  assert.match(authRoute, /!adminPasswordConfigured\(\) \|\| !adminSessionSecretConfigured\(\)/);
+  assert.match(authRoute, /status: 503/);
+});
 
 test("contains the puzzle app entry points", async () => {
   const [page, layout, styles, packageJson] = await Promise.all([

@@ -78,7 +78,6 @@ function rateLimited(retryAfter: number) {
 export async function GET(request: Request) {
   return Response.json({
     authenticated: isAdminRequest(request),
-    configured: adminPasswordConfigured() && adminSessionSecretConfigured(),
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -89,8 +88,8 @@ export async function POST(request: Request) {
   if (retryAfter) return rateLimited(retryAfter);
   const expected = process.env.ADMIN_PASSWORD?.trim() || "";
   if (!adminPasswordConfigured() || !adminSessionSecretConfigured()) {
-    return Response.json({ error: "ADMIN_PASSWORD en az 12, ADMIN_SESSION_SECRET en az 32 karakter olmalı." }, {
-      status: 500,
+    return Response.json({ error: "Admin servisi şu anda kullanılamıyor." }, {
+      status: 503,
       headers: { "Cache-Control": "no-store" },
     });
   }
