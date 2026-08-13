@@ -111,6 +111,7 @@ h1 { margin:0; max-width:780px; font-size:clamp(30px,3.5vw,46px); line-height:.9
 .puzzle-piece:active { z-index:40; cursor:grabbing; transform:scale(1.07) rotate(-1deg); transition:none; }
 .puzzle-piece.dragging { z-index:1000; cursor:grabbing; transform:scale(1.035) rotate(-1deg); transition:none!important; filter:brightness(1.08) drop-shadow(0 0 6px var(--player-color,var(--blue))); will-change:left,top; }
 .puzzle-piece.locked { z-index:4; cursor:default; }
+.puzzle-piece.locked .piece-canvas { filter:none; }
 .puzzle-piece.locked:hover { transform:none; }
 .puzzle-piece.compact-piece .piece-canvas { filter:drop-shadow(1.3px 1.7px .4px rgba(21,21,21,.34)); }
 .puzzle-piece.dense-piece { contain:layout style; transition:none; }

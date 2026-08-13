@@ -168,7 +168,10 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.match(component, /rows \* cols >= LARGE_PUZZLE_THRESHOLD \? 1 : 2/);
   assert.match(component, /384 \/ Math\.max\(width, height\)/);
   assert.match(component, /detail \? "detail" : "board"/);
+  assert.match(component, /outlined \? "outlined" : "seamless"/);
+  assert.match(component, /if \(outlined\) \{/);
   assert.match(component, /context\.imageSmoothingQuality = "high"/);
+  assert.match(page, /outlined=\{!piece\.locked\}/);
   assert.match(component, /context\.setTransform\(canvas\.width \/ width, 0, 0, canvas\.height \/ height, 0, 0\)/);
   assert.doesNotMatch(component, /context\.scale\(scale, scale\)/);
   assert.doesNotMatch(page, /pieceCount > 120|rows \* cols > 120/);
@@ -207,6 +210,11 @@ test("piece canvases share exact display and board boundary geometry", async () 
   assert.match(page, /const borderWidth = guide \? Math\.max\(0, guide\.offsetWidth - guide\.clientWidth\) : 4/);
   assert.match(page, /const availableWidth = Math\.max\(0, rect\.width - borderWidth\)/);
   assert.match(page, /style=\{\{ aspectRatio: imageAspect \* rows \/ cols \}\}/);
+  const lockedStart = page.indexOf("const LockedPiecesCanvas");
+  const lockedEnd = page.indexOf("\n\nconst InteractivePuzzlePiece", lockedStart);
+  const lockedCanvas = page.slice(lockedStart, lockedEnd);
+  assert.doesNotMatch(lockedCanvas, /context\.stroke\(path\)/);
+  assert.match(styles, /\.puzzle-piece\.locked \.piece-canvas\s*\{[^}]*filter:none/);
 });
 
 test("pushing pieces to the edge updates immediately and persists in the background", async () => {
