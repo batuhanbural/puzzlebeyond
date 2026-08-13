@@ -337,6 +337,36 @@ test("large desktop puzzles fill all four sides of the outer workspace", async (
     if (bottom) occupied.bottom += 1;
   }
   assert.ok(Object.values(occupied).every((count) => count > 0), JSON.stringify(occupied));
+  assert.ok(occupied.left + occupied.right > occupied.top + occupied.bottom, JSON.stringify(occupied));
+  assert.ok(Math.abs(occupied.left - occupied.right) < rows * cols * 0.12, JSON.stringify(occupied));
+  assert.ok(Math.abs(occupied.top - occupied.bottom) < rows * cols * 0.12, JSON.stringify(occupied));
+});
+
+test("dense desktop layouts follow available perimeter capacity across image shapes", async () => {
+  const { fitBoardFrame, fitPuzzleSize, fitRailBoardFrame, sidePiecePositions } = await helpersPromise;
+  for (const imageAspect of [9 / 16, 3 / 4, 1, 4 / 3, 16 / 9]) {
+    for (const size of puzzleSizes.filter(({ count }) => count > 20)) {
+      const { rows, cols, count } = fitPuzzleSize(size, imageAspect);
+      const board = fitRailBoardFrame(fitBoardFrame(imageAspect, 1.45), rows, cols, "perimeter");
+      assert.ok(Math.abs(board.left + board.width / 2 - 0.5) < 1e-12);
+      assert.ok(Math.abs(board.top + board.height / 2 - 0.5) < 1e-12);
+      const cellWidth = board.width / cols;
+      const cellHeight = board.height / rows;
+      const occupied = { left: 0, right: 0, top: 0, bottom: 0 };
+      for (const position of sidePiecePositions(rows, cols, `${imageAspect}:${count}`, board).values()) {
+        if (position.y + cellHeight * 1.28 < board.top) occupied.top += 1;
+        else if (position.y - cellHeight * 0.28 > board.top + board.height) occupied.bottom += 1;
+        else if (position.x + cellWidth * 1.28 < board.left) occupied.left += 1;
+        else occupied.right += 1;
+      }
+      assert.equal(Object.values(occupied).reduce((total, value) => total + value, 0), count);
+      assert.ok(Math.abs(occupied.left - occupied.right) < count * 0.22, JSON.stringify({ imageAspect, count, occupied }));
+      assert.ok(Math.abs(occupied.top - occupied.bottom) < count * 0.22, JSON.stringify({ imageAspect, count, occupied }));
+      if (imageAspect < 0.8 && count >= 120) {
+        assert.ok(occupied.left + occupied.right > occupied.top + occupied.bottom, JSON.stringify({ imageAspect, count, occupied }));
+      }
+    }
+  }
 });
 
 test("piece targets stay inside the normalized board for all reviewed grids", async () => {

@@ -457,9 +457,45 @@ function pieceRailPositions(rows: number, cols: number, seed: string, board: Boa
   perimeterRegions.forEach(shuffle);
   const slots: PieceRailPosition[] = [];
   if (mode === "perimeter") {
-    for (let index = 0; index < Math.max(...perimeterRegions.map((region) => region.length)); index++) {
-      for (const region of perimeterRegions) if (region[index]) slots.push(region[index]);
+    // Give every region an exact capacity-based quota, then shuffle the chosen
+    // slots. Equal four-way interleaving overfilled shallow portrait rails,
+    // while a single random pool could drift heavily toward one opposing side.
+    const targetCount = count;
+    const verticalCapacity = (topPerimeterSlots.length + bottomPerimeterSlots.length) / 2;
+    const horizontalCapacity = (leftPerimeterSlots.length + rightPerimeterSlots.length) / 2;
+    const balancedCapacities = [verticalCapacity, horizontalCapacity, verticalCapacity, horizontalCapacity];
+    const balancedTotal = balancedCapacities.reduce((total, capacity) => total + capacity, 0);
+    const desiredQuotas = balancedCapacities.map((capacity) => balancedTotal > 0
+      ? targetCount * capacity / balancedTotal
+      : 0);
+    const quotas = perimeterRegions.map((region, index) => region.length > 0 ? Math.floor(desiredQuotas[index]) : 0);
+    let remaining = targetCount - quotas.reduce((total, quota) => total + quota, 0);
+    while (remaining > 0) {
+      const available = perimeterRegions
+        .map((region, index) => ({ index, score: desiredQuotas[index] - quotas[index], capacity: region.length }))
+        .filter(({ capacity }) => capacity > 0)
+        .sort((left, right) => right.score - left.score || right.capacity - left.capacity);
+      if (available.length === 0) break;
+      quotas[available[0].index] += 1;
+      remaining -= 1;
     }
+    const selectedSlots = perimeterRegions.flatMap((region, regionIndex) => Array.from(
+      { length: quotas[regionIndex] },
+      (_, slotIndex) => {
+        const base = region[slotIndex % region.length];
+        if (slotIndex < region.length) return base;
+        const position = {
+          x: Math.max(0.005, Math.min(0.995 - cellWidth, base.x + (random() - 0.5) * cellWidth * 0.62)),
+          y: Math.max(0.005, Math.min(0.995 - cellHeight, base.y + (random() - 0.5) * cellHeight * 0.62)),
+        };
+        if (regionIndex === 0) position.y = Math.min(position.y, board.top - 0.003 - cellHeight * 1.28);
+        else if (regionIndex === 1) position.x = Math.max(position.x, board.left + board.width + 0.003 + cellWidth * 0.28);
+        else if (regionIndex === 2) position.y = Math.max(position.y, board.top + board.height + 0.003 + cellHeight * 0.28);
+        else position.x = Math.min(position.x, board.left - 0.003 - cellWidth * 1.28);
+        return position;
+      },
+    ));
+    slots.push(...shuffle(selectedSlots));
   }
   else for (let index = 0; index < Math.max(firstRailSlots.length, secondRailSlots.length); index++) {
     if (firstRailSlots[index]) slots.push(firstRailSlots[index]);
@@ -1620,16 +1656,10 @@ export default function Home() {
   const bandWorkspaceAspect = imageAspect * MOBILE_HORIZONTAL_BOARD.height / MOBILE_HORIZONTAL_BOARD.width;
   const landscapeWorkspaceAspect = imageAspect * MOBILE_LANDSCAPE_BOARD.height / MOBILE_LANDSCAPE_BOARD.width;
   const workspaceStyle = {
-    "--desktop-board-left": `${desktopBoardFrame.left * 100}%`,
-    "--desktop-board-top": `${desktopBoardFrame.top * 100}%`,
     "--desktop-board-width": `${desktopBoardFrame.width * 100}%`,
     "--desktop-board-height": `${desktopBoardFrame.height * 100}%`,
-    "--band-board-left": `${bandBoardFrame.left * 100}%`,
-    "--band-board-top": `${bandBoardFrame.top * 100}%`,
     "--band-board-width": `${bandBoardFrame.width * 100}%`,
     "--band-board-height": `${bandBoardFrame.height * 100}%`,
-    "--landscape-board-left": `${landscapeBoardFrame.left * 100}%`,
-    "--landscape-board-top": `${landscapeBoardFrame.top * 100}%`,
     "--landscape-board-width": `${landscapeBoardFrame.width * 100}%`,
     "--landscape-board-height": `${landscapeBoardFrame.height * 100}%`,
     "--side-workspace-aspect": imageAspect * BOARD.height / BOARD.width,
