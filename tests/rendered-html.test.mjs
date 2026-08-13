@@ -227,6 +227,9 @@ test("piece canvases share exact display and board boundary geometry", async () 
   const lockedCanvas = page.slice(lockedStart, lockedEnd);
   assert.doesNotMatch(lockedCanvas, /context\.stroke\(path\)/);
   assert.match(styles, /\.puzzle-piece\.locked \.piece-canvas\s*\{[^}]*filter:none/);
+  assert.match(page, /<svg[\s\S]*?className="board-grid"[\s\S]*?viewBox=\{`0 0 \$\{cols\} \$\{rows\}`\}[\s\S]*?vectorEffect="non-scaling-stroke"/);
+  assert.doesNotMatch(styles, /\.board-grid\s*\{[^}]*background-size/);
+  assert.match(styles, /\.board-grid path\s*\{[^}]*stroke:rgba\(21,21,21,\.2\)[^}]*stroke-width:1/);
 });
 
 test("pushing pieces to the edge updates immediately and persists in the background", async () => {

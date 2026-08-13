@@ -299,6 +299,13 @@ function pieceBoardTarget(id: number, rows: number, cols: number) {
   };
 }
 
+function boardGridPath(rows: number, cols: number) {
+  const commands: string[] = [];
+  for (let col = 1; col < cols; col += 1) commands.push(`M ${col} 0 V ${rows}`);
+  for (let row = 1; row < rows; row += 1) commands.push(`M 0 ${row} H ${cols}`);
+  return commands.join(" ");
+}
+
 type PieceRailPosition = { x: number; y: number };
 type PieceRailMode = "sides" | "top-bottom" | "perimeter";
 type BoardFrame = { readonly left: number; readonly top: number; readonly width: number; readonly height: number };
@@ -1690,6 +1697,7 @@ export default function Home() {
   const cols = room?.cols ?? DEFAULT_COLS;
   const pieceCount = rows * cols;
   const puzzleSeed = room?.code ?? previewSeed;
+  const gridPath = useMemo(() => boardGridPath(rows, cols), [rows, cols]);
   useEffect(() => () => clearPuzzlePieceCanvasCache(), [imageUrl, rows, cols, puzzleSeed]);
   const solvedCount = useMemo(() => pieces.filter((piece) => piece.locked).length, [pieces]);
   const remainingCount = pieceCount - solvedCount;
@@ -2480,14 +2488,15 @@ export default function Home() {
                 <div className="puzzle-board-area" ref={boardAreaRef}>
                   <div className="puzzle-board-guide" ref={boardRef} style={boardStyle} role="group" aria-label={`${rows} satır ve ${cols} sütunluk puzzle tahtası`} aria-describedby="puzzle-keyboard-help">
                     <span className="sr-only" id="puzzle-keyboard-help">Bir parçaya odaklanıp Enter veya Boşluk tuşuyla doğru yerine yerleştirebilirsin.</span>
-                    <div
+                    <svg
                       className="board-grid"
-                      style={{
-                        "--grid-cell-width": `${100 / cols}%`,
-                        "--grid-cell-height": `${100 / rows}%`,
-                      } as CSSProperties}
+                      viewBox={`0 0 ${cols} ${rows}`}
+                      preserveAspectRatio="none"
+                      shapeRendering="geometricPrecision"
                       aria-hidden="true"
-                    />
+                    >
+                      <path d={gridPath} vectorEffect="non-scaling-stroke" />
+                    </svg>
                     <p>PARÇALARI BURAYA YERLEŞTİR</p>
                     {hintVisible && hintPiece && (
                       <div

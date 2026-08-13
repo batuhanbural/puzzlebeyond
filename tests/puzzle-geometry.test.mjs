@@ -55,6 +55,7 @@ function compileInlineLayoutHelpers(source) {
     ["fitRailBoardFrame", ["board", "rows", "cols", "mode"]],
     ["railModeForFrame", ["board", "pieceCount"]],
     ["pieceBoardTarget", ["id", "rows", "cols"]],
+    ["boardGridPath", ["rows", "cols"]],
     ["pieceRailPositions", ["rows", "cols", "seed", "board", "mode"]],
     ["sidePiecePositions", ["rows", "cols", "seed", "board"]],
     ["bandPiecePositions", ["rows", "cols", "seed", "board"]],
@@ -74,6 +75,7 @@ function compileInlineLayoutHelpers(source) {
     .replace(/const axisPositions = \(cellSize: number, step: number\) =>/, "const axisPositions = (cellSize, step) =>")
     .replace(/const randomBetween = \(minimum: number, maximum: number\) =>/, "const randomBetween = (minimum, maximum) =>")
     .replace(/const values: number\[\]/g, "const values")
+    .replace(/const commands: string\[\]/g, "const commands")
     .replace(/\)\s*:\s*BoardFrame\s*\{/, ") {")
     .replace(/\)\s*:\s*PieceRailMode\s*\{/, ") {")
     .replace(/: PieceRailPosition\[\]/g, "")
@@ -87,7 +89,7 @@ function compileInlineLayoutHelpers(source) {
     const BOARD = { left: 0.19, top: 0.12, width: 0.62, height: 0.76 };
     const MOBILE_HORIZONTAL_BOARD = { left: 0.06, top: 0.26, width: 0.88, height: 0.48 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, sidePiecePositions, bandPiecePositions, landscapePiecePositions, redistributePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
+    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, boardGridPath, sidePiecePositions, bandPiecePositions, landscapePiecePositions, redistributePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
@@ -402,6 +404,18 @@ test("piece targets stay inside the normalized board for all reviewed grids", as
       }
     }
   }
+});
+
+test("the mobile 1034-piece grid uses the exact same 47 by 22 coordinate lattice as pieces", async () => {
+  const { fitPuzzleSize, pieceBoardTarget, boardGridPath } = await helpersPromise;
+  const fitted = fitPuzzleSize(puzzleSizes.at(-1), 0.45);
+
+  assert.deepEqual({ rows: fitted.rows, cols: fitted.cols, count: fitted.count }, { rows: 47, cols: 22, count: 1034 });
+  const path = boardGridPath(fitted.rows, fitted.cols);
+  assert.equal((path.match(/M /g) ?? []).length, fitted.rows + fitted.cols - 2);
+  assert.match(path, /M 21 0 V 47/);
+  assert.match(path, /M 0 46 H 22/);
+  assert.deepEqual(pieceBoardTarget(1033, fitted.rows, fitted.cols), { x: 21 / 22, y: 46 / 47 });
 });
 
 test("piece normalization enforces board bounds and board/mat zones", async () => {
