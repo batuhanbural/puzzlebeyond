@@ -21,7 +21,7 @@ test("admin login stays available while configuration is verified by the server"
   assert.match(authRoute, /status: 503/);
 });
 
-test("returning browsers get an explicit continue button for their saved room", async () => {
+test("returning browsers automatically reopen their saved room", async () => {
   const [page, styles] = await Promise.all([
     read("app/page.tsx"),
     read("app/globals.css"),
@@ -31,13 +31,30 @@ test("returning browsers get an explicit continue button for their saved room", 
   assert.match(page, /window\.sessionStorage\.getItem\(ROOM_STORAGE_KEY\)/);
   assert.match(page, /window\.localStorage\.setItem\(ROOM_STORAGE_KEY, storedCode\)/);
   assert.match(page, /const \[resumeRoomCode, setResumeRoomCode\] = useState\(""\)/);
-  assert.match(page, /setResumeRoomCode\(getStoredRoomCode\(\)\)/);
-  assert.match(page, /const resumeRoom = async \(\) =>/);
-  assert.match(page, /fetch\(`\/api\/room\?code=\$\{encodeURIComponent\(resumeRoomCode\)\}`/);
+  assert.match(page, /const autoResumeAttempted = useRef\(false\)/);
+  assert.match(page, /const storedCode = getStoredRoomCode\(\)/);
+  assert.match(page, /requestAnimationFrame\(\(\) => \{[\s\S]*autoResumeAttempted\.current = true;[\s\S]*void resumeRoom\(storedCode\)/);
+  assert.match(page, /const resumeRoom = useCallback\(async \(requestedCode = resumeRoomCode\) =>/);
+  assert.match(page, /fetch\(`\/api\/room\?code=\$\{encodeURIComponent\(roomCode\)\}`/);
   assert.match(page, /response\.status === 404[\s\S]*storeRoomCode\(null\)[\s\S]*setResumeRoomCode\(""\)/);
   assert.equal((page.match(/KALDIĞIN YERDEN DEVAM ET/g) || []).length, 2);
   assert.match(styles, /\.resume-room-button\s*\{[^}]*background:var\(--lime\)[^}]*box-shadow:4px 4px 0 var\(--ink\)/);
   assert.match(styles, /\.mobile-room-actions \.resume-room-button\s*\{[^}]*min-height:38px/);
+});
+
+test("photo upload action lives in the left panel and reports file errors inside its dialog", async () => {
+  const [page, styles] = await Promise.all([
+    read("app/page.tsx"),
+    read("app/globals.css"),
+  ]);
+
+  assert.match(page, /<button className="panel-text-button" onClick=\{openCreateDialog\}>FOTOĞRAFINLA BAŞLA →<\/button>/);
+  assert.doesNotMatch(page, /progress-create[^\n]*FOTOĞRAFINLA BAŞLA/);
+  assert.match(page, /\{room && <button className="primary-button full progress-create" onClick=\{openCreateDialog\}>YENİ PUZZLE KUR →<\/button>\}/);
+  assert.match(page, /const \[uploadError, setUploadError\] = useState\(""\)/);
+  assert.match(page, /Bu fotoğraf çok büyük\. En fazla 4 MB boyutunda bir fotoğraf seç\./);
+  assert.match(page, /\{uploadError && <p className="upload-error" role="alert">\{uploadError\}<\/p>\}/);
+  assert.match(styles, /\.upload-error\s*\{[^}]*background:#ffd8d3[^}]*font-weight:900/);
 });
 
 test("contains the puzzle app entry points", async () => {

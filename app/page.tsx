@@ -1412,6 +1412,7 @@ export default function Home() {
   const [codeInput, setCodeInput] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState("");
+  const [uploadError, setUploadError] = useState("");
   const [title, setTitle] = useState("Hafta sonu buluşması");
   const [difficulty, setDifficulty] = useState("12");
   const [dialog, setDialog] = useState<"create" | "join" | "nickname" | null>(null);
@@ -1455,6 +1456,7 @@ export default function Home() {
   const pendingRoomSaves = useRef(0);
   const rafRef = useRef<number | null>(null);
   const dragRef = useRef<LocalDrag | null>(null);
+  const autoResumeAttempted = useRef(false);
 
   useEffect(() => {
     piecesRef.current = pieces;
@@ -1585,10 +1587,6 @@ export default function Home() {
     }).finally(() => { if (!cancelled) setGalleryLoading(false); });
     return () => { cancelled = true; };
   }, [room, galleryOpen, introCompletion, galleryItems.length]);
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => setResumeRoomCode(getStoredRoomCode()));
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
   useEffect(() => {
     const sendHeartbeat = async () => {
       if (presenceRevoked.current || document.hidden) return;
@@ -2152,12 +2150,13 @@ export default function Home() {
     } finally { setBusy(false); }
   };
 
-  const resumeRoom = async () => {
-    if (!resumeRoomCode || busy) return;
+  const resumeRoom = useCallback(async (requestedCode = resumeRoomCode) => {
+    const roomCode = requestedCode.trim().toUpperCase();
+    if (!roomCode || busy) return;
     setBusy(true);
     setNotice("Son odan açılıyor…");
     try {
-      const response = await fetch(`/api/room?code=${encodeURIComponent(resumeRoomCode)}`, { cache: "no-store" });
+      const response = await fetch(`/api/room?code=${encodeURIComponent(roomCode)}`, { cache: "no-store" });
       const data = await readApiPayload<{ room?: Room }>(response);
       if (!response.ok || !data.room) {
         if (response.status === 404) {
@@ -2186,6 +2185,23 @@ export default function Home() {
     } finally {
       setBusy(false);
     }
+  }, [busy, resumeRoomCode]);
+
+  useEffect(() => {
+    if (autoResumeAttempted.current) return;
+    const storedCode = getStoredRoomCode();
+    if (!storedCode) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (autoResumeAttempted.current) return;
+      autoResumeAttempted.current = true;
+      void resumeRoom(storedCode);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [resumeRoom]);
+
+  const openCreateDialog = () => {
+    setUploadError("");
+    setDialog("create");
   };
 
   const selectGalleryPuzzle = (item: GalleryItem) => {
@@ -2240,8 +2256,11 @@ export default function Home() {
   const onFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
     if (!selected) return;
+    setUploadError("");
     if (selected.size > 4 * 1024 * 1024) {
-      setNotice("Fotoğraf en fazla 4 MB olabilir.");
+      const message = "Bu fotoğraf çok büyük. En fazla 4 MB boyutunda bir fotoğraf seç.";
+      setUploadError(message);
+      setNotice(message);
       event.target.value = "";
       return;
     }
@@ -2257,7 +2276,9 @@ export default function Home() {
     } catch (error) {
       event.target.value = "";
       setFile(null);
-      setNotice(error instanceof Error ? error.message : "Fotoğraf okunamadı.");
+      const message = error instanceof Error ? error.message : "Fotoğraf okunamadı.";
+      setUploadError(message);
+      setNotice(message);
     } finally {
       setBusy(false);
     }
@@ -2640,7 +2661,7 @@ export default function Home() {
         </button>
         <div className="header-actions">
           <button className="text-button" onClick={() => setDialog("join")}>Kodla katıl</button>
-          {!room && <button className={`primary-button small ${galleryVisible ? "header-gallery" : "header-new-setup"}`} onClick={() => setDialog("create")}><span>＋</span> Yeni puzzle</button>}
+          {!room && <button className={`primary-button small ${galleryVisible ? "header-gallery" : "header-new-setup"}`} onClick={openCreateDialog}><span>＋</span> Yeni puzzle</button>}
         </div>
       </header>
 
@@ -2694,7 +2715,7 @@ export default function Home() {
                 </button>
               )}
               <button className="primary-button full" onClick={() => setDialog("join")}>KODLA KATIL →</button>
-              <button className="panel-text-button" onClick={() => setDialog("create")}>YENİ ODA KUR</button>
+              <button className="panel-text-button" onClick={openCreateDialog}>FOTOĞRAFINLA BAŞLA →</button>
               <button className="panel-text-button" onClick={skipPreviewPuzzle}>GALERİYE GEÇ</button>
             </div>
           )}
@@ -2737,7 +2758,7 @@ export default function Home() {
               </div>
               <div className="gallery-actions">
                 <button className="outline-button" onClick={resetPreviewPuzzle}>Ön izlemeyi tekrar oyna</button>
-                <button className="primary-button" onClick={() => setDialog("create")}>Kendi fotoğrafını ekle</button>
+                <button className="primary-button" onClick={openCreateDialog}>Kendi fotoğrafını ekle</button>
               </div>
             </section>
           ) : (
@@ -2817,7 +2838,7 @@ export default function Home() {
               <div className="mobile-room-actions">
                 {!room && resumeRoomCode && <button className="resume-room-button" onClick={() => void resumeRoom()} disabled={busy}>{busy ? "ODA AÇILIYOR…" : "KALDIĞIN YERDEN DEVAM ET"}</button>}
                 {room && <button className="outline-button" onClick={copyCode}>Kodu paylaş: {room.code}</button>}
-                {room && <button className="primary-button" onClick={() => setDialog("create")}>YENİ PUZZLE KUR</button>}
+                {room && <button className="primary-button" onClick={openCreateDialog}>YENİ PUZZLE KUR</button>}
               </div>
             </>
           )}
@@ -2839,7 +2860,7 @@ export default function Home() {
             <div><span>BEKLİYOR</span><strong>{remainingCount}</strong><i>PARÇA</i></div>
           </div>
           <div className="progress-rail"><i style={{ width: `${progress}%` }} /></div>
-          <button className="primary-button full progress-create" onClick={() => setDialog("create")}>{room ? "YENİ PUZZLE KUR →" : "FOTOĞRAFINLA BAŞLA →"}</button>
+          {room && <button className="primary-button full progress-create" onClick={openCreateDialog}>YENİ PUZZLE KUR →</button>}
 
           <section className="piece-inspector-section">
             <div className="panel-heading panel-heading-rich">
@@ -2945,6 +2966,7 @@ export default function Home() {
                   <div><b>{file ? file.name : selectedGalleryId ? "Galeriden seçilen puzzle" : "Fotoğrafını ekle"}</b><small>{selectedGalleryId ? "Hazır görsel seçildi · istersen değiştirebilirsin" : "JPG, PNG veya WEBP · en fazla 4 MB"}</small></div>
                   <input type="file" accept="image/jpeg,image/png,image/webp" onChange={onFile} />
                 </label>
+                {uploadError && <p className="upload-error" role="alert">{uploadError}</p>}
                 <fieldset><legend style={{ textAlign: "center" }}>Zorluk · hedef parça sayısı</legend><div className="difficulty-options">
                   {PUZZLE_SIZES.map((option) => (
                     <button key={option.count} className={difficulty === String(option.count) ? "selected" : ""} onClick={() => setDifficulty(String(option.count))}>

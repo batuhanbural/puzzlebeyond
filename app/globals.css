@@ -230,6 +230,7 @@ footer p { font-family:Georgia,serif; font-size:12px; font-style:italic; font-we
 .upload-field b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
 .upload-field small { color:#77736b; font-size:9px; }
 .upload-field input { position:absolute; width:1px; height:1px; opacity:0; }
+.upload-error { margin:-4px 0 0; padding:9px 11px; border:1.5px solid var(--ink); background:#ffd8d3; color:var(--ink); font-size:10px; font-weight:900; line-height:1.35; box-shadow:2px 2px 0 var(--coral); }
 .upload-icon { width:70px; height:62px; display:grid; place-items:center; background:var(--lime); border:2px solid var(--ink); font-size:30px; }
 fieldset { margin:20px 0 0; padding:0; border:0; }
 .difficulty-options { display:grid; grid-template-columns:repeat(auto-fit,minmax(88px,1fr)); gap:8px; margin-top:8px; }
