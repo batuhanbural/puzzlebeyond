@@ -1710,7 +1710,6 @@ export default function Home() {
   const interactiveBoardPieces = useMemo(() => pieceCount >= LARGE_PUZZLE_THRESHOLD
     ? boardPieces.filter((piece) => !piece.locked)
     : boardPieces, [boardPieces, pieceCount]);
-  const hasRecentBoardPiece = interactiveBoardPieces.some((piece) => piece.id === lastHeldPieceId && !piece.locked);
   const lockedIds = useMemo(() => pieces.filter((piece) => piece.locked).map((piece) => piece.id), [pieces]);
   const lockedIdsKey = useMemo(() => lockedIds.join(","), [lockedIds]);
   const sideLayout = useMemo(
@@ -2436,7 +2435,7 @@ export default function Home() {
                 onPointerUp={endMove}
                 onPointerCancel={cancelMove}
               >
-                <div className={`puzzle-board-area ${hasRecentBoardPiece ? "recent-piece-area" : ""}`} ref={boardAreaRef}>
+                <div className="puzzle-board-area" ref={boardAreaRef}>
                   <div className="puzzle-board-guide" ref={boardRef} style={boardStyle} role="group" aria-label={`${rows} satır ve ${cols} sütunluk puzzle tahtası`} aria-describedby="puzzle-keyboard-help">
                     <span className="sr-only" id="puzzle-keyboard-help">Bir parçaya odaklanıp Enter veya Boşluk tuşuyla doğru yerine yerleştirebilirsin.</span>
                     <div

@@ -98,12 +98,12 @@ test("pointer release commits a piece without replaying its movement", async () 
   assert.doesNotMatch(endMove, /pushMove\(next, movingId\)\.finally/);
 });
 
-test("the most recently held piece stays above both board and mat pieces", async () => {
+test("dragged pieces stay above the board without lifting the whole board layer", async () => {
   const [page, styles] = await Promise.all([read("app/page.tsx"), read("app/globals.css")]);
 
-  assert.match(page, /hasRecentBoardPiece/);
-  assert.match(page, /recent-piece-area/);
-  assert.match(styles, /\.puzzle-board-area\.recent-piece-area\s*\{[^}]*z-index:45/);
+  assert.doesNotMatch(page, /hasRecentBoardPiece|recent-piece-area/);
+  assert.doesNotMatch(styles, /\.puzzle-board-area\.recent-piece-area/);
+  assert.match(styles, /\.puzzle-board-area\.drag-active\s*\{[^}]*z-index:50/);
   assert.match(styles, /\.puzzle-piece\.recent\s*\{[^}]*z-index:45/);
   assert.match(styles, /\.puzzle-piece\.dragging\s*\{[^}]*z-index:1000/);
 });
@@ -164,6 +164,7 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   const hideRoom = styles.match(/@media \(max-width:1180px\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
   const hideBoth = styles.match(/@media \(max-width:900px\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
   const shortLandscape = styles.match(/@media \(max-height:640px\) and \(orientation:landscape\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
+  const phone = styles.match(/@media \(max-width:760px\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
   const phoneLandscape = styles.match(/@media \(max-width:1024px\) and \(orientation:landscape\), \(orientation:landscape\) and \(hover:none\) and \(pointer:coarse\)\s*\{[\s\S]*?(?=\n@media|$)/)?.[0] || "";
 
   assert.match(hideRoom, /\.room-panel\s*\{\s*display:none/);
@@ -172,6 +173,9 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.match(hideBoth, /grid-template-columns:minmax\(0,1fr\)/);
   assert.match(shortLandscape, /\.room-panel,\s*\.progress-panel\s*\{\s*display:none/);
   assert.match(shortLandscape, /footer\s*\{\s*display:none/);
+  assert.match(phone, /\.site-shell\.puzzle-active \.board-section\s*\{[^}]*padding:0 0 10px[^}]*grid-template-rows:44px minmax\(0,1fr\)/);
+  assert.match(phone, /\.site-shell\.puzzle-active \.puzzle-workspace\s*\{[^}]*width:100%;[^}]*height:calc\(100% - 10px\);[^}]*aspect-ratio:auto/);
+  assert.match(phone, /\.site-shell\.puzzle-active \.mobile-room-actions\s*\{[^}]*display:none/);
   assert.match(page, /site-shell \$\{galleryVisible \? "gallery-active" : "puzzle-active"\}/);
   assert.doesNotMatch(page, /className="header-copy"|className="header-slogan"|className=\{`hero-strip/);
   assert.match(page, /<b>ORTAK MASA<\/b><small>AYNI KOD, AYNI PUZZLE<\/small>/);
