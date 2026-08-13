@@ -2637,22 +2637,7 @@ export default function Home() {
                     <div className="piece-inspector-placeholder" aria-hidden="true"><span>?</span></div>
                   )}
                 </div>
-                <div className="piece-inspector-meta">
-                  {selectedPiece ? (
-                    <>
-                      <span>PARÇA</span>
-                      <strong>#{selectedPiece.id + 1}</strong>
-                      <small>{selectedPiece.locked ? "YERİNE OTURDU" : selectedPiece.zone === "board" ? "TAHTADA" : "DIŞ ALANDA"}</small>
-                    </>
-                  ) : (
-                    <>
-                      <strong>PARÇA SEÇİLMEDİ</strong>
-                      <small>İNCELEMEK İÇİN BİR PARÇAYA DOKUN</small>
-                    </>
-                  )}
-                </div>
               </div>
-              <p className="piece-inspector-copy">Tahtada veya dış alanda bir parçayı seçtiğinde burada büyük hâlini görebilirsin.</p>
             </div>
           </section>
         </aside>
@@ -2702,17 +2687,6 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="piece-inspector-placeholder" aria-hidden="true"><span>?</span></div>
-                )}
-              </div>
-              <div className="piece-inspector-meta">
-                {selectedPiece ? (
-                  <>
-                    <span>PARÇA</span>
-                    <strong>#{selectedPiece.id + 1}</strong>
-                    <small>{selectedPiece.locked ? "YERİNE OTURDU" : selectedPiece.zone === "board" ? "TAHTADA" : "DIŞ ALANDA"}</small>
-                  </>
-                ) : (
-                  <><strong>PARÇA SEÇİLMEDİ</strong><small>ÖNCE BİR PARÇAYA DOKUN</small></>
                 )}
               </div>
             </div>

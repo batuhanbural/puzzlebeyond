@@ -77,6 +77,8 @@ test("desktop side panel previews the selected puzzle piece", async () => {
   assert.match(styles, /\.piece-inspector-card\s*\{[^}]*border:2px solid var\(--ink\)/);
   assert.doesNotMatch(styles.match(/\.piece-inspector-card\s*\{[^}]*\}/)?.[0] || "", /transform:/);
   assert.match(styles, /\.piece-inspector-stage\s*\{[^}]*place-items:center[^}]*overflow:hidden/);
+  assert.doesNotMatch(page, /piece-inspector-meta|piece-inspector-copy/);
+  assert.doesNotMatch(styles, /\.piece-inspector-meta|\.piece-inspector-copy/);
   assert.match(styles, /\.piece-inspector-piece \.piece-canvas/);
 });
 
@@ -88,6 +90,8 @@ test("mobile piece inspector opens as an explicit bottom sheet", async () => {
   assert.match(page, /mobileInspectorOpen && !galleryVisible/);
   assert.match(page, /className="mobile-piece-inspector-backdrop"/);
   assert.match(page, /className="mobile-piece-inspector-sheet"/);
+  assert.match(styles, /\.mobile-piece-inspector-sheet \.piece-inspector-card\s*\{[^}]*display:block/);
+  assert.match(styles, /\.mobile-piece-inspector-sheet \.piece-inspector-stage\s*\{[^}]*border:0/);
   assert.match(page, /aria-modal="true"/);
   assert.match(page, /event\.clientY - mobileInspectorDragStart\.current > 56/);
   assert.match(page, /<JigsawPiece id=\{selectedPiece\.id\}[\s\S]*?eager detail/);
