@@ -2191,10 +2191,13 @@ export default function Home() {
     if (autoResumeAttempted.current) return;
     const storedCode = getStoredRoomCode();
     if (!storedCode) return;
+    const navigation = window.performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    const shouldResumeImmediately = navigation?.type === "reload";
     const frame = window.requestAnimationFrame(() => {
       if (autoResumeAttempted.current) return;
       autoResumeAttempted.current = true;
-      void resumeRoom(storedCode);
+      if (shouldResumeImmediately) void resumeRoom(storedCode);
+      else setResumeRoomCode(storedCode);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [resumeRoom]);

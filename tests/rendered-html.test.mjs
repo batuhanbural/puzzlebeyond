@@ -21,7 +21,7 @@ test("admin login stays available while configuration is verified by the server"
   assert.match(authRoute, /status: 503/);
 });
 
-test("returning browsers automatically reopen their saved room", async () => {
+test("reloads reopen the active room while later visits keep the continue button", async () => {
   const [page, styles] = await Promise.all([
     read("app/page.tsx"),
     read("app/globals.css"),
@@ -33,7 +33,9 @@ test("returning browsers automatically reopen their saved room", async () => {
   assert.match(page, /const \[resumeRoomCode, setResumeRoomCode\] = useState\(""\)/);
   assert.match(page, /const autoResumeAttempted = useRef\(false\)/);
   assert.match(page, /const storedCode = getStoredRoomCode\(\)/);
-  assert.match(page, /requestAnimationFrame\(\(\) => \{[\s\S]*autoResumeAttempted\.current = true;[\s\S]*void resumeRoom\(storedCode\)/);
+  assert.match(page, /getEntriesByType\("navigation"\)\[0\] as PerformanceNavigationTiming/);
+  assert.match(page, /const shouldResumeImmediately = navigation\?\.type === "reload"/);
+  assert.match(page, /requestAnimationFrame\(\(\) => \{[\s\S]*autoResumeAttempted\.current = true;[\s\S]*if \(shouldResumeImmediately\) void resumeRoom\(storedCode\);[\s\S]*else setResumeRoomCode\(storedCode\)/);
   assert.match(page, /const resumeRoom = useCallback\(async \(requestedCode = resumeRoomCode\) =>/);
   assert.match(page, /fetch\(`\/api\/room\?code=\$\{encodeURIComponent\(roomCode\)\}`/);
   assert.match(page, /response\.status === 404[\s\S]*storeRoomCode\(null\)[\s\S]*setResumeRoomCode\(""\)/);
