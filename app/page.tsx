@@ -1257,6 +1257,7 @@ export default function Home() {
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [hintVisible, setHintVisible] = useState(false);
   const [lastHeldPieceId, setLastHeldPieceId] = useState<number | null>(null);
+  const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   const [playerName, setPlayerName] = useState(() => getStoredNickname() || "Sen");
   const [nicknameInput, setNicknameInput] = useState(() => getStoredNickname());
   const [roomPlayers, setRoomPlayers] = useState<RoomPlayer[]>([]);
@@ -1266,6 +1267,7 @@ export default function Home() {
   const boardAreaRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const mobileInspectorDragStart = useRef<number | null>(null);
   const piecesRef = useRef(pieces);
   const [workspaceSize, setWorkspaceSize] = useState({ width: 0, height: 0 });
   const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
@@ -2217,7 +2219,10 @@ export default function Home() {
 
   useEffect(() => {
     const cancelOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") cancelMove();
+      if (event.key === "Escape") {
+        setMobileInspectorOpen(false);
+        cancelMove();
+      }
     };
     window.addEventListener("keydown", cancelOnEscape);
     window.addEventListener("blur", cancelMove);
@@ -2440,6 +2445,7 @@ export default function Home() {
               {room && <button className="sync-button" onClick={() => void forceSyncRoom()} disabled={syncBusy} title="Puzzle durumunu sunucudan yeniden al">{syncBusy ? "EŞİTLENİYOR…" : "↻ EŞİTLE"}</button>}
               {(room || !galleryVisible) && <button className="push-sides-button" onClick={pushToSides} title="Tahtadaki kilitlenmemiş parçaları kenara it">↹ KENARA İT</button>}
               {(room || !galleryVisible) && <button className={`hint-button ${hintVisible ? "active" : ""}`} onClick={showHint} aria-pressed={hintVisible}>✦ İPUCU</button>}
+              {(room || !galleryVisible) && <button className="mobile-inspector-trigger" onClick={() => setMobileInspectorOpen(true)} disabled={!selectedPiece} aria-haspopup="dialog">◇ {selectedPiece ? `#${selectedPiece.id + 1}` : "PARÇA"}</button>}
               <div className="difficulty-pill" title={`${rows}×${cols}`}>{progress}% · {pieceCount} PARÇA</div>
             </div>
           </div>
@@ -2665,6 +2671,68 @@ export default function Home() {
           </section>
         </aside>
       </section>
+
+      {!galleryVisible && (
+        <button
+          className="mobile-inspector-landscape-trigger"
+          onClick={() => setMobileInspectorOpen(true)}
+          disabled={!selectedPiece}
+          aria-haspopup="dialog"
+          aria-label={selectedPiece ? `${selectedPiece.id + 1} numaralı parçayı incele` : "İncelemek için bir parça seç"}
+        >
+          <span>◇</span>{selectedPiece ? `#${selectedPiece.id + 1}` : "PARÇA"}
+        </button>
+      )}
+
+      {mobileInspectorOpen && !galleryVisible && (
+        <div className="mobile-piece-inspector-backdrop" onPointerDown={() => setMobileInspectorOpen(false)}>
+          <section
+            className="mobile-piece-inspector-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mobile-piece-inspector-title"
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              mobileInspectorDragStart.current = event.clientY;
+            }}
+            onPointerUp={(event) => {
+              if (mobileInspectorDragStart.current !== null && event.clientY - mobileInspectorDragStart.current > 56) {
+                setMobileInspectorOpen(false);
+              }
+              mobileInspectorDragStart.current = null;
+            }}
+            onPointerCancel={() => { mobileInspectorDragStart.current = null; }}
+          >
+            <button className="mobile-inspector-handle" onClick={() => setMobileInspectorOpen(false)} aria-label="Parça incelemeyi kapat"><i /></button>
+            <div className="mobile-inspector-heading">
+              <span><b id="mobile-piece-inspector-title">PARÇA İNCELEME</b><small>SEÇİLİ PARÇA</small></span>
+              <button onClick={() => setMobileInspectorOpen(false)} aria-label="Kapat">×</button>
+            </div>
+            <div className={`piece-inspector-card ${selectedPiece ? "has-piece" : "is-empty"}`} aria-live="polite">
+              <div className="piece-inspector-stage">
+                {selectedPiece ? (
+                  <div className="piece-inspector-piece" style={{ aspectRatio: imageAspect * rows / cols }}>
+                    <JigsawPiece id={selectedPiece.id} rows={rows} cols={cols} seed={puzzleSeed} imageUrl={imageUrl} eager detail />
+                  </div>
+                ) : (
+                  <div className="piece-inspector-placeholder" aria-hidden="true"><span>?</span></div>
+                )}
+              </div>
+              <div className="piece-inspector-meta">
+                {selectedPiece ? (
+                  <>
+                    <span>PARÇA</span>
+                    <strong>#{selectedPiece.id + 1}</strong>
+                    <small>{selectedPiece.locked ? "YERİNE OTURDU" : selectedPiece.zone === "board" ? "TAHTADA" : "DIŞ ALANDA"}</small>
+                  </>
+                ) : (
+                  <><strong>PARÇA SEÇİLMEDİ</strong><small>ÖNCE BİR PARÇAYA DOKUN</small></>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       <footer><span>PUZZLEBEYOND / 2026</span><p>Uzakta olsanız da aynı masadasınız.</p><span>MADE FOR TOGETHERNESS</span></footer>
 

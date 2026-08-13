@@ -78,6 +78,23 @@ test("desktop side panel previews the selected puzzle piece", async () => {
   assert.match(styles, /\.piece-inspector-piece \.piece-canvas/);
 });
 
+test("mobile piece inspector opens as an explicit bottom sheet", async () => {
+  const [page, styles] = await Promise.all([read("app/page.tsx"), read("app/globals.css")]);
+  assert.match(page, /const \[mobileInspectorOpen, setMobileInspectorOpen\] = useState\(false\)/);
+  assert.match(page, /className="mobile-inspector-trigger"/);
+  assert.match(page, /className="mobile-inspector-landscape-trigger"/);
+  assert.match(page, /mobileInspectorOpen && !galleryVisible/);
+  assert.match(page, /className="mobile-piece-inspector-backdrop"/);
+  assert.match(page, /className="mobile-piece-inspector-sheet"/);
+  assert.match(page, /aria-modal="true"/);
+  assert.match(page, /event\.clientY - mobileInspectorDragStart\.current > 56/);
+  assert.match(page, /<JigsawPiece id=\{selectedPiece\.id\}[\s\S]*?eager detail/);
+  assert.match(styles, /\.mobile-piece-inspector-backdrop\s*\{[^}]*position:fixed[^}]*align-items:end/);
+  assert.match(styles, /@keyframes mobileInspectorIn/);
+  assert.match(styles, /@media \(max-width:900px\)[\s\S]*?\.mobile-inspector-trigger\s*\{[^}]*display:inline-flex/);
+  assert.match(styles, /\.site-shell\.puzzle-active>\.mobile-inspector-landscape-trigger\s*\{[^}]*position:fixed[^}]*display:flex/);
+});
+
 test("pointer release commits a piece without replaying its movement", async () => {
   const [page, styles] = await Promise.all([
     read("app/page.tsx"),
