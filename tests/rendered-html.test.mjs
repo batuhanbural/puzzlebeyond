@@ -61,12 +61,19 @@ test("the puzzle surface disables text selection and the context menu", async ()
 test("desktop side panel previews the selected puzzle piece", async () => {
   const [page, styles] = await Promise.all([read("app/page.tsx"), read("app/globals.css")]);
   assert.match(page, /PARÇA İNCELEME/);
-  assert.doesNotMatch(page, /OYUN DURUMU|ANLIK İLERLEME/);
+  assert.match(page, /OYUN DURUMU/);
+  assert.match(page, /ANLIK İLERLEME/);
+  assert.ok(page.indexOf("OYUN DURUMU") < page.indexOf("PARÇA İNCELEME"));
+  assert.match(page, /<span className="index coral">02<\/span>/);
+  assert.match(page, /<span className="index">03<\/span>/);
   assert.match(page, /const selectedPiece = useMemo/);
   assert.match(page, /className="piece-inspector-piece"/);
   assert.match(page, /id=\{selectedPiece\.id\}/);
-  assert.match(page, /<JigsawPiece[\s\S]*?eager/);
+  assert.match(page, /<JigsawPiece[\s\S]*?eager[\s\S]*?detail/);
+  assert.match(styles, /\.progress-overview/);
+  assert.match(styles, /\.piece-inspector-section\s*\{[^}]*border-top:2px solid var\(--ink\)/);
   assert.match(styles, /\.piece-inspector-card\s*\{[^}]*border:2px solid var\(--ink\)/);
+  assert.doesNotMatch(styles.match(/\.piece-inspector-card\s*\{[^}]*\}/)?.[0] || "", /transform:/);
   assert.match(styles, /\.piece-inspector-stage\s*\{[^}]*place-items:center[^}]*overflow:hidden/);
   assert.match(styles, /\.piece-inspector-piece \.piece-canvas/);
 });
@@ -140,6 +147,9 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.match(page, /const LARGE_PUZZLE_THRESHOLD = 120/);
   assert.match(page, /imageUrl=\{imageUrl\} eager=\{pieceCount >= LARGE_PUZZLE_THRESHOLD \|\| isRecent \|\| isRemoteHeld\}/);
   assert.match(component, /rows \* cols >= LARGE_PUZZLE_THRESHOLD \? 1 : 2/);
+  assert.match(component, /384 \/ Math\.max\(width, height\)/);
+  assert.match(component, /detail \? "detail" : "board"/);
+  assert.match(component, /context\.imageSmoothingQuality = "high"/);
   assert.match(component, /context\.setTransform\(canvas\.width \/ width, 0, 0, canvas\.height \/ height, 0, 0\)/);
   assert.doesNotMatch(component, /context\.scale\(scale, scale\)/);
   assert.doesNotMatch(page, /pieceCount > 120|rows \* cols > 120/);

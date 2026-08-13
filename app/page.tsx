@@ -710,7 +710,7 @@ function traceJigsawPiecePath(
   path.closePath();
 }
 
-const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, eager = false }: { id: number; rows: number; cols: number; seed: string; imageUrl: string; eager?: boolean }) {
+const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, eager = false, detail = false }: { id: number; rows: number; cols: number; seed: string; imageUrl: string; eager?: boolean; detail?: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(eager);
 
@@ -729,7 +729,7 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, 
       canvas.height = 1;
       return;
     }
-    const canvasKey = puzzlePieceCanvasKey(id, rows, cols, seed, imageUrl);
+    const canvasKey = `${puzzlePieceCanvasKey(id, rows, cols, seed, imageUrl)}\u0000${detail ? "detail" : "board"}`;
     const preserveCanvas = () => rememberPuzzlePieceCanvas(canvasKey, canvas);
     if (restorePuzzlePieceCanvas(canvasKey, canvas)) return preserveCanvas;
     let cancelled = false;
@@ -748,12 +748,16 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, 
         const padY = cellHeight * 0.34;
         const width = cellWidth + padX * 2;
         const height = cellHeight + padY * 2;
-        const scale = rows * cols >= LARGE_PUZZLE_THRESHOLD ? 1 : 2;
+        const scale = detail
+          ? Math.max(1, Math.min(12, 384 / Math.max(width, height)))
+          : rows * cols >= LARGE_PUZZLE_THRESHOLD ? 1 : 2;
         canvas.width = Math.ceil(width * scale);
         canvas.height = Math.ceil(height * scale);
         const context = canvas.getContext("2d");
         if (!context) return;
         context.setTransform(canvas.width / width, 0, 0, canvas.height / height, 0, 0);
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
 
         context.beginPath();
         traceJigsawPiecePath(context, id, rows, cols, seed, padX, padY, cellWidth, cellHeight);
@@ -779,7 +783,7 @@ const JigsawPiece = memo(function JigsawPiece({ id, rows, cols, seed, imageUrl, 
       if (drawTimer !== undefined) window.clearTimeout(drawTimer);
       preserveCanvas();
     };
-  }, [id, rows, cols, seed, imageUrl, visible, eager]);
+  }, [id, rows, cols, seed, imageUrl, visible, eager, detail]);
 
   return <canvas ref={canvasRef} className="piece-canvas" aria-hidden="true" />;
 });
@@ -1696,6 +1700,7 @@ export default function Home() {
   const puzzleSeed = room?.code ?? previewSeed;
   useEffect(() => () => clearPuzzlePieceCanvasCache(), [imageUrl, rows, cols, puzzleSeed]);
   const solvedCount = useMemo(() => pieces.filter((piece) => piece.locked).length, [pieces]);
+  const remainingCount = pieceCount - solvedCount;
   const progress = Math.round((solvedCount / pieceCount) * 100);
   const galleryVisible = !room && (galleryOpen || introCompletion === "gallery");
   const desktopWorkspaceAspect = workspaceSize.width > 0 && workspaceSize.height > 0
@@ -2597,44 +2602,67 @@ export default function Home() {
         <aside className="panel progress-panel">
           <div className="panel-heading panel-heading-rich">
             <span className="index coral">02</span>
-            <span><b>PARÇA İNCELEME</b><small>SEÇİLİ PARÇA</small></span>
+            <span><b>OYUN DURUMU</b><small>ANLIK İLERLEME</small></span>
           </div>
-          <div className="piece-inspector" aria-live="polite">
-            <div className={`piece-inspector-card ${selectedPiece ? "has-piece" : "is-empty"}`}>
-              <div className="piece-inspector-stage">
-                {selectedPiece ? (
-                  <div className="piece-inspector-piece" style={{ aspectRatio: imageAspect * rows / cols }}>
-                    <JigsawPiece
-                      id={selectedPiece.id}
-                      rows={rows}
-                      cols={cols}
-                      seed={puzzleSeed}
-                      imageUrl={imageUrl}
-                      eager
-                    />
-                  </div>
-                ) : (
-                  <div className="piece-inspector-placeholder" aria-hidden="true"><span>?</span></div>
-                )}
-              </div>
-              <div className="piece-inspector-meta">
-                {selectedPiece ? (
-                  <>
-                    <span>PARÇA</span>
-                    <strong>#{selectedPiece.id + 1}</strong>
-                    <small>{selectedPiece.locked ? "YERİNE OTURDU" : selectedPiece.zone === "board" ? "TAHTADA" : "DIŞ ALANDA"}</small>
-                  </>
-                ) : (
-                  <>
-                    <strong>PARÇA SEÇİLMEDİ</strong>
-                    <small>İNCELEMEK İÇİN BİR PARÇAYA DOKUN</small>
-                  </>
-                )}
-              </div>
+          <div className="progress-overview">
+            <div className="progress-dial" style={{ background: `conic-gradient(var(--coral) 0 ${progress}%, #ded8cb ${progress}% 100%)` }}>
+              <div><strong>{progress}</strong><span>%</span></div>
             </div>
-            <p className="piece-inspector-copy">Tahtada veya dış alanda bir parçayı seçtiğinde burada büyük hâlini görebilirsin.</p>
-            <button className="primary-button full inspector-create" onClick={() => setDialog("create")}>{room ? "YENİ PUZZLE KUR →" : "FOTOĞRAFINLA BAŞLA →"}</button>
+            <p>{progress === 100 ? (room ? "Görselin tamamı ortaya çıktı." : "Hazır puzzleları keşfet.") : progress > 0 ? "Görüntü ortaya çıkıyor." : "İlk parçayı sen yerleştir."}</p>
           </div>
+          <div className="progress-counts">
+            <div><span>YERİNDE</span><strong>{solvedCount}</strong><i>PARÇA</i></div>
+            <div><span>BEKLİYOR</span><strong>{remainingCount}</strong><i>PARÇA</i></div>
+          </div>
+          <div className="progress-rail"><i style={{ width: `${progress}%` }} /></div>
+          <div className="panel-help">
+            <span>✦ KÜÇÜK İPUCU</span>
+            <p>Parçayı doğru yere yaklaştırıp bırak; yerine kendiliğinden oturur.</p>
+          </div>
+          <button className="primary-button full progress-create" onClick={() => setDialog("create")}>{room ? "YENİ PUZZLE KUR →" : "FOTOĞRAFINLA BAŞLA →"}</button>
+
+          <section className="piece-inspector-section">
+            <div className="panel-heading panel-heading-rich">
+              <span className="index">03</span>
+              <span><b>PARÇA İNCELEME</b><small>SEÇİLİ PARÇA</small></span>
+            </div>
+            <div className="piece-inspector" aria-live="polite">
+              <div className={`piece-inspector-card ${selectedPiece ? "has-piece" : "is-empty"}`}>
+                <div className="piece-inspector-stage">
+                  {selectedPiece ? (
+                    <div className="piece-inspector-piece" style={{ aspectRatio: imageAspect * rows / cols }}>
+                      <JigsawPiece
+                        id={selectedPiece.id}
+                        rows={rows}
+                        cols={cols}
+                        seed={puzzleSeed}
+                        imageUrl={imageUrl}
+                        eager
+                        detail
+                      />
+                    </div>
+                  ) : (
+                    <div className="piece-inspector-placeholder" aria-hidden="true"><span>?</span></div>
+                  )}
+                </div>
+                <div className="piece-inspector-meta">
+                  {selectedPiece ? (
+                    <>
+                      <span>PARÇA</span>
+                      <strong>#{selectedPiece.id + 1}</strong>
+                      <small>{selectedPiece.locked ? "YERİNE OTURDU" : selectedPiece.zone === "board" ? "TAHTADA" : "DIŞ ALANDA"}</small>
+                    </>
+                  ) : (
+                    <>
+                      <strong>PARÇA SEÇİLMEDİ</strong>
+                      <small>İNCELEMEK İÇİN BİR PARÇAYA DOKUN</small>
+                    </>
+                  )}
+                </div>
+              </div>
+              <p className="piece-inspector-copy">Tahtada veya dış alanda bir parçayı seçtiğinde burada büyük hâlini görebilirsin.</p>
+            </div>
+          </section>
         </aside>
       </section>
 
