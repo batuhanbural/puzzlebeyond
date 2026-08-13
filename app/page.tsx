@@ -3,9 +3,10 @@
 import { ChangeEvent, CSSProperties, PointerEvent, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { GalleryKind } from "@/lib/gallery";
 import type { RealtimeSubscription, RoomActionMessage, RoomDragMessage } from "@/lib/realtime-client";
+import type { MatLayout } from "@/lib/puzzle-validation";
 
 type PieceZone = "board" | "mat";
-type Piece = { id: number; x: number; y: number; locked?: boolean; layoutVersion?: number; zone?: PieceZone; positioned?: true };
+type Piece = { id: number; x: number; y: number; locked?: boolean; layoutVersion?: number; zone?: PieceZone; positioned?: true; matLayout?: MatLayout };
 type Room = {
   code: string;
   title: string;
@@ -536,6 +537,16 @@ function landscapePiecePositions(rows: number, cols: number, seed: string, board
   return pieceRailPositions(rows, cols, seed, board, mode);
 }
 
+function activeMatLayout(imageAspect: number): MatLayout {
+  if (window.matchMedia("(max-width: 1024px) and (orientation: landscape), (orientation: landscape) and (hover: none) and (pointer: coarse)").matches) {
+    return "landscape";
+  }
+  if (imageAspect > 1 && window.matchMedia("(max-width: 760px) and (orientation: portrait)").matches) {
+    return "band";
+  }
+  return "side";
+}
+
 function redistributePiecePositions(pieceIds: number[], layout: Map<number, PieceRailPosition>) {
   const positions = [...layout.values()];
   const ids = [...pieceIds].sort((left, right) => left - right);
@@ -951,12 +962,25 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   onPlacePiece: (pieceId: number) => void;
 }) {
   const isBoardPiece = zone === "board";
-  const sideX = piece.positioned ? piece.x : sidePosition?.x ?? 0;
-  const sideY = piece.positioned ? piece.y : sidePosition?.y ?? 0;
-  const bandX = piece.positioned ? piece.x : bandPosition?.x ?? 0;
-  const bandY = piece.positioned ? piece.y : bandPosition?.y ?? 0;
-  const landscapeX = piece.positioned ? piece.x : landscapePosition?.x ?? 0;
-  const landscapeY = piece.positioned ? piece.y : landscapePosition?.y ?? 0;
+  const usesSavedMatPosition = (layout: MatLayout, board: BoardFrame) => {
+    if (!piece.positioned) return false;
+    if (piece.matLayout) return piece.matLayout === layout;
+    const cellWidth = board.width / cols;
+    const cellHeight = board.height / rows;
+    return piece.x + cellWidth * 1.28 < board.left
+      || piece.x - cellWidth * 0.28 > board.left + board.width
+      || piece.y + cellHeight * 1.28 < board.top
+      || piece.y - cellHeight * 0.28 > board.top + board.height;
+  };
+  const useSidePosition = usesSavedMatPosition("side", sideBoard);
+  const useBandPosition = usesSavedMatPosition("band", bandBoard);
+  const useLandscapePosition = usesSavedMatPosition("landscape", landscapeBoard);
+  const sideX = useSidePosition ? piece.x : sidePosition?.x ?? 0;
+  const sideY = useSidePosition ? piece.y : sidePosition?.y ?? 0;
+  const bandX = useBandPosition ? piece.x : bandPosition?.x ?? 0;
+  const bandY = useBandPosition ? piece.y : bandPosition?.y ?? 0;
+  const landscapeX = useLandscapePosition ? piece.x : landscapePosition?.x ?? 0;
+  const landscapeY = useLandscapePosition ? piece.y : landscapePosition?.y ?? 0;
   const style = isBoardPiece
     ? {
       "--player-color": playerColor,
@@ -1560,6 +1584,7 @@ export default function Home() {
                 zone: "mat" as const,
                 locked: false,
                 positioned: true as const,
+                matLayout: message.dropMatLayout,
                 layoutVersion: PUZZLE_LAYOUT_VERSION,
               }
               : piece);
@@ -1601,7 +1626,7 @@ export default function Home() {
       setPieces((current) => {
         const next = current.map((piece) => piece.locked || piece.zone !== "board"
           ? piece
-          : { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, positioned: undefined, layoutVersion: PUZZLE_LAYOUT_VERSION });
+          : { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, positioned: undefined, matLayout: undefined, layoutVersion: PUZZLE_LAYOUT_VERSION });
         piecesRef.current = next;
         return next;
       });
@@ -2137,10 +2162,12 @@ export default function Home() {
     const matY = workspaceRect
       ? Math.max(0, Math.min(1 - drag.height / workspaceRect.height, (drag.clientY - workspaceRect.top - drag.height / 2) / workspaceRect.height))
       : 0;
+    const matLayout = droppedOnBoard ? undefined : activeMatLayout(imageAspect);
     if (liveEndMessage) {
       liveEndMessage.dropZone = droppedOnBoard ? "board" : "mat";
       liveEndMessage.dropX = droppedOnBoard ? finalBoardX : matX;
       liveEndMessage.dropY = droppedOnBoard ? finalBoardY : matY;
+      liveEndMessage.dropMatLayout = matLayout;
       if (droppedOnBoard) {
         liveEndMessage.x = finalBoardX + 1 / (2 * cols);
         liveEndMessage.y = finalBoardY + 1 / (2 * rows);
@@ -2154,6 +2181,7 @@ export default function Home() {
         zone: droppedOnBoard ? "board" as const : "mat" as const,
         locked: snaps,
         positioned: droppedOnBoard ? undefined : (true as const),
+        matLayout,
         layoutVersion: PUZZLE_LAYOUT_VERSION,
       }
       : piece);
@@ -2168,7 +2196,7 @@ export default function Home() {
     if (snaps && !room && introCompletion === "idle" && next.every((piece) => piece.locked)) {
       setIntroCompletion("showing");
     }
-  }, [cols, rows, pushMove, room, introCompletion, createLiveDragMessage, publishLiveDrag, sendLiveDragMessage]);
+  }, [cols, rows, imageAspect, pushMove, room, introCompletion, createLiveDragMessage, publishLiveDrag, sendLiveDragMessage]);
 
   useEffect(() => {
     const cancelOnEscape = (event: KeyboardEvent) => {
@@ -2185,7 +2213,7 @@ export default function Home() {
   const placePieceFromKeyboard = useCallback((pieceId: number) => {
     const target = pieceBoardTarget(pieceId, rows, cols);
     const next = piecesRef.current.map((piece) => piece.id === pieceId
-      ? { ...piece, ...target, zone: "board" as const, locked: true, layoutVersion: PUZZLE_LAYOUT_VERSION }
+      ? { ...piece, ...target, zone: "board" as const, locked: true, positioned: undefined, matLayout: undefined, layoutVersion: PUZZLE_LAYOUT_VERSION }
       : piece);
     setPieces(next);
     setLastHeldPieceId(pieceId);
@@ -2279,6 +2307,7 @@ export default function Home() {
         zone: "mat" as const,
         locked: false,
         positioned: undefined,
+        matLayout: undefined,
         layoutVersion: PUZZLE_LAYOUT_VERSION,
       };
     });

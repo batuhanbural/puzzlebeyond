@@ -9,6 +9,7 @@ export const MIN_IMAGE_ASPECT = 0.2;
 export const MAX_IMAGE_ASPECT = 5;
 
 export type PieceZone = "board" | "mat";
+export type MatLayout = "side" | "band" | "landscape";
 export type ValidatedPiece = {
   id: number;
   x: number;
@@ -17,6 +18,7 @@ export type ValidatedPiece = {
   layoutVersion: number;
   zone: PieceZone;
   positioned?: true;
+  matLayout?: MatLayout;
 };
 
 export type SupportedImageType = "image/jpeg" | "image/png" | "image/webp";
@@ -60,7 +62,12 @@ export function normalizePuzzlePiece(value: unknown, rows: number, cols: number)
   if (zone === "mat") {
     if (value.positioned === true) {
       if (x < 0 || x > 0.98 || y < 0 || y > 0.98) return null;
-      return { id, x, y, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION, zone, positioned: true };
+      const matLayout = value.matLayout;
+      if (matLayout !== undefined && matLayout !== "side" && matLayout !== "band" && matLayout !== "landscape") return null;
+      return {
+        id, x, y, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION, zone, positioned: true,
+        ...(matLayout ? { matLayout } : {}),
+      };
     }
     return { id, x: 0, y: 0, locked: false, layoutVersion: PUZZLE_LAYOUT_VERSION, zone };
   }

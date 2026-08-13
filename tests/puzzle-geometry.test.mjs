@@ -423,6 +423,7 @@ test("piece normalization enforces board bounds and board/mat zones", async () =
     y: 0.5,
     zone: "mat",
     positioned: true,
+    matLayout: "band",
     locked: false,
     layoutVersion,
   };
@@ -506,6 +507,8 @@ test("the rendered puzzle switches horizontal mobile images to top and bottom ra
   assert.doesNotMatch(source, /redistributePiecePositions\(boardPieces\.map/);
   assert.match(source, /zone: droppedOnBoard \? "board" as const : "mat" as const/);
   assert.match(source, /positioned: droppedOnBoard \? undefined : \(true as const\)/);
+  assert.match(source, /matLayout,/);
+  assert.match(source, /function activeMatLayout/);
   assert.match(source, /const workspaceRect = workspaceRef\.current\?\.getBoundingClientRect\(\)/);
   assert.match(source, /onPointerCancel=\{cancelMove\}/);
   assert.match(source, /onLostPointerCapture=/);

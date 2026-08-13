@@ -21,11 +21,13 @@ test("live drag messages accept only bounded ephemeral coordinates", () => {
   assert.equal(parseRoomDragMessage({ ...valid, pieceId: 48 * 48 }), null);
   assert.equal(parseRoomDragMessage({ ...valid, x: Number.NaN }), null);
   assert.equal(parseRoomDragMessage({ ...valid, phase: "drop" }), null);
-  const matDrop = { ...valid, phase: "end", dropZone: "mat", dropX: 0.18, dropY: 0.64 };
+  const matDrop = { ...valid, phase: "end", dropZone: "mat", dropX: 0.18, dropY: 0.64, dropMatLayout: "band" };
   assert.deepEqual(parseRoomDragMessage(matDrop), matDrop);
   assert.equal(parseRoomDragMessage({ ...matDrop, dropZone: "side" }), null);
   assert.equal(parseRoomDragMessage({ ...matDrop, dropY: undefined }), null);
   assert.equal(parseRoomDragMessage({ ...matDrop, dropX: 1.1 }), null);
+  assert.equal(parseRoomDragMessage({ ...matDrop, dropMatLayout: "board" }), null);
+  assert.equal(parseRoomDragMessage({ ...matDrop, dropZone: "board" }), null);
   assert.equal(parseRoomDragMessage({ ...matDrop, phase: "move" }), null);
 });
 
@@ -67,6 +69,7 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   assert.match(handler, /message\.dropZone === "mat"/);
   assert.match(handler, /drag\.gestureId !== message\.gestureId/);
   assert.match(handler, /positioned: true as const/);
+  assert.match(handler, /matLayout: message\.dropMatLayout/);
   assert.match(handler, /scheduleAuthoritativeRefresh\(0\)/);
   assert.match(handler, /expiresAt = Date\.now\(\) \+ REMOTE_DROP_HANDOFF_MS/);
   assert.match(handler, /drag\.senderId !== message\.senderId \|\| drag\.phase === "end"/);
@@ -78,6 +81,7 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   assert.match(page, /removeCommittedRemoteDrops\(current, nextRoom\.pieces\)/);
   assert.match(page, /drag\.phase === "end" && drag\.dropZone !== "mat"/);
   assert.match(page, /liveEndMessage\.dropZone = droppedOnBoard \? "board" : "mat"/);
+  assert.match(page, /liveEndMessage\.dropMatLayout = matLayout/);
   assert.match(page, /const refreshDelay = 750 - \(now - lastRefreshAt\)/);
   assert.match(page, /scheduleAuthoritativeRefresh\(refreshDelay\)/);
   assert.match(page, /scheduleAuthoritativeRefresh\(120\)/);

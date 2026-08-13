@@ -84,6 +84,8 @@ test("pointer release commits a piece without replaying its movement", async () 
   assert.match(endMove, /drag\.height \/ 2/);
   assert.doesNotMatch(endMove, /dropTolerance|drag\.width \* 0\.2|drag\.height \* 0\.2/);
   assert.match(endMove, /positioned: droppedOnBoard \? undefined : \(true as const\)/);
+  assert.match(endMove, /const matLayout = droppedOnBoard \? undefined : activeMatLayout\(imageAspect\)/);
+  assert.match(endMove, /liveEndMessage\.dropMatLayout = matLayout/);
   assert.ok(
     endMove.indexOf("getBoundingClientRect()") < endMove.indexOf('setAttribute("style", drag.originalStyle)'),
     "drop geometry must be measured before restoring the pre-drag style",
@@ -134,6 +136,7 @@ test("a piece moved onto the board paints before the handoff frame", async () =>
   assert.match(page, /liveEndMessage\.y = finalBoardY \+ 1 \/ \(2 \* rows\)/);
   assert.match(page, /liveEndMessage\.dropX = droppedOnBoard \? finalBoardX : matX/);
   assert.match(page, /liveEndMessage\.dropY = droppedOnBoard \? finalBoardY : matY/);
+  assert.match(page, /liveEndMessage\.dropMatLayout = matLayout/);
   const remoteRule = styles.match(/\.puzzle-piece\.remote-drag-piece\s*\{[^}]*\}/)?.[0] || "";
   const remoteHeldRule = styles.match(/\.puzzle-piece\.remote-held:not\(\.dragging\)\s*\{[^}]*\}/)?.[0] || "";
   assert.match(remoteRule, /will-change:transform/);
@@ -206,7 +209,9 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.doesNotMatch(phoneLandscape, /landscape-workspace-aspect/);
   assert.match(phoneLandscape, /\.puzzle-board-area\s*\{[^}]*--landscape-board-left,14%[^}]*--landscape-board-top,4%[^}]*--landscape-board-width,72%[^}]*--landscape-board-height,92%/);
   assert.match(phoneLandscape, /\.puzzle-piece\.side-piece\s*\{[^}]*--landscape-piece-width/);
-  assert.match(page, /const sideX = piece\.positioned \? piece\.x/);
+  assert.match(page, /const usesSavedMatPosition = \(layout: MatLayout, board: BoardFrame\)/);
+  assert.match(page, /if \(piece\.matLayout\) return piece\.matLayout === layout/);
+  assert.match(page, /const bandX = useBandPosition \? piece\.x : bandPosition\?\.x/);
 });
 
 test("exposes the production API routes", async () => {
