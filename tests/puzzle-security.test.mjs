@@ -128,6 +128,7 @@ test("piece validation canonicalizes solved targets and rejects hidden board coo
     matLayout: "band",
   });
   assert.equal(normalizePuzzlePiece({ id: 1, x: 0.4, y: 0.5, zone: "mat", positioned: true, matLayout: "board", locked: false }, 3, 4), null);
+  assert.deepEqual(normalizePuzzlePiece({ id: 1, x: 0.4, y: 0.5, zone: "mat", positioned: true, matLayout: "mobile-side", locked: false }, 3, 4)?.matLayout, "mobile-side");
   assert.equal(normalizePuzzlePiece({ id: 1, x: 0.99, y: 0.5, zone: "mat", positioned: true, locked: false }, 3, 4), null);
 });
 

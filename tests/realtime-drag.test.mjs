@@ -27,6 +27,7 @@ test("live drag messages accept only bounded ephemeral coordinates", () => {
   assert.equal(parseRoomDragMessage({ ...matDrop, dropY: undefined }), null);
   assert.equal(parseRoomDragMessage({ ...matDrop, dropX: 1.1 }), null);
   assert.equal(parseRoomDragMessage({ ...matDrop, dropMatLayout: "board" }), null);
+  assert.equal(parseRoomDragMessage({ ...matDrop, dropMatLayout: "mobile-side" })?.dropMatLayout, "mobile-side");
   assert.equal(parseRoomDragMessage({ ...matDrop, dropZone: "board" }), null);
   assert.equal(parseRoomDragMessage({ ...matDrop, phase: "move" }), null);
 });

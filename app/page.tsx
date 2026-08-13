@@ -561,6 +561,9 @@ function activeMatLayout(imageAspect: number): MatLayout {
   if (imageAspect > 1 && window.matchMedia("(max-width: 760px) and (orientation: portrait)").matches) {
     return "band";
   }
+  if (window.matchMedia("(max-width: 760px) and (orientation: portrait)").matches) {
+    return "mobile-side";
+  }
   return "side";
 }
 
@@ -954,6 +957,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   sideBoard,
   bandBoard,
   landscapeBoard,
+  sideMatLayout,
   sidePosition,
   bandPosition,
   landscapePosition,
@@ -976,6 +980,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   sideBoard: BoardFrame;
   bandBoard: BoardFrame;
   landscapeBoard: BoardFrame;
+  sideMatLayout: "side" | "mobile-side";
   sidePosition?: PieceRailPosition;
   bandPosition?: PieceRailPosition;
   landscapePosition?: PieceRailPosition;
@@ -987,7 +992,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   const isBoardPiece = zone === "board";
   const usesSavedMatPosition = (layout: MatLayout, board: BoardFrame) => {
     if (!piece.positioned) return false;
-    if (piece.matLayout && piece.matLayout !== layout) return false;
+    if (piece.matLayout) return piece.matLayout === layout;
     const cellWidth = board.width / cols;
     const cellHeight = board.height / rows;
     return piece.x + cellWidth * 1.28 < board.left
@@ -995,7 +1000,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
       || piece.y + cellHeight * 1.28 < board.top
       || piece.y - cellHeight * 0.28 > board.top + board.height;
   };
-  const useSidePosition = usesSavedMatPosition("side", sideBoard);
+  const useSidePosition = usesSavedMatPosition(sideMatLayout, sideBoard);
   const useBandPosition = usesSavedMatPosition("band", bandBoard);
   const useLandscapePosition = usesSavedMatPosition("landscape", landscapeBoard);
   const sideX = useSidePosition ? piece.x : sidePosition?.x ?? 0;
@@ -1301,6 +1306,7 @@ export default function Home() {
   const piecesRef = useRef(pieces);
   const [workspaceSize, setWorkspaceSize] = useState({ width: 0, height: 0 });
   const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
+  const [matLayoutMode, setMatLayoutMode] = useState<MatLayout>("side");
   const lastLocalMove = useRef(0);
   const remoteUpdatedAt = useRef(0);
   const realtimeConnected = useRef(false);
@@ -1363,6 +1369,16 @@ export default function Home() {
     }).catch(() => { /* The file validation flow reports unreadable images. */ });
     return () => { cancelled = true; };
   }, [imageUrl]);
+  useEffect(() => {
+    const updateLayoutMode = () => setMatLayoutMode(activeMatLayout(imageAspect));
+    updateLayoutMode();
+    window.addEventListener("resize", updateLayoutMode);
+    window.addEventListener("orientationchange", updateLayoutMode);
+    return () => {
+      window.removeEventListener("resize", updateLayoutMode);
+      window.removeEventListener("orientationchange", updateLayoutMode);
+    };
+  }, [imageAspect]);
   useEffect(() => {
     const workspace = workspaceRef.current;
     if (!workspace || typeof ResizeObserver === "undefined") return;
@@ -1833,6 +1849,7 @@ export default function Home() {
       ? roomPlayers
       : [fallbackPlayer, ...roomPlayers];
   const localPlayerColor = playerColor(localPlayerIdentity);
+  const sideMatLayout = matLayoutMode === "mobile-side" ? "mobile-side" : "side";
 
   useEffect(() => {
     if (room || introCompletion !== "showing") return;
@@ -2580,6 +2597,7 @@ export default function Home() {
                         sideBoard={desktopBoardFrame}
                         bandBoard={bandBoardFrame}
                         landscapeBoard={landscapeBoardFrame}
+                        sideMatLayout={sideMatLayout}
                         onStart={startMove}
                         onLostCapture={handleLostPieceCapture}
                         onFocusPiece={focusPiece}
@@ -2628,6 +2646,7 @@ export default function Home() {
                     sideBoard={desktopBoardFrame}
                     bandBoard={bandBoardFrame}
                     landscapeBoard={landscapeBoardFrame}
+                    sideMatLayout={sideMatLayout}
                     sidePosition={sideLayout.get(piece.id)}
                     bandPosition={bandLayout.get(piece.id)}
                     landscapePosition={landscapeLayout.get(piece.id)}

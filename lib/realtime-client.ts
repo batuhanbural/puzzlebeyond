@@ -72,7 +72,7 @@ export function parseRoomDragMessage(value: unknown): RoomDragMessage | null {
     if (phase !== "end" || (dropZone !== "board" && dropZone !== "mat")) return null;
     if (typeof dropX !== "number" || !Number.isFinite(dropX) || dropX < 0 || dropX > 1) return null;
     if (typeof dropY !== "number" || !Number.isFinite(dropY) || dropY < 0 || dropY > 1) return null;
-    if (dropMatLayout !== undefined && dropMatLayout !== "side" && dropMatLayout !== "band" && dropMatLayout !== "landscape") return null;
+    if (dropMatLayout !== undefined && dropMatLayout !== "side" && dropMatLayout !== "mobile-side" && dropMatLayout !== "band" && dropMatLayout !== "landscape") return null;
     if (dropZone !== "mat" && dropMatLayout !== undefined) return null;
     return {
       senderId, gestureId, pieceId: Number(pieceId), x, y, seq: Number(seq), phase, dropZone, dropX, dropY,

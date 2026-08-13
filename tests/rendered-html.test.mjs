@@ -324,7 +324,8 @@ test("side panels yield before the puzzle map becomes unusable", async () => {
   assert.match(phoneLandscape, /\.puzzle-board-area\s*\{[^}]*--landscape-board-left,14%[^}]*--landscape-board-top,4%[^}]*--landscape-board-width,72%[^}]*--landscape-board-height,92%/);
   assert.match(phoneLandscape, /\.puzzle-piece\.side-piece\s*\{[^}]*--landscape-piece-width/);
   assert.match(page, /const usesSavedMatPosition = \(layout: MatLayout, board: BoardFrame\)/);
-  assert.match(page, /if \(piece\.matLayout && piece\.matLayout !== layout\) return false/);
+  assert.match(page, /if \(piece\.matLayout\) return piece\.matLayout === layout/);
+  assert.match(page, /sideMatLayout=\{sideMatLayout\}/);
   assert.match(page, /const bandX = useBandPosition \? piece\.x : bandPosition\?\.x/);
 });
 
