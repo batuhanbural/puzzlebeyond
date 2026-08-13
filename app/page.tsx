@@ -2604,7 +2604,7 @@ export default function Home() {
             <div className="progress-dial" style={{ background: `conic-gradient(var(--coral) 0 ${progress}%, #ded8cb ${progress}% 100%)` }}>
               <div><strong>{progress}</strong><span>%</span></div>
             </div>
-            <p>{progress === 100 ? (room ? "Görselin tamamı ortaya çıktı." : "Hazır puzzleları keşfet.") : progress > 0 ? "Görüntü ortaya çıkıyor." : "İlk parçayı sen yerleştir."}</p>
+            <p>{progress === 100 ? (room ? "Görselin tamamı ortaya çıktı." : "Hazır puzzleları keşfet.") : solvedCount > 0 ? "Görüntü ortaya çıkıyor." : "İlk parçayı sen yerleştir."}</p>
           </div>
           <div className="progress-counts">
             <div><span>YERİNDE</span><strong>{solvedCount}</strong><i>PARÇA</i></div>

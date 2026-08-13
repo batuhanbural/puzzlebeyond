@@ -78,8 +78,16 @@ test("desktop side panel previews the selected puzzle piece", async () => {
   assert.doesNotMatch(styles.match(/\.piece-inspector-card\s*\{[^}]*\}/)?.[0] || "", /transform:/);
   assert.match(styles, /\.piece-inspector-stage\s*\{[^}]*place-items:center[^}]*overflow:hidden/);
   assert.doesNotMatch(page, /piece-inspector-meta|piece-inspector-copy/);
+  assert.doesNotMatch(page, /Tahtada veya dış alanda bir parçayı seçtiğinde/);
   assert.doesNotMatch(styles, /\.piece-inspector-meta|\.piece-inspector-copy/);
   assert.match(styles, /\.piece-inspector-piece \.piece-canvas/);
+});
+
+test("progress guidance uses the solved piece count instead of rounded percent", async () => {
+  const page = await read("app/page.tsx");
+
+  assert.match(page, /progress === 100[\s\S]*?: solvedCount > 0 \? "Görüntü ortaya çıkıyor\." : "İlk parçayı sen yerleştir\."/);
+  assert.doesNotMatch(page, /: progress > 0 \? "Görüntü ortaya çıkıyor\."/);
 });
 
 test("mobile piece inspector opens as an explicit bottom sheet", async () => {
