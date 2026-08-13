@@ -373,6 +373,30 @@ function boardFrameFromBounds(workspace: InnerBounds, board: InnerBounds): Board
   };
 }
 
+function matPositionAtPointer(
+  clientX: number,
+  clientY: number,
+  workspace: InnerBounds,
+  pieceWidth: number,
+  pieceHeight: number,
+): PieceRailPosition {
+  return {
+    x: Math.max(0, Math.min(1 - pieceWidth / workspace.width, (clientX - workspace.left - pieceWidth / 2) / workspace.width)),
+    y: Math.max(0, Math.min(1 - pieceHeight / workspace.height, (clientY - workspace.top - pieceHeight / 2) / workspace.height)),
+  };
+}
+
+function pieceTouchesBoardArea(piece: Piece, rows: number, cols: number) {
+  if (piece.zone === "board") return true;
+  if (piece.zone !== "mat" || piece.positioned !== true) return false;
+  const pieceWidth = BOARD.width / cols;
+  const pieceHeight = BOARD.height / rows;
+  return piece.x + pieceWidth * 1.28 >= BOARD.left
+    && piece.x - pieceWidth * 0.28 <= BOARD.left + BOARD.width
+    && piece.y + pieceHeight * 1.28 >= BOARD.top
+    && piece.y - pieceHeight * 0.28 <= BOARD.top + BOARD.height;
+}
+
 function fitBoardFrame(imageAspect: number, workspaceAspect: number): BoardFrame {
   const safeImageAspect = Number.isFinite(imageAspect) && imageAspect > 0 ? imageAspect : DEFAULT_IMAGE_ASPECT;
   const safeWorkspaceAspect = Number.isFinite(workspaceAspect) && workspaceAspect > 0 ? workspaceAspect : 1.55;
@@ -1737,7 +1761,7 @@ export default function Home() {
       setHintVisible(false);
       setRemoteDrags([]);
       setPieces((current) => {
-        const next = current.map((piece) => piece.locked || piece.zone !== "board"
+        const next = current.map((piece) => piece.locked || !pieceTouchesBoardArea(piece, roomRows, roomCols)
           ? piece
           : { ...piece, x: 0, y: 0, zone: "mat" as const, locked: false, positioned: undefined, matLayout: undefined, matCoordinateSpace: undefined, layoutVersion: PUZZLE_LAYOUT_VERSION });
         piecesRef.current = next;
@@ -2284,15 +2308,14 @@ export default function Home() {
     const placedOnBoard = droppedOnBoard || snaps;
     const finalBoardX = snaps ? targetX : boardX;
     const finalBoardY = snaps ? targetY : boardY;
-    const workspaceMatX = workspaceRect
-      ? Math.max(0, Math.min(1 - drag.width / workspaceRect.width, (drag.clientX - workspaceRect.left - drag.width / 2) / workspaceRect.width))
-      : 0;
-    const workspaceMatY = workspaceRect
-      ? Math.max(0, Math.min(1 - drag.height / workspaceRect.height, (drag.clientY - workspaceRect.top - drag.height / 2) / workspaceRect.height))
-      : 0;
+    const matPieceWidth = matBoardRect ? matBoardRect.width / cols : drag.width;
+    const matPieceHeight = matBoardRect ? matBoardRect.height / rows : drag.height;
+    const workspaceMatPosition = workspaceRect
+      ? matPositionAtPointer(drag.clientX, drag.clientY, workspaceRect, matPieceWidth, matPieceHeight)
+      : { x: 0, y: 0 };
     const sharedMatPosition = workspaceRect && matBoardRect
-      ? workspaceToSharedPosition({ x: workspaceMatX, y: workspaceMatY }, boardFrameFromBounds(workspaceRect, matBoardRect))
-      : { x: workspaceMatX, y: workspaceMatY };
+      ? workspaceToSharedPosition(workspaceMatPosition, boardFrameFromBounds(workspaceRect, matBoardRect))
+      : workspaceMatPosition;
     const sharedMatX = Math.max(0, Math.min(0.98, sharedMatPosition.x));
     const sharedMatY = Math.max(0, Math.min(0.98, sharedMatPosition.y));
     const matLayout = placedOnBoard ? undefined : activeMatLayout(imageAspect);
@@ -2426,14 +2449,14 @@ export default function Home() {
   }, [hintPiece, lastHeldPieceId]);
 
   const pushToSides = useCallback(() => {
-    const boardPieces = piecesRef.current.filter((piece) => !piece.locked && piece.zone === "board");
-    if (boardPieces.length === 0) {
+    const pushablePieces = piecesRef.current.filter((piece) => !piece.locked && pieceTouchesBoardArea(piece, rows, cols));
+    if (pushablePieces.length === 0) {
       setNotice("Tahtada kenara alınacak serbest parça yok!");
       return;
     }
     setHintVisible(false);
     const next = piecesRef.current.map((piece) => {
-      if (piece.locked || piece.zone !== "board") return piece;
+      if (piece.locked || !pieceTouchesBoardArea(piece, rows, cols)) return piece;
       return {
         ...piece,
         x: 0,
@@ -2462,7 +2485,7 @@ export default function Home() {
       void pushPieces(next);
     }
     setNotice("Tahtadaki serbest parçalar kenara itildi.");
-  }, [room, pushPieces]);
+  }, [room, pushPieces, rows, cols]);
 
   const downloadCompletedImage = async () => {
     if (!room || progress !== 100 || downloadBusy) return;

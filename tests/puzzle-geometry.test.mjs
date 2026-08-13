@@ -61,6 +61,8 @@ function compileInlineLayoutHelpers(source) {
     ["projectPositionBetweenBoardFrames", ["position", "source", "target"]],
     ["workspaceToSharedPosition", ["position", "board"]],
     ["sharedToWorkspacePosition", ["position", "board"]],
+    ["matPositionAtPointer", ["clientX", "clientY", "workspace", "pieceWidth", "pieceHeight"]],
+    ["pieceTouchesBoardArea", ["piece", "rows", "cols"]],
     ["pieceRailPositions", ["rows", "cols", "seed", "board", "mode"]],
     ["sidePiecePositions", ["rows", "cols", "seed", "board"]],
     ["bandPiecePositions", ["rows", "cols", "seed", "board"]],
@@ -93,7 +95,7 @@ function compileInlineLayoutHelpers(source) {
     const PUZZLE_LAYOUT_VERSION = ${JSON.stringify(layoutVersion)};
     const BOARD = { left: 0.19, top: 0.12, width: 0.62, height: 0.76 };
     ${helpers.join("\n")}
-    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, isNearPieceTarget, boardGridPath, workspaceToSharedPosition, sharedToWorkspacePosition, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
+    return { fitPuzzleSize, fitBoardFrame, fitRailBoardFrame, railModeForFrame, pieceBoardTarget, isNearPieceTarget, boardGridPath, workspaceToSharedPosition, sharedToWorkspacePosition, matPositionAtPointer, pieceTouchesBoardArea, sidePiecePositions, bandPiecePositions, landscapePiecePositions, scatteredPieces, normalizePieceLayout, isWithinDropBounds };
   `);
   return { ...factory(), defaultAspect, layoutVersion };
 }
@@ -461,6 +463,66 @@ test("the 1034-piece 47 by 22 board crosses every shared boundary without a jump
   }
 });
 
+test("47 by 22 boundary drops keep the piece center exactly under the pointer", async () => {
+  const { matPositionAtPointer } = await helpersPromise;
+  const rows = 47;
+  const cols = 22;
+  const layouts = [
+    {
+      workspace: { left: 180, top: 90, width: 960, height: 744, right: 1140, bottom: 834 },
+      board: { left: 420, top: 140, width: 480, height: 644 },
+    },
+    {
+      workspace: { left: 0, top: 80, width: 390, height: 732, right: 390, bottom: 812 },
+      board: { left: 70, top: 300, width: 250, height: 290 },
+    },
+  ];
+
+  for (const { workspace, board } of layouts) {
+    const pieceWidth = board.width / cols;
+    const pieceHeight = board.height / rows;
+    const points = [
+      { x: board.left, y: board.top + board.height / 2 },
+      { x: board.left + board.width, y: board.top + board.height / 2 },
+      { x: board.left + board.width / 2, y: board.top },
+      { x: board.left + board.width / 2, y: board.top + board.height },
+    ];
+    for (const point of points) {
+      const position = matPositionAtPointer(point.x, point.y, workspace, pieceWidth, pieceHeight);
+      const renderedCenterX = workspace.left + position.x * workspace.width + pieceWidth / 2;
+      const renderedCenterY = workspace.top + position.y * workspace.height + pieceHeight / 2;
+      assert.ok(Math.abs(renderedCenterX - point.x) < 1e-9);
+      assert.ok(Math.abs(renderedCenterY - point.y) < 1e-9);
+    }
+  }
+});
+
+test("push to edges catches even the smallest visible corner on a 47 by 22 board", async () => {
+  const { pieceTouchesBoardArea } = await helpersPromise;
+  const rows = 47;
+  const cols = 22;
+  const board = { left: 0.19, top: 0.12, width: 0.62, height: 0.76 };
+  const pieceWidth = board.width / cols;
+  const pieceHeight = board.height / rows;
+  const epsilon = 1e-8;
+  const matPiece = (x, y) => ({ x, y, zone: "mat", positioned: true, locked: false });
+
+  assert.equal(pieceTouchesBoardArea({ x: 0, y: 0, zone: "board", locked: false }, rows, cols), true);
+  assert.equal(pieceTouchesBoardArea({ x: 0, y: 0, zone: "mat", locked: false }, rows, cols), false);
+  assert.equal(pieceTouchesBoardArea(matPiece(board.left - pieceWidth * 1.28, board.top), rows, cols), true);
+  assert.equal(pieceTouchesBoardArea(matPiece(board.left + board.width + pieceWidth * 0.28, board.top), rows, cols), true);
+  assert.equal(pieceTouchesBoardArea(matPiece(board.left, board.top - pieceHeight * 1.28), rows, cols), true);
+  assert.equal(pieceTouchesBoardArea(matPiece(board.left, board.top + board.height + pieceHeight * 0.28), rows, cols), true);
+  assert.equal(pieceTouchesBoardArea(matPiece(
+    board.left + board.width + pieceWidth * 0.28,
+    board.top + board.height + pieceHeight * 0.28,
+  ), rows, cols), true, "a single touching corner is enough");
+  assert.equal(pieceTouchesBoardArea(matPiece(
+    board.left + board.width + pieceWidth * 0.28 + epsilon,
+    board.top + board.height + pieceHeight * 0.28 + epsilon,
+  ), rows, cols), false);
+});
+
 test("the mobile 1034-piece grid uses the exact same 47 by 22 coordinate lattice as pieces", async () => {
   const { fitPuzzleSize, pieceBoardTarget, boardGridPath } = await helpersPromise;
   const fitted = fitPuzzleSize(puzzleSizes.at(-1), 0.45);
@@ -576,8 +638,8 @@ test("the rendered puzzle switches horizontal mobile images to top and bottom ra
   assert.match(source, /imageAspect > 1 \? "horizontal-puzzle" : ""/);
   assert.match(source, /piece\.zone === "board" \|\| piece\.locked/);
   assert.match(source, /!piece\.locked && piece\.zone !== "board"/);
-  assert.match(source, /const boardPieces = piecesRef\.current\.filter\(\(piece\) => !piece\.locked && piece\.zone === "board"\)/);
-  assert.doesNotMatch(source, /redistributePiecePositions\(boardPieces\.map/);
+  assert.match(source, /const pushablePieces = piecesRef\.current\.filter\(\(piece\) => !piece\.locked && pieceTouchesBoardArea\(piece, rows, cols\)\)/);
+  assert.doesNotMatch(source, /redistributePiecePositions\(pushablePieces\.map/);
   assert.match(source, /zone: placedOnBoard \? "board" as const : "mat" as const/);
   assert.match(source, /positioned: placedOnBoard \? undefined : \(true as const\)/);
   assert.match(source, /matLayout,/);

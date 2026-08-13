@@ -149,8 +149,10 @@ test("pointer release commits a piece without replaying its movement", async () 
   assert.match(endMove, /event: PointerEvent<HTMLDivElement>/);
   assert.match(endMove, /drag\.clientX = event\.clientX/);
   assert.match(endMove, /drag\.clientY = event\.clientY/);
-  assert.match(endMove, /const workspaceMatX = workspaceRect/);
-  assert.match(endMove, /const workspaceMatY = workspaceRect/);
+  assert.match(endMove, /const matPieceWidth = matBoardRect \? matBoardRect\.width \/ cols : drag\.width/);
+  assert.match(endMove, /const matPieceHeight = matBoardRect \? matBoardRect\.height \/ rows : drag\.height/);
+  assert.match(endMove, /const workspaceMatPosition = workspaceRect/);
+  assert.match(endMove, /matPositionAtPointer\(drag\.clientX, drag\.clientY, workspaceRect, matPieceWidth, matPieceHeight\)/);
   assert.match(endMove, /isWithinDropBounds/);
   assert.match(endMove, /drag\.width \/ 2/);
   assert.match(endMove, /drag\.height \/ 2/);
@@ -292,8 +294,8 @@ test("pushing pieces to the edge updates immediately and persists in the backgro
   const pushToSides = page.slice(start, end);
   assert.ok(pushToSides.indexOf("setPieces(next)") < pushToSides.indexOf("pushPieces(next)"));
   assert.ok(pushToSides.indexOf("sendAction(message)") < pushToSides.indexOf("pushPieces(next)"));
-  assert.match(pushToSides, /filter\(\(piece\) => !piece\.locked && piece\.zone === "board"\)/);
-  assert.match(pushToSides, /if \(piece\.locked \|\| piece\.zone !== "board"\) return piece/);
+  assert.match(pushToSides, /filter\(\(piece\) => !piece\.locked && pieceTouchesBoardArea\(piece, rows, cols\)\)/);
+  assert.match(pushToSides, /if \(piece\.locked \|\| !pieceTouchesBoardArea\(piece, rows, cols\)\) return piece/);
   assert.match(pushToSides, /positioned: undefined/);
   assert.doesNotMatch(pushToSides, /matchMedia|activeLayout|distributed/);
   assert.match(pushToSides, /if \(room\) \{[\s\S]*void pushPieces\(next\)/);
@@ -301,7 +303,7 @@ test("pushing pieces to the edge updates immediately and persists in the backgro
   const remoteStart = page.indexOf("const applyRemoteAction =");
   const remoteEnd = page.indexOf("\n\n    void fetch(\"/api/realtime\")", remoteStart);
   const remoteAction = page.slice(remoteStart, remoteEnd);
-  assert.match(remoteAction, /piece\.locked \|\| piece\.zone !== "board"/);
+  assert.match(remoteAction, /piece\.locked \|\| !pieceTouchesBoardArea\(piece, roomRows, roomCols\)/);
 });
 
 test("side panels yield before the puzzle map becomes unusable", async () => {
