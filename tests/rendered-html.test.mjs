@@ -158,6 +158,8 @@ test("pushing pieces to the edge updates immediately and persists in the backgro
   assert.ok(pushToSides.indexOf("sendAction(message)") < pushToSides.indexOf("pushPieces(next)"));
   assert.match(pushToSides, /filter\(\(piece\) => !piece\.locked && piece\.zone === "board"\)/);
   assert.match(pushToSides, /if \(piece\.locked \|\| piece\.zone !== "board"\) return piece/);
+  assert.match(pushToSides, /positioned: undefined/);
+  assert.doesNotMatch(pushToSides, /matchMedia|activeLayout|distributed/);
   assert.match(pushToSides, /if \(room\) \{[\s\S]*void pushPieces\(next\)/);
 
   const remoteStart = page.indexOf("const applyRemoteAction =");

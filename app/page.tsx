@@ -2270,22 +2270,15 @@ export default function Home() {
       return;
     }
     setHintVisible(false);
-    const useLandscapeLayout = window.matchMedia("(max-width: 1024px) and (orientation: landscape), (orientation: landscape) and (hover: none) and (pointer: coarse)").matches;
-    const useBandLayout = !useLandscapeLayout
-      && imageAspect > 1
-      && window.matchMedia("(max-width: 760px) and (orientation: portrait)").matches;
-    const activeLayout = useLandscapeLayout ? landscapeLayout : useBandLayout ? bandLayout : sideLayout;
-    const distributed = redistributePiecePositions(boardPieces.map((piece) => piece.id), activeLayout);
     const next = piecesRef.current.map((piece) => {
       if (piece.locked || piece.zone !== "board") return piece;
-      const position = distributed.get(piece.id);
       return {
         ...piece,
-        x: position ? Math.min(0.98, position.x) : 0,
-        y: position ? Math.min(0.98, position.y) : 0,
+        x: 0,
+        y: 0,
         zone: "mat" as const,
         locked: false,
-        positioned: position ? (true as const) : undefined,
+        positioned: undefined,
         layoutVersion: PUZZLE_LAYOUT_VERSION,
       };
     });
@@ -2305,7 +2298,7 @@ export default function Home() {
       void pushPieces(next);
     }
     setNotice("Tahtadaki serbest parçalar kenara itildi.");
-  }, [bandLayout, imageAspect, landscapeLayout, room, sideLayout, pushPieces]);
+  }, [room, pushPieces]);
 
   const downloadCompletedImage = async () => {
     if (!room || progress !== 100 || downloadBusy) return;
