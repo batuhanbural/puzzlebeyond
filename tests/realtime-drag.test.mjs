@@ -67,7 +67,8 @@ test("live motion is throttled, bounded and never authoritative", async () => {
   const handler = page.slice(start, end);
   assert.match(handler, /setRemoteDrags/);
   assert.match(handler, /message\.dropZone === "mat"/);
-  assert.match(handler, /drag\.gestureId !== message\.gestureId/);
+  assert.match(handler, /const handoff = \{ \.\.\.message, expiresAt \}/);
+  assert.match(handler, /hasGesture/);
   assert.match(handler, /positioned: true as const/);
   assert.match(handler, /matLayout: message\.dropMatLayout/);
   assert.match(handler, /scheduleAuthoritativeRefresh\(0\)/);
@@ -79,7 +80,11 @@ test("live motion is throttled, bounded and never authoritative", async () => {
 
   assert.match(page, /transform = `translate3d\(\$\{x\}px,\$\{y\}px,0\)`/);
   assert.match(page, /removeCommittedRemoteDrops\(current, nextRoom\.pieces\)/);
-  assert.match(page, /drag\.phase === "end" && drag\.dropZone !== "mat"/);
+  assert.match(page, /drag\.phase === "end" && drag\.dropZone === "mat"/);
+  assert.match(page, /querySelector<HTMLElement>\(`\[data-piece-id="\$\{drag\.pieceId\}"\]`\)/);
+  assert.match(page, /x = targetRect\.left - boardRect\.left/);
+  assert.match(page, /y = targetRect\.top - boardRect\.top/);
+  assert.match(page, /data-piece-id=\{piece\.id\}/);
   assert.match(page, /liveEndMessage\.dropZone = droppedOnBoard \? "board" : "mat"/);
   assert.match(page, /liveEndMessage\.dropMatLayout = matLayout/);
   assert.match(page, /const refreshDelay = 750 - \(now - lastRefreshAt\)/);

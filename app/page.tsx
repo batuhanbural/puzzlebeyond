@@ -1021,6 +1021,7 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
   return (
     <div
       className={`puzzle-piece ${isBoardPiece ? "board-piece" : "side-piece"} ${piece.locked ? "locked" : ""} ${isRecent ? "recent" : ""} ${isRemoteHeld ? "remote-held" : ""} ${densityClass}`}
+      data-piece-id={piece.id}
       style={style}
       onPointerDown={(event) => onStart(event, piece)}
       onLostPointerCapture={() => onLostCapture(piece.id)}
@@ -1044,10 +1045,22 @@ const InteractivePuzzlePiece = memo(function InteractivePuzzlePiece({
 function positionRemotePuzzlePiece(element: HTMLDivElement, drag: RemoteDrag, rows: number, cols: number, animate: boolean) {
   const board = element.parentElement;
   if (!board || board.clientWidth <= 0 || board.clientHeight <= 0) return;
-  const x = (drag.x - 1 / (2 * cols)) * board.clientWidth;
-  const y = (drag.y - 1 / (2 * rows)) * board.clientHeight;
+  let x = (drag.x - 1 / (2 * cols)) * board.clientWidth;
+  let y = (drag.y - 1 / (2 * rows)) * board.clientHeight;
+  if (drag.phase === "end" && drag.dropZone === "mat") {
+    const workspace = board.closest(".puzzle-workspace");
+    const target = workspace?.querySelector<HTMLElement>(`[data-piece-id="${drag.pieceId}"]`);
+    if (target) {
+      const boardRect = board.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      x = targetRect.left - boardRect.left;
+      y = targetRect.top - boardRect.top;
+      element.style.width = `${targetRect.width}px`;
+      element.style.height = `${targetRect.height}px`;
+    }
+  }
   element.style.transition = animate
-    ? drag.phase === "end" && drag.dropZone !== "mat"
+    ? drag.phase === "end"
       ? `transform ${REMOTE_SETTLE_TRANSITION_MS}ms cubic-bezier(.2,.8,.2,1), filter 120ms ease, opacity 120ms ease`
       : `transform ${REMOTE_MOVE_TRANSITION_MS}ms linear, filter 120ms ease, opacity 120ms ease`
     : "none";
@@ -1595,8 +1608,14 @@ export default function Home() {
         if (message.dropZone === "mat" && message.dropX !== undefined && message.dropY !== undefined) {
           const dropX = message.dropX;
           const dropY = message.dropY;
-          setRemoteDrags((current) => current.filter((drag) => drag.senderId !== message.senderId
-            || drag.gestureId !== message.gestureId));
+          const expiresAt = Date.now() + REMOTE_DROP_HANDOFF_MS;
+          setRemoteDrags((current) => {
+            const hasGesture = current.some((drag) => drag.senderId === message.senderId && drag.gestureId === message.gestureId);
+            const handoff = { ...message, expiresAt };
+            return hasGesture
+              ? current.map((drag) => drag.senderId === message.senderId && drag.gestureId === message.gestureId ? handoff : drag)
+              : [...current, handoff].slice(-MAX_REMOTE_DRAGS);
+          });
           setPieces((current) => {
             const next = current.map((piece) => piece.id === message.pieceId && !piece.locked
               ? {
